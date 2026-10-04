@@ -23,6 +23,24 @@ enum BumperBrand {
         static let signal = Color(red: 0.0000, green: 0.9020, blue: 0.9373)
     }
 
+    /// Light mode: paper ground, ink text. The signal is darkened to stay readable on paper.
+    enum Light {
+        /// #EBE4D2
+        static let ground = Color(red: 0.9216, green: 0.8941, blue: 0.8235)
+        /// #DBD4C2
+        static let groundDeep = Color(red: 0.8588, green: 0.8314, blue: 0.7608)
+        /// #D1CAB9
+        static let surface = Color(red: 0.8196, green: 0.7922, blue: 0.7255)
+        /// #0E0D0B
+        static let text = Color(red: 0.0549, green: 0.0510, blue: 0.0431)
+        /// #565249
+        static let quiet = Color(red: 0.3373, green: 0.3216, blue: 0.2863)
+        /// #00676C
+        static let signal = Color(red: 0.0000, green: 0.4039, blue: 0.4235)
+        /// #D15B60
+        static let plate = Color(red: 0.8196, green: 0.3569, blue: 0.3765)
+    }
+
     /// The ink boil. Lengths are fractions of the wordmark's height, so they hold at any size.
     enum Boil {
         static let framesPerSecond: Double = 8

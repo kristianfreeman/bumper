@@ -83,6 +83,8 @@ final class SmokeTests: XCTestCase {
     func testOnboardingSignsInWithQuickConnect() {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-mockOnboarding", "-reset"]
+        // TEST_RUNNER_THEME=<id>: screenshots in another theme.
+        if let theme = ProcessInfo.processInfo.environment["THEME"] { app.launchArguments += ["-appearance.theme", theme] }
         app.launch()
         let server = app.buttons["onboarding.server.mock-server"]
         XCTAssertTrue(server.waitForExistence(timeout: 5), "the mock server isn't listed")

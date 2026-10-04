@@ -55,7 +55,7 @@ mkdir -p "$TV/LaunchBackground.colorset"
 printf '{ "colors" : [ { "idiom" : "universal", "color" : { "color-space" : "srgb", "components" : { "red" : "0x17", "green" : "0x16", "blue" : "0x14", "alpha" : "1.000" } } } ], %s }\n' "$INFO" > "$TV/LaunchBackground.colorset/Contents.json"
 
 # The boil: four frames each of the wordmark and the sticker.
-for mark in wordmark symbol; do
+for mark in wordmark symbol wordmark-light symbol-light; do
   for i in 0 1 2 3; do
     imageset "$TV/BumperBoil-$mark-$i.imageset" tv "1x=frames/$mark-$i@240.png" "2x=frames/$mark-$i@480.png"
   done

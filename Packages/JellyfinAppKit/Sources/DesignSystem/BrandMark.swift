@@ -17,6 +17,7 @@ public struct BrandMark: View {
     let kind: Kind
     let height: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.theme) private var theme
 
     public init(_ kind: Kind = .wordmark, height: CGFloat) {
         self.kind = kind
@@ -41,7 +42,8 @@ public struct BrandMark: View {
     }
 
     private func frame(_ i: Int) -> some View {
-        Image("BumperBoil-\(kind.rawValue)-\(i)")
+        // Paper print on dark themes, ink print on light ones (same red plate).
+        Image("BumperBoil-\(kind.rawValue)\(theme.colorScheme == .light ? "-light" : "")-\(i)")
             .resizable()
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)

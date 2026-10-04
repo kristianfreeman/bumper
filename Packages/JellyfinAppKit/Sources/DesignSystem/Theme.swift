@@ -48,15 +48,14 @@ extension Theme {
         cardCornerRadius: 16, focusStyle: .lift
     )
 
-    /// Bumper on paper: ink text, and a deep cyan for focus and progress
-    /// (the signal cyan is unreadable on cream: 1.2 : 1).
+    /// Bumper on paper (the kit's BumperBrand.Light): ink text, and the
+    /// signal darkened to 4.5 : 1 on the deepest ground, same cyan hue.
     public static let bumperLight = Theme(
         id: "bumper-light", name: "Bumper Light", tagline: "Paper and ink.", isPremium: false, colorScheme: .light,
-        backgroundTop: BumperBrand.Palette.paper, backgroundBottom: Color(red: 0.867, green: 0.835, blue: 0.757),   // #DDD5C1
-        surface: Color(red: 0.839, green: 0.804, blue: 0.714),                                                    // #D6CDB6
-        accent: Color(red: 0.0, green: 0.416, blue: 0.447),                                                       // #006A72, 5.0 : 1 on paper
-        primaryText: BumperBrand.Palette.ink, secondaryText: Color(red: 0.361, green: 0.341, blue: 0.302),        // #5C574D, 5.7 : 1
-        progress: Color(red: 0.0, green: 0.416, blue: 0.447),
+        backgroundTop: BumperBrand.Light.ground, backgroundBottom: BumperBrand.Light.groundDeep,
+        surface: BumperBrand.Light.surface, accent: BumperBrand.Light.signal,
+        primaryText: BumperBrand.Light.text, secondaryText: BumperBrand.Light.quiet,
+        progress: BumperBrand.Light.signal,
         cardCornerRadius: 16, focusStyle: .lift
     )
 
