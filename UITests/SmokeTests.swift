@@ -75,6 +75,31 @@ final class SmokeTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-reset"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["On Your Network"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["onboarding.network"].waitForExistence(timeout: 5))
+    }
+
+    /// Pick the server, see the profiles and the Quick Connect code; the mock
+    /// approves the code after a couple of polls and the TV signs in on its own.
+    func testOnboardingSignsInWithQuickConnect() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockOnboarding", "-reset"]
+        app.launch()
+        let server = app.buttons["onboarding.server.mock-server"]
+        XCTAssertTrue(server.waitForExistence(timeout: 5), "the mock server isn't listed")
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !server.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.3) }
+        shot(app, "onboarding-connect")
+        remote.press(.select)
+        let code = app.descendants(matching: .any)["quickconnect.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 5), "no Quick Connect code")
+        XCTAssertTrue(app.buttons["onboarding.user.Tester"].exists, "no profiles")
+        shot(app, "onboarding-signin")
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 12), "Quick Connect didn't sign in")
+    }
+
+    private func shot(_ app: XCUIApplication, _ name: String) {
+        guard let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] else { return }
+        Thread.sleep(forTimeInterval: 1.2)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png"))
     }
 }

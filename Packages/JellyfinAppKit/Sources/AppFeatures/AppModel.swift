@@ -60,6 +60,8 @@ nonisolated struct LaunchOptions: Sendable {
     var route: String?
     /// Serve the mock over a real loopback socket (needed for AVPlayer).
     var mockHTTP = false
+    /// `-mock -mockOnboarding`: start signed out, with the mock server listed (onboarding tests).
+    var mockOnboarding = false
     /// Start a sleep timer of this many seconds (tests).
     var sleepAfterSeconds: Int?
     /// Run the seek benchmark once playback starts (scripts/seek-bench.sh).
@@ -87,6 +89,7 @@ nonisolated struct LaunchOptions: Sendable {
         reset = arguments.contains("-reset")
         benchmark = arguments.contains("-benchmark")
         mockHTTP = arguments.contains("-mockHTTP")
+        mockOnboarding = arguments.contains("-mockOnboarding")
         if let i = arguments.firstIndex(of: "-simulateModel"), i + 1 < arguments.count { simulateModel = arguments[i + 1] }
         if let i = arguments.firstIndex(of: "-simulateModeSwitch"), i + 1 < arguments.count { simulateModeSwitchMs = Int(arguments[i + 1]) }
         if let i = arguments.firstIndex(of: "-route"), i + 1 < arguments.count { route = arguments[i + 1] }
@@ -175,6 +178,9 @@ final class AppModel {
             // Fresh session every launch: the loopback URL is what AVPlayer sees.
             let server = ServerRecord(id: "mock-server", name: "Mock Jellyfin (HTTP)", url: url, version: "10.11.11")
             session = accounts.signIn(server: server, result: MockJellyfinProtocol.authenticationResult)
+        } else if options.mock && options.mockOnboarding {
+            accounts.upsert(server: ServerRecord(id: "mock-server", name: "Mock Jellyfin", url: MockJellyfinProtocol.baseURL, version: "10.11.11"))
+            session = nil
         } else if options.mock && session?.server.url != MockJellyfinProtocol.baseURL {
             // Includes a session left over from a -mockHTTP run, whose loopback
             // server died with that process.
