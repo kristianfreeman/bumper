@@ -108,7 +108,7 @@ public struct SquareCard: View {
                     .cardFocus()
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name ?? "").font(.caption).foregroundStyle(theme.primaryText)
-                    if let subtitle { Text(subtitle).font(.caption2).foregroundStyle(theme.secondaryText) }
+                    Text(subtitle ?? " ").font(.caption2).foregroundStyle(theme.secondaryText)
                 }
                 .lineLimit(1)
                 .frame(width: width, alignment: .leading)
@@ -157,11 +157,11 @@ public struct LandscapeCard: View {
                     }
                     .overlay(alignment: .topTrailing) { WatchedBadge(item: item).padding(10) }
                     .cardFocus()
+                // Always two lines (an empty one if there's no subtitle): every
+                // card is the same height, so grids never re-measure as they scroll.
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.caption).foregroundStyle(theme.primaryText).lineLimit(1)
-                    if let subtitle {
-                        Text(subtitle).font(.caption2).foregroundStyle(theme.secondaryText).lineLimit(1)
-                    }
+                    Text(subtitle ?? " ").font(.caption2).foregroundStyle(theme.secondaryText).lineLimit(1)
                 }
                 .frame(width: width, alignment: .leading)
             }

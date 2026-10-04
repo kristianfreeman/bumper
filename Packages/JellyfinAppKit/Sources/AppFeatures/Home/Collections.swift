@@ -14,8 +14,9 @@ struct CollectionList<Header: View>: View {
     var firstCardFocus: FocusState<Bool>.Binding? = nil
     /// A collection is about to scroll into view: load it if it loads lazily.
     var onNear: ((String) -> Void)? = nil
-    /// Home: Tonight's plan leads the page.
+    /// Home: Tonight's plan leads the page, and the profile pills sit top right.
     var showsTonight = false
+    var showsProfile = false
     @ViewBuilder var header: () -> Header
     @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
@@ -26,9 +27,16 @@ struct CollectionList<Header: View>: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 70) {
-                    header()
-                        .padding(.horizontal, Layout.horizontalMargin)
-                    LazyVStack(alignment: .leading, spacing: 80) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        TopBand {
+                            if showsProfile { ProfileCluster() }
+                        }
+                        header()
+                    }
+                    .padding(.horizontal, Layout.horizontalMargin)
+                    // Not lazy: a lazy stack estimates the height of collections it
+                    // hasn't built, and corrects it as they appear — the page jumped.
+                    VStack(alignment: .leading, spacing: 80) {
                         // Launch focus goes to the first card on the page: Tonight's when it leads.
                         let tonightLeads = showsTonight && !app.tonight.isEmpty
                         if tonightLeads {
@@ -95,20 +103,32 @@ struct CollectionSection: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("collection.\(section.id)")
             if section.items.isEmpty {
-                Color.clear.frame(height: width * aspect + 60)                 // loading: keeps the page still
+                // Loading: skeleton cards at the real size, so nothing moves when they fill in.
+                Grid(horizontalSpacing: Layout.cardSpacing, verticalSpacing: 44) {
+                    ForEach(0..<Self.rows, id: \.self) { _ in
+                        GridRow { ForEach(0..<columns, id: \.self) { _ in SkeletonCard(width: width, aspect: aspect) } }
+                    }
+                }
             } else {
                 let shown = Array(section.items.prefix(columns * Self.rows - (section.seeAll == nil ? 0 : 1)))
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: columns),
-                          alignment: .leading, spacing: 44) {
-                    ForEach(shown) { item in
-                        card(item)
-                            .accessibilityIdentifier("card.\(section.id).\(item.id)")
-                            .reportsFocus(item, row: section.id)
-                            .modifier(FirstFocus(binding: item.id == shown.first?.id ? firstCardFocus : nil))
-                    }
-                    if let query = section.seeAll {
-                        ViewAllTile(count: section.total, width: width, aspect: aspect) {
-                            navigate(.grid(GridSpec(title: section.title, query: query, library: section.library ?? section.title)))
+                let tiles = shown.count + (section.seeAll == nil ? 0 : 1)
+                // A plain grid (two rows at most): laid out exactly, nothing estimated.
+                Grid(alignment: .topLeading, horizontalSpacing: Layout.cardSpacing, verticalSpacing: 44) {
+                    ForEach(0..<((tiles + columns - 1) / columns), id: \.self) { row in
+                        GridRow(alignment: .top) {
+                            ForEach(row * columns..<min(tiles, (row + 1) * columns), id: \.self) { i in
+                                if i < shown.count {
+                                    let item = shown[i]
+                                    card(item)
+                                        .accessibilityIdentifier("card.\(section.id).\(item.id)")
+                                        .reportsFocus(item, row: section.id)
+                                        .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
+                                } else if let query = section.seeAll {
+                                    ViewAllTile(count: section.total, width: width, aspect: aspect) {
+                                        navigate(.grid(GridSpec(title: section.title, query: query, library: section.library ?? section.title)))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -141,6 +161,24 @@ struct CollectionSection: View {
         case .square:
             SquareCard(item, subtitle: item.albumArtist, progress: item.progress, width: width) { navigate(.audiobook(item.id)) }
         }
+    }
+}
+
+/// A card's shape while its collection loads (same size as the real thing).
+struct SkeletonCard: View {
+    let width: CGFloat
+    let aspect: CGFloat
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            RoundedRectangle(cornerRadius: 22).fill(theme.surface.opacity(0.5)).frame(width: width, height: width * aspect)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(" ").font(.caption)
+                Text(" ").font(.caption2)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

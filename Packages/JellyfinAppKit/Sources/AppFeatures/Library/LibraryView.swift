@@ -156,7 +156,7 @@ struct LibraryView: View {
                     Text(library.name ?? "Library").font(.system(size: 64, weight: .bold)).foregroundStyle(.white)
                     if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(.white.opacity(0.75)) }
                 }
-                .padding(.top, 110)
+                .padding(.top, 20)
             }
         }
         .environment(\.focusTracker, tracker)

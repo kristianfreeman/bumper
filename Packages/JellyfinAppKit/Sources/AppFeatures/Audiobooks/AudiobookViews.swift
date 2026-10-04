@@ -67,7 +67,7 @@ struct AudiobookLibraryView: View {
                     Text("Audiobooks").font(.system(size: 64, weight: .bold)).foregroundStyle(.white)
                     if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(.white.opacity(0.75)) }
                 }
-                .padding(.top, 110)
+                .padding(.top, 20)
             }
             if let player = app.audiobook {
                 NowPlayingPill(player: player) { app.showsAudiobook = true }

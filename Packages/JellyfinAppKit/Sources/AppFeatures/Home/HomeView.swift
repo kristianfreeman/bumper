@@ -175,12 +175,8 @@ struct HomeView: View {
         let page = EditorialHome(sections: model.sections, userName: app.session?.account.userName)
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
-            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsTonight: true) {
+            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsTonight: true, showsProfile: true) {
                 VStack(alignment: .leading, spacing: 14) {
-                    // Scrolls with the page (pinned, it covered the cards below).
-                    ProfileCluster()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.bottom, -40)
                     Text(page.copy.greeting)
                         .font(.system(size: 64, weight: .bold))
                         .foregroundStyle(.white)

@@ -159,4 +159,29 @@ final class SidebarTests: XCTestCase {
         print("SIDEBAR-DEBUG lower row \(onCard) → menu: \(after)")
         XCTAssertTrue(after.hasPrefix("SIDEBAR"), "Menu from \(onCard): focus on \(after)")
     }
+
+    /// Up from the top row: the left half goes to the sidebar's tab button,
+    /// the right half to the profile pills.
+    func testUpFromTheTopRowReachesTheSidebarOrTheProfile() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 8))
+        Thread.sleep(forTimeInterval: 1.5)
+        let remote = XCUIRemote.shared
+        remote.press(.up)
+        Thread.sleep(forTimeInterval: 0.8)
+        let leftUp = focusedDescription(app)
+        print("SIDEBAR-DEBUG up from first card: \(leftUp)")
+        XCTAssertTrue(leftUp.hasPrefix("SIDEBAR"), "Up from the first card: focus on \(leftUp)")
+        remote.press(.right)                                           // sidebar → back to the cards
+        Thread.sleep(forTimeInterval: 0.8)
+        remote.press(.right); remote.press(.right)                     // third card: the right half
+        Thread.sleep(forTimeInterval: 0.6)
+        remote.press(.up)
+        Thread.sleep(forTimeInterval: 0.8)
+        let rightUp = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        print("SIDEBAR-DEBUG up from third card: \(rightUp.identifier) '\(rightUp.label)'")
+        XCTAssertTrue(rightUp.identifier.hasPrefix("profile."), "Up from the right half: focus on \(rightUp.identifier) '\(rightUp.label)'")
+    }
 }
