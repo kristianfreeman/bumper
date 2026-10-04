@@ -11,3 +11,4 @@ Vendor/VLCKit.xcframework/
 build/
 perf-results/
 iPhone/Info.plist
+.wrangler/
