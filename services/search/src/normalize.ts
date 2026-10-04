@@ -4,7 +4,7 @@ export const FILLER = new Set([
   "a", "an", "the", "some", "something", "anything", "any", "i", "im", "i'm", "me", "my", "we", "us", "our",
   "want", "wanna", "would", "like", "love", "to", "watch", "watching", "see", "find", "please",
   "kind", "kinds", "of", "sort", "type", "maybe", "really", "just", "bit", "little", "that", "this", "is", "it", "its",
-  "in", "for", "with", "and", "or", "on", "at", "can", "could", "you", "give", "get", "put", "play", "lets", "let's",
+  "in", "for", "from", "with", "and", "or", "on", "at", "can", "could", "you", "give", "get", "put", "play", "lets", "let's",
   "feel", "feeling", "mood", "tonight", "now", "um", "uh", "hmm", "so", "be", "do", "something's", "one", "ones",
 ]);
 
