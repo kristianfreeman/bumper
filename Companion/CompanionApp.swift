@@ -77,7 +77,6 @@ struct TVView: View {
                         .accessibilityIdentifier("phone.addFocused")
                     }
                 }
-                .accessibilityIdentifier("phone.focused")
             }
             Section {
                 ForEach(state?.tonight ?? []) { entry in

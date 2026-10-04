@@ -130,7 +130,9 @@ struct ItemDetailView: View {
         // sidebarAdaptable TabView the sidebar otherwise keeps focus on a
         // deep-linked page — and Menu from the sidebar exits the app.
         .defaultFocus($playFocused, true, priority: .userInitiated)
-        .onAppear { app.focusedItem = model.item }                // the companion shows the page you're on
+        // The companion shows the page you're on (again once its details arrive).
+        .onAppear { app.focusedItem = model.item }
+        .onChange(of: model.item) { _, item in app.focusedItem = item }
         .task {
             // Programmatic focus is ignored until the view has joined the focus
             // hierarchy (after the push transition), and how long that takes

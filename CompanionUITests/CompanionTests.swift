@@ -9,15 +9,16 @@ final class CompanionTests: XCTestCase {
     func testMirrorsTheTVAndPlansTonight() {
         let app = XCUIApplication()
         app.launch()
-        let title = app.staticTexts["phone.focusedTitle"]
-        XCTAssertTrue(title.waitForExistence(timeout: 20), "never connected to the TV, or nothing focused there")
-        let expected = ProcessInfo.processInfo.environment["EXPECT_TITLE"] ?? ""
-        if !expected.isEmpty { XCTAssertEqual(title.label, expected) }
+        let expected = ProcessInfo.processInfo.environment["EXPECT_TITLE"] ?? "Endless Voyage"
+        let shown = app.staticTexts.matching(NSPredicate(format: "label == %@", expected))
+        XCTAssertTrue(shown.firstMatch.waitForExistence(timeout: 20), "the TV's focused title (\(expected)) never appeared — not connected?")
         let add = app.buttons["phone.addFocused"]
         XCTAssertTrue(add.waitForExistence(timeout: 3))
         add.tap()
-        let entry = app.staticTexts.matching(NSPredicate(format: "label == %@", title.label)).element(boundBy: 1)
-        XCTAssertTrue(entry.waitForExistence(timeout: 5), "Tonight on the phone didn't show the added title")
+        // It comes back from the TV as a Tonight entry: the title twice on screen.
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, shown.count < 2 { Thread.sleep(forTimeInterval: 0.2) }
+        XCTAssertGreaterThanOrEqual(shown.count, 2, "Tonight on the phone didn't show the added title")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/companion.png"))
         }

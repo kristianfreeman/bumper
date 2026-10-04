@@ -15,7 +15,7 @@ scripts/with-timeout.sh 400 xcodebuild build -project JellyfinApp.xcodeproj -sch
 scripts/with-timeout.sh 400 xcodebuild build-for-testing -project JellyfinApp.xcodeproj -scheme JellyfinCompanion -destination "id=$PHONE" -derivedDataPath build/test/companion -quiet >"$OUT/phone-build.log" 2>&1 || { echo "phone build failed ($OUT/phone-build.log)"; exit 1; }
 xcrun simctl install "$TV" build/test/app/Build/Products/Debug-appletvsimulator/JellyfinApp.app
 xcrun simctl terminate "$TV" "$BID" 2>/dev/null
-xcrun simctl launch "$TV" "$BID" -mock -reset -route item:movie-0001 >/dev/null
+xcrun simctl launch "$TV" "$BID" -mock -mockHTTP -reset -route item:movie-0001   # -mockHTTP: artwork the phone can load >/dev/null
 sleep 4
 TEST_RUNNER_EXPECT_TITLE="Endless Voyage" TEST_RUNNER_SHOTS_DIR="$PWD/$OUT" scripts/with-timeout.sh 180 xcodebuild test-without-building -project JellyfinApp.xcodeproj -scheme JellyfinCompanion \
   -destination "id=$PHONE" -derivedDataPath build/test/companion -collect-test-diagnostics never >"$OUT/phone-test.log" 2>&1
