@@ -5,7 +5,7 @@ public import Foundation
 /// JSON, one message per length-prefixed frame (`Frames`), over a TCP
 /// connection found by Bonjour (`CompanionService.type`).
 public enum CompanionService {
-    public static let type = "_jellyfinapp._tcp"
+    public static let type = "_bumper._tcp"
     public static let version = 1
 }
 

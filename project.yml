@@ -1,9 +1,9 @@
 # Generate the Xcode project with:  xcodegen generate
 # (The .xcodeproj is a build artifact; this file is the source of truth.)
-name: JellyfinApp
+name: Bumper
 
 options:
-  bundleIdPrefix: app.jellyfinapp
+  bundleIdPrefix: com.kristianfreeman
   deploymentTarget:
     tvOS: "26.0"     # Apple TV 4K (2017) stops at tvOS 26; tvOS 27 APIs used when available
     iOS: "26.0"      # the companion app (Apple Intelligence's on-device model where available)
@@ -14,8 +14,8 @@ options:
 settings:
   base:
     # ── Branding: the ONLY place the user-facing name lives. ──
-    APP_DISPLAY_NAME: JellyfinApp
-    PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.tv
+    APP_DISPLAY_NAME: Bumper
+    PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper
     MARKETING_VERSION: 0.1.0
     CURRENT_PROJECT_VERSION: 1
     # ──────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ packages:
     path: Packages/JellyfinAppKit
 
 targets:
-  JellyfinApp:
+  Bumper:
     type: application
     platform: tvOS
     sources:
@@ -70,28 +70,30 @@ targets:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: Find Jellyfin servers and your iPhone on your network.
-        NSBonjourServices: [_jellyfinapp._tcp]
+        NSBonjourServices: [_bumper._tcp]
         UIBackgroundModes: [audio]
 
-  # Proof of concept: the iPhone companion — talks to the Apple TV app over the
-  # local network (Packages/JellyfinAppKit/Sources/Companion).
-  JellyfinCompanion:
+  # Bumper for iPhone. For now it's the TV's companion (talks to the Apple TV
+  # app over the local network: Packages/JellyfinAppKit/Sources/Companion);
+  # it grows into the full app. Same bundle ID as the TV app: one App Store
+  # listing, one themes purchase (universal purchase).
+  BumperPhone:
     type: application
     platform: iOS
-    sources: [Companion]
+    sources: [iPhone]
     dependencies:
       - package: JellyfinAppKit
         product: Companion
     settings:
       base:
-        PRODUCT_NAME: JellyfinCompanion
-        PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.companion
+        PRODUCT_NAME: Bumper
+        PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
         GENERATE_INFOPLIST_FILE: YES
         "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     info:
-      path: Companion/Info.plist
+      path: iPhone/Info.plist
       properties:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -101,39 +103,39 @@ targets:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: Find and talk to your Apple TV.
-        NSBonjourServices: [_jellyfinapp._tcp]
+        NSBonjourServices: [_bumper._tcp]
 
-  JellyfinCompanionUITests:
+  BumperPhoneUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [CompanionUITests]
+    sources: [iPhoneUITests]
     dependencies:
-      - target: JellyfinCompanion
+      - target: BumperPhone
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.companion.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper.iphone.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: JellyfinCompanion
+        TEST_TARGET_NAME: BumperPhone
         TARGETED_DEVICE_FAMILY: "1"
 
-  JellyfinAppUITests:
+  BumperUITests:
     type: bundle.ui-testing
     platform: tvOS
     sources: [UITests]
     dependencies:
-      - target: JellyfinApp
+      - target: Bumper
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.tv.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper.tv.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: JellyfinApp
+        TEST_TARGET_NAME: Bumper
 
 schemes:
-  JellyfinApp:
+  Bumper:
     build:
       targets:
-        JellyfinApp: all
-        JellyfinAppUITests: [test]
+        Bumper: all
+        BumperUITests: [test]
     run:
       config: Debug
       storeKitConfiguration: App/Configuration.storekit
@@ -144,15 +146,15 @@ schemes:
       config: Release
       gatherCoverageData: false
       targets:
-        - JellyfinAppUITests
+        - BumperUITests
     profile:
       config: Release
-  JellyfinCompanion:
+  BumperPhone:
     build:
       targets:
-        JellyfinCompanion: all
-        JellyfinCompanionUITests: [test]
+        BumperPhone: all
+        BumperPhoneUITests: [test]
     test:
       config: Debug
       targets:
-        - JellyfinCompanionUITests
+        - BumperPhoneUITests

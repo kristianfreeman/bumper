@@ -35,7 +35,7 @@ DD="build/test"
 OUT="perf-results/$(date +%Y%m%d-%H%M%S)"
 PKG=Packages/JellyfinAppKit
 LOCK="build/.test.lock"
-BUNDLE=app.jellyfinapp.tv
+BUNDLE=com.kristianfreeman.bumper
 
 # ── Single run at a time ─────────────────────────────────────────────────────
 # Concurrent runs fight over the simulator (each launches/terminates the app
@@ -97,7 +97,7 @@ capped() { local t="$1"; shift; scripts/with-timeout.sh "${CAP:-$t}" "$@"; }
 
 summarize() { grep -E '✔ Test run|✘|error:|Test Case .*(passed|failed)|TEST (SUCCEEDED|FAILED)|measured' || true; }
 need_vlckit() { [[ -d Vendor/VLCKit.xcframework ]] || scripts/fetch-vlckit.sh; }
-need_project() { [[ -d JellyfinApp.xcodeproj ]] || xcodegen generate; }
+need_project() { [[ -d Bumper.xcodeproj ]] || xcodegen generate; }
 
 # ── Tiers ────────────────────────────────────────────────────────────────────
 fast() { need_vlckit; (cd "$PKG" && ../../scripts/with-timeout.sh "${CAP:-90}" swift test 2>&1) | sed 's/\x1b\[[0-9;]*m//g' | summarize; }
@@ -115,7 +115,7 @@ CONFIG="${CONFIG:-Debug}"
 
 build_for_testing() {
   need_vlckit; need_project
-  capped 300 xcodebuild build-for-testing -project JellyfinApp.xcodeproj -scheme JellyfinApp -configuration "$CONFIG" \
+  capped 300 xcodebuild build-for-testing -project Bumper.xcodeproj -scheme Bumper -configuration "$CONFIG" \
     -destination "$DEST" -derivedDataPath "$DD/app" -quiet
 }
 
@@ -124,7 +124,7 @@ ui_run() {
   stop_sim_apps                                       # clean slate on the simulator
   # Raw log kept for diagnosis; per-test timeouts so a stall fails fast.
   TEST_RUNNER_PERF_ITERATIONS="${PERF_ITERATIONS:-1}" \
-  capped 120 xcodebuild test-without-building -project JellyfinApp.xcodeproj -scheme JellyfinApp -configuration "$CONFIG" -destination "$DEST" \
+  capped 120 xcodebuild test-without-building -project Bumper.xcodeproj -scheme Bumper -configuration "$CONFIG" -destination "$DEST" \
     -derivedDataPath "$DD/app" -resultBundlePath "$OUT/ui.xcresult" \
     -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" \
     "$@" 2>&1 | tee "$OUT/ui.log" | summarize
@@ -135,14 +135,14 @@ case "${1:-fast}" in
   fast) step fast ;;
   perf) step perf ;;
   unit) step unit ;;
-  smoke) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/SmokeTests${2:+/$2}" -only-testing:"JellyfinAppUITests/SidebarTests" ;;
-  profile) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/ProfileTests${2:+/$2}" ;;
-  settings) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/SettingsTests${2:+/$2}" ;;
-  player) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/PlayerTests${2:+/$2}" ;;
-  tonight) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/TonightTests" ;;
-  collection) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/CollectionTests" ;;
-  books) step build_for_testing; step ui_run -only-testing:"JellyfinAppUITests/AudiobookTests${2:+/$2}" ;;
-  shots) step build_for_testing; SHOTS="$PWD/perf-results/shots"; rm -rf "$SHOTS"; TEST_RUNNER_SHOTS_DIR="$SHOTS" step ui_run -only-testing:"JellyfinAppUITests/PlayerShots" -only-testing:"JellyfinAppUITests/SettingsShots" -only-testing:"JellyfinAppUITests/HomeShots" -only-testing:"JellyfinAppUITests/BookShots"; echo "shots: $SHOTS" ;;
+  smoke) step build_for_testing; step ui_run -only-testing:"BumperUITests/SmokeTests${2:+/$2}" -only-testing:"BumperUITests/SidebarTests" ;;
+  profile) step build_for_testing; step ui_run -only-testing:"BumperUITests/ProfileTests${2:+/$2}" ;;
+  settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
+  player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
+  tonight) step build_for_testing; step ui_run -only-testing:"BumperUITests/TonightTests" ;;
+  collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
+  books) step build_for_testing; step ui_run -only-testing:"BumperUITests/AudiobookTests${2:+/$2}" ;;
+  shots) step build_for_testing; SHOTS="$PWD/perf-results/shots"; rm -rf "$SHOTS"; TEST_RUNNER_SHOTS_DIR="$SHOTS" step ui_run -only-testing:"BumperUITests/PlayerShots" -only-testing:"BumperUITests/SettingsShots" -only-testing:"BumperUITests/HomeShots" -only-testing:"BumperUITests/BookShots"; echo "shots: $SHOTS" ;;
   ui) CONFIG=Release; step build_for_testing; PERF_ITERATIONS="${PERF_ITERATIONS:-5}" step ui_run ;;
   bench) step scripts/benchmark.sh ;;
   seek) step scripts/seek-bench.sh ;;

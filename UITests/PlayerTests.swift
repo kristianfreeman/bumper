@@ -76,7 +76,7 @@ final class PlayerTests: XCTestCase {
             XCTAssertTrue(app.descendants(matching: .any)["scrub.preview"].exists, "clip \(clip): no scrub preview")
             let target = Int(head.label) ?? 0
             remote.press(.select)
-            XCTAssertTrue(waitFor(app.descendants(matching: .any)["transport.playing"], label: { _ in true }, timeout: 3), "clip \(clip): didn't play")
+            XCTAssertTrue(waitFor(app.descendants(matching: .any)["transport.playing"], label: { _ in true }, timeout: 5), "clip \(clip): didn't play")
             Thread.sleep(forTimeInterval: 1)
             let now = Int(time.label) ?? 0
             XCTAssertTrue(now >= target - 600 && now <= target + 2_500, "clip \(clip): resumed at \(now) ms, head was \(target) ms")

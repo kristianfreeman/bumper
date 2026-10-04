@@ -9,17 +9,17 @@ UDID="${UDID:-$(xcrun simctl list devices available | grep "$SIM_NAME (" | grep 
 DD="${DD:-build/test/app}"
 
 # Leave the simulator clean however we exit (Ctrl-C included).
-trap 'xcrun simctl terminate "${UDID:-booted}" app.jellyfinapp.tv >/dev/null 2>&1 || true' EXIT
+trap 'xcrun simctl terminate "${UDID:-booted}" com.kristianfreeman.bumper >/dev/null 2>&1 || true' EXIT
 
-scripts/with-timeout.sh 300 xcodebuild -project JellyfinApp.xcodeproj -scheme JellyfinApp -configuration Release \
+scripts/with-timeout.sh 300 xcodebuild -project Bumper.xcodeproj -scheme Bumper -configuration Release \
   -destination "platform=tvOS Simulator,id=$UDID" -derivedDataPath "$DD" build -quiet
 xcrun simctl boot "$UDID" 2>/dev/null || true
-xcrun simctl terminate "$UDID" app.jellyfinapp.tv 2>/dev/null || true
-xcrun simctl install "$UDID" "$DD/Build/Products/Release-appletvsimulator/JellyfinApp.app"
-CONTAINER=$(xcrun simctl get_app_container "$UDID" app.jellyfinapp.tv data)
+xcrun simctl terminate "$UDID" com.kristianfreeman.bumper 2>/dev/null || true
+xcrun simctl install "$UDID" "$DD/Build/Products/Release-appletvsimulator/Bumper.app"
+CONTAINER=$(xcrun simctl get_app_container "$UDID" com.kristianfreeman.bumper data)
 OUT="$CONTAINER/Library/Caches/perf/benchmark.json"
 rm -f "$OUT"
-xcrun simctl launch "$UDID" app.jellyfinapp.tv -mock -reset -benchmark >/dev/null
+xcrun simctl launch "$UDID" com.kristianfreeman.bumper -mock -reset -benchmark >/dev/null
 
 # The app writes its metrics snapshot to a file when the scroll pass ends
 # (os_log would truncate it).

@@ -12,16 +12,16 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 SIM_NAME="${SIM_NAME:-Apple TV 4K (3rd generation)}"
 UDID="${UDID:-$(xcrun simctl list devices available | grep "$SIM_NAME (" | grep -v 1080p | tail -1 | grep -oE '[0-9A-F-]{36}')}"
-BUNDLE=app.jellyfinapp.tv
+BUNDLE=com.kristianfreeman.bumper
 MEDIA="${MEDIA:-$PWD/TestMedia/seek}"
 [[ -f "$MEDIA/manifest.json" ]] || { echo "no seek media: run scripts/make-seek-media.sh"; exit 1; }
 trap 'xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true' EXIT
 
 if [[ -n "${EXTENSIVE:-}" ]]; then CLIPS="${CLIPS:-0 1 2 3}"; LATENCIES="${LATENCIES:-0 25}"; else CLIPS="${CLIPS:-0 2}"; LATENCIES="${LATENCIES:-20}"; fi
 
-scripts/with-timeout.sh 300 xcodebuild -project JellyfinApp.xcodeproj -scheme JellyfinApp -configuration Release \
+scripts/with-timeout.sh 300 xcodebuild -project Bumper.xcodeproj -scheme Bumper -configuration Release \
   -destination "platform=tvOS Simulator,id=$UDID" -derivedDataPath build/test/app build -quiet || { echo "BUILD FAILED"; exit 1; }
-xcrun simctl install "$UDID" build/test/app/Build/Products/Release-appletvsimulator/JellyfinApp.app
+xcrun simctl install "$UDID" build/test/app/Build/Products/Release-appletvsimulator/Bumper.app
 CONTAINER=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)
 OUT="$CONTAINER/Library/Caches/perf/seekbench.json"
 mkdir -p perf-results

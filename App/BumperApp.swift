@@ -2,7 +2,7 @@ import AppFeatures
 import SwiftUI
 
 @main
-struct JellyfinApp: App {
+struct Bumper: App {
     init() {
         AppRoot.markProcessStart()
     }

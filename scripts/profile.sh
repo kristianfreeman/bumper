@@ -14,7 +14,7 @@ SIM_NAME="${SIM_NAME:-Apple TV 4K (3rd generation)}"
 OUT="perf-results/trace-$(date +%Y%m%d-%H%M%S).trace"
 mkdir -p perf-results
 
-xcodebuild build -project JellyfinApp.xcodeproj -scheme JellyfinApp -configuration Release \
+xcodebuild build -project Bumper.xcodeproj -scheme Bumper -configuration Release \
   -destination "platform=tvOS Simulator,name=$SIM_NAME" -derivedDataPath build/profile -quiet
 APP=$(find build/profile/Build/Products/Release-appletvsimulator -maxdepth 1 -name '*.app' | head -1)
 UDID=$(xcrun simctl list devices available | grep "$SIM_NAME (" | head -1 | grep -oE '[0-9A-F-]{36}')

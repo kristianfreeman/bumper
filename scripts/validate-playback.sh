@@ -12,7 +12,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIM_NAME="${SIM_NAME:-Apple TV 4K (3rd generation)}"
 UDID="${UDID:-$(xcrun simctl list devices available | grep "$SIM_NAME (" | grep -v 1080p | tail -1 | grep -oE '[0-9A-F-]{36}')}"
-BUNDLE=app.jellyfinapp.tv
+BUNDLE=com.kristianfreeman.bumper
 MANIFEST="$ROOT/TestMedia/manifest.json"
 REPORTS="$HOME/Library/Logs/DiagnosticReports"
 
@@ -25,7 +25,7 @@ fail=0
 RESULTS=$(mktemp)          # clip → {playback.ttff} for regression tracking
 echo '{}' > "$RESULTS"
 
-newest_crash() { ls -t "$REPORTS"/JellyfinApp*.ips 2>/dev/null | head -1; }
+newest_crash() { ls -t "$REPORTS"/Bumper*.ips 2>/dev/null | head -1; }
 crash_frames() {
   python3 - "$1" <<'EOF'
 import json, sys
@@ -35,7 +35,7 @@ print(f"          crash:  {exc.get('type')} {d.get('termination', {}).get('indic
 imgs = d['usedImages']
 for t in d['threads']:
     if t.get('triggered'):
-        frames = [f for f in t['frames'] if imgs[f.get('imageIndex', 0)]['name'].startswith('JellyfinApp')][:5]
+        frames = [f for f in t['frames'] if imgs[f.get('imageIndex', 0)]['name'].startswith('Bumper')][:5]
         for f in frames:
             loc = f"{f.get('sourceFile', '')}:{f.get('sourceLine', '')}" if f.get('sourceFile') else ''
             print(f"            at {f.get('symbol', '?')[:90]} {loc}")
@@ -55,7 +55,7 @@ for i in $INDICES; do
   # lines are attributed by the exact PID simctl hands back.
   LOG=$(mktemp)
   xcrun simctl spawn "$UDID" log stream --level info --style compact \
-    --predicate 'process == "JellyfinApp" AND subsystem == "app.jellyfinapp.tv"' >"$LOG" 2>/dev/null &
+    --predicate 'process == "Bumper" AND subsystem == "com.kristianfreeman.bumper"' >"$LOG" 2>/dev/null &
   STREAM=$!
   sleep 0.5
   start=$(date +%s)
@@ -78,7 +78,7 @@ for i in $INDICES; do
     echo "          last app log lines (pid $pid):"
     grep "\[$pid:" "$LOG" | tail -4 | cut -c 60-230 | sed 's/^/            /'
     [[ -s "$LOG" ]] || echo "            (log stream captured nothing)"
-    echo "          pids seen in log: $(grep -oE 'JellyfinApp\[[0-9]+' "$LOG" | sort -u | tr '\n' ' ')"
+    echo "          pids seen in log: $(grep -oE 'Bumper\[[0-9]+' "$LOG" | sort -u | tr '\n' ' ')"
   fi
   rm -f "$LOG"
   plan=$(grep -o 'Plan: .*' <<<"$logs" | head -1 | cut -c7-)

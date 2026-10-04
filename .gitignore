@@ -10,4 +10,4 @@ TestMedia/
 Vendor/VLCKit.xcframework/
 build/
 perf-results/
-Companion/Info.plist
+iPhone/Info.plist

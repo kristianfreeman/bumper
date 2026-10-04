@@ -9,7 +9,7 @@ public enum Brand {
     public static let displayName: String =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
         ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
-        ?? "JellyfinApp"
+        ?? "Bumper"
 
     public static let version: String =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
@@ -17,9 +17,9 @@ public enum Brand {
     public static let build: String =
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
 
-    public static let bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "app.jellyfinapp"
+    public static let bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.kristianfreeman.bumper"
 
-    public static let sourceCodeURL = URL(string: "https://github.com/kristianfreeman/jellyfinapp")!
+    public static let sourceCodeURL = URL(string: "https://github.com/kristianfreeman/bumper")!
 }
 
 /// The business rules in one place.

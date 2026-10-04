@@ -7,7 +7,7 @@
 #   scripts/pull-device-metrics.sh --sim [udid]      # booted simulator
 set -euo pipefail
 cd "$(dirname "$0")/.."
-BUNDLE=app.jellyfinapp.tv
+BUNDLE=com.kristianfreeman.bumper
 OUT="perf-results/device-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT"
 

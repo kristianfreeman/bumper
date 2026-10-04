@@ -1,15 +1,17 @@
-# JellyfinApp (working title)
+# Bumper
 
-A native Apple TV client for [Jellyfin](https://jellyfin.org), built to be the **fastest** way to browse
-a Jellyfin library and to **play every file you throw at it** — without making your server transcode.
+An open-source, ambient media player for Apple TV (and, growing from its companion, iPhone): it keeps
+things playing. Today it plays a [Jellyfin](https://jellyfin.org) library — the **fastest** way to browse
+one, and it **plays every file you throw at it** without making your server transcode.
 
 - **Open source.** Playback, every codec, every feature: free, forever.
 - **The only purchase is cosmetic:** a one-time "Themes & Customization" unlock (StoreKit 2).
 - **Modern:** Swift 6.4 (strict concurrency, strict memory safety in core modules), tvOS 26+ (so the
   2017 Apple TV 4K is supported; tvOS 27 APIs behind `#available`), Jellyfin 10.11+.
 
-> The product name is a placeholder. It lives in exactly one place: `APP_DISPLAY_NAME` /
-> `PRODUCT_BUNDLE_IDENTIFIER` in [`project.yml`](project.yml) (read at runtime via `Brand`).
+> The name lives in exactly one place: `APP_DISPLAY_NAME` / `PRODUCT_BUNDLE_IDENTIFIER` in
+> [`project.yml`](project.yml) (read at runtime via `Brand`). The Apple TV and iPhone apps share one
+> bundle ID, `com.kristianfreeman.bumper` (universal purchase: one listing, one themes unlock).
 > Module names are brand-free.
 
 ## Getting started
@@ -17,8 +19,8 @@ a Jellyfin library and to **play every file you throw at it** — without making
 ```bash
 brew install xcodegen ffmpeg   # ffmpeg only generates test clips
 scripts/fetch-vlckit.sh        # one-time: VideoLAN's VLCKit 4 xcframework → Vendor/ (checksum-pinned)
-xcodegen generate              # → JellyfinApp.xcodeproj
-open JellyfinApp.xcodeproj
+xcodegen generate              # → Bumper.xcodeproj
+open Bumper.xcodeproj
 ```
 
 Run with the `-mock` launch argument to use the built-in fake server (600 movies, 48 series,

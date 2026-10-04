@@ -3,7 +3,7 @@
 # the LAN; the app runs its mock Jellyfin on the TV (`-mock` profile — the
 # real sign-in is never touched); results come back via devicectl.
 
-BUNDLE=app.jellyfinapp.tv
+BUNDLE=com.kristianfreeman.bumper
 DEVICE="${DEVICE:-$(xcrun devicectl list devices 2>/dev/null | awk '/physical/ && (/connected/ || /available/) { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9a-f]{40}$/) print $i }' | head -1)}"
 MODEL="$(xcrun devicectl list devices 2>/dev/null | grep "$DEVICE" | grep -oE 'AppleTV[0-9]+,[0-9]+' | head -1)"
 
@@ -15,11 +15,11 @@ require_device() { [[ -n "$DEVICE" ]] || { echo "no Apple TV found (devicectl li
 # (CoreDevice error 4016) and wakes, so installs retry.
 build_and_install() {
   echo "Building Release for ${MODEL:-$DEVICE}…"
-  scripts/with-timeout.sh 900 xcodebuild -project JellyfinApp.xcodeproj -scheme JellyfinApp -configuration Release \
+  scripts/with-timeout.sh 900 xcodebuild -project Bumper.xcodeproj -scheme Bumper -configuration Release \
     -destination "id=$DEVICE" -derivedDataPath build/device -allowProvisioningUpdates build -quiet >"$OUT/build.log" 2>&1 \
     || { echo "BUILD FAILED (see $OUT/build.log)"; grep -m5 "error:" "$OUT/build.log"; exit 1; }
   for attempt in 1 2 3; do
-    dc device install app --device "$DEVICE" build/device/Build/Products/Release-appletvos/JellyfinApp.app >/dev/null 2>&1 && return 0
+    dc device install app --device "$DEVICE" build/device/Build/Products/Release-appletvos/Bumper.app >/dev/null 2>&1 && return 0
     echo "install attempt $attempt failed (TV asleep?); retrying…"; sleep 8
   done
   echo "INSTALL FAILED — is the Apple TV awake?"; exit 1
