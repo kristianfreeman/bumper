@@ -36,6 +36,7 @@ struct EditorialTests {
         #expect(e.recent(e.recentMovies, library: "Movies").title == "New this week")
         #expect(e.upNext.subtitle == "Continuing Lost.")
 
+        #expect(Editorial(now: evening, calendar: Self.calendar, userName: "kristian").greeting.hasSuffix(", Kristian."))
         let late = Editorial(now: Self.date(1), calendar: Self.calendar, userName: nil)
         #expect(late.greeting.hasPrefix("Up late") || late.greeting.hasPrefix("Still up"))
         #expect(late.lede == "Something short before bed?")

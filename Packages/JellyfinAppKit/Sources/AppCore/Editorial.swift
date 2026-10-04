@@ -47,7 +47,8 @@ public struct Editorial: Sendable {
     }
 
     private var weekend: Bool { calendar.isDateInWeekend(now) }
-    private var firstName: String? { userName?.split(separator: " ").first.map(String.init) }
+    /// Account names are often lower-case ("kristian"); greet a person.
+    private var firstName: String? { userName?.split(separator: " ").first.map { String($0).capitalizedFirst } }
 
     /// "Good evening, Kristian."
     public var greeting: String {
