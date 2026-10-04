@@ -1,8 +1,10 @@
 # Version 0.1 plan
 
 **Status (2026-10-04):** all four phases have a first working version (see the commits on
-`wip/v0.1`). Still to do: the iPhone companion on a real iPhone (connect it to this Mac), and
-feedback from using it all on the Living Room TV.
+`wip/v0.1`), plus smart search (`services/search`: a Cloudflare Worker that reads requests
+with Jev and caches them in Workers KV; the app falls back to its own word parser) and a
+redesigned onboarding. Still to do: deploy the search Worker (needs a Cloudflare login and a
+Typesafe API key), and feedback from using it all on the Living Room TV.
 
 The last product changes before 0.1, in the order they'll land. Each phase ships on its own
 (tests + device check), so we can stop and release at the end of any of them.
