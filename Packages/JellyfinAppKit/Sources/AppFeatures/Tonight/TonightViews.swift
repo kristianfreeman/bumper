@@ -26,6 +26,7 @@ enum TonightWords {
 struct TonightSection: View {
     let store: TonightStore
     var available: CGFloat
+    var firstCardFocus: FocusState<Bool>.Binding? = nil
     @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
@@ -50,6 +51,7 @@ struct TonightSection: View {
                         .overlay(alignment: .topLeading) { TimeBadge(slot: slot).padding(12) }
                         .contextMenu { ItemContextMenu(item: slot.entry.item) }
                         .accessibilityIdentifier("card.tonight.\(slot.entry.id)")
+                        .modifier(FirstFocus(binding: slot.entry.id == store.timeline.first?.entry.id ? firstCardFocus : nil))
                 }
             }
         }

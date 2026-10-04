@@ -29,11 +29,13 @@ struct CollectionList<Header: View>: View {
                     header()
                         .padding(.horizontal, Layout.horizontalMargin)
                     LazyVStack(alignment: .leading, spacing: 80) {
-                        if showsTonight, !app.tonight.isEmpty {
-                            TonightSection(store: app.tonight, available: width)
+                        // Launch focus goes to the first card on the page: Tonight's when it leads.
+                        let tonightLeads = showsTonight && !app.tonight.isEmpty
+                        if tonightLeads {
+                            TonightSection(store: app.tonight, available: width, firstCardFocus: firstCardFocus)
                         }
                         ForEach(sections) { section in
-                            CollectionSection(section: section, available: width, firstCardFocus: section.id == sections.first?.id ? firstCardFocus : nil)
+                            CollectionSection(section: section, available: width, firstCardFocus: !tonightLeads && section.id == sections.first?.id ? firstCardFocus : nil)
                                 .id(section.id)
                                 .onAppear {
                                     if section.items.isEmpty { onNear?(section.id) }
@@ -185,7 +187,7 @@ struct ViewAllTile: View {
 }
 
 /// Applies `.focused` only to the one card that should take launch focus.
-private struct FirstFocus: ViewModifier {
+struct FirstFocus: ViewModifier {
     let binding: FocusState<Bool>.Binding?
     func body(content: Content) -> some View {
         if let binding { content.focused(binding) } else { content }

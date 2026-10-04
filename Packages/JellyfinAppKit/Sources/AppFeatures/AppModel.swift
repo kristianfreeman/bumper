@@ -119,6 +119,7 @@ final class AppModel {
     var focusedItem: BaseItem?
     var nowPlaying: NowPlayingInfo?
     @ObservationIgnored lazy var companion = CompanionBridge(app: self)
+    @ObservationIgnored private var defaults: UserDefaults = .standard
     let capabilities: DeviceCapabilities
     private(set) var session: UserSession?
     var playback: PlaybackRequest?
@@ -180,7 +181,8 @@ final class AppModel {
         }
         Self.configureAudioSession()
         InputTrace.install()
-        if let session { tonight.attach(account: session.id, sleepTimer: sleepTimer) }
+        if let session { tonight.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults) }
+        self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
         if let ms = options.simulateModeSwitchMs { DisplayModeManager.simulatedSwitch = .milliseconds(ms) }
@@ -248,7 +250,7 @@ final class AppModel {
 
     func didSignIn(_ session: UserSession) {
         self.session = session
-        tonight.attach(account: session.id, sleepTimer: sleepTimer)
+        tonight.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults)
         reportCapabilities(session)
     }
 

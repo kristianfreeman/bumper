@@ -15,6 +15,8 @@ final class TonightStore {
     /// Ticks once a minute so the times on screen stay true.
     private(set) var now = Date.now
     @ObservationIgnored private var key = "tonight"
+    /// The app's settings store (the mock profile has its own, cleared by -reset).
+    @ObservationIgnored private var defaults: UserDefaults = .standard
     @ObservationIgnored private weak var sleepTimer: SleepTimer?
     @ObservationIgnored private var clock: Task<Void, Never>?
     /// Next-up episodes: where suggestions come from.
@@ -22,10 +24,12 @@ final class TonightStore {
     /// Changes go out to the companion app.
     @ObservationIgnored var onChange: (() -> Void)?
 
-    func attach(account: String, sleepTimer: SleepTimer) {
+    func attach(account: String, sleepTimer: SleepTimer, defaults: UserDefaults) {
         key = "tonight-\(account)"
         self.sleepTimer = sleepTimer
-        if let data = UserDefaults.standard.data(forKey: key), let saved = try? JSONDecoder().decode(TonightPlan.self, from: data) {
+        self.defaults = defaults
+        plan = TonightPlan()
+        if let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(TonightPlan.self, from: data) {
             plan = saved
             if let doneBy = plan.doneBy, doneBy < .now { plan.doneBy = nil }    // yesterday's
         }
@@ -84,7 +88,7 @@ final class TonightStore {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(plan) { UserDefaults.standard.set(data, forKey: key) }
+        if let data = try? JSONEncoder().encode(plan) { defaults.set(data, forKey: key) }
     }
 
     private func armSleepTimer() {
