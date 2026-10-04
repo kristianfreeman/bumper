@@ -42,5 +42,7 @@ npx wrangler secret put CLIENT_TOKEN          # optional: the app sends it as a 
 npx wrangler deploy
 ```
 
-Then set `BumperSearchEndpoint` in `App/Info.plist` to `https://<worker>/v1/interpret`.
+Deployed at `https://bumper-search.signalnerve.workers.dev/v1/interpret` (set as
+`BumperSearchEndpoint` in project.yml). Until `TYPESAFE_API_KEY` is set, the health check
+answers 503 and the app reads requests on the device.
 Changing the questions in `src/jev.ts`? Bump `CACHE_VERSION` in `src/index.ts`.

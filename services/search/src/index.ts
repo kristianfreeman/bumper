@@ -24,7 +24,9 @@ export default {
     if (env.CLIENT_TOKEN && request.headers.get("Authorization") !== `Bearer ${env.CLIENT_TOKEN}`) {
       return new globalThis.Response(null, { status: 401 });
     }
-    if (request.method === "HEAD") return new globalThis.Response(null, { status: 204 });
+    // Up only when it can answer: stub mode, or a Jev key to ask with.
+    const ready = env.JEV_MODE === "stub" || !!env.TYPESAFE_API_KEY;
+    if (request.method === "HEAD") return new globalThis.Response(null, { status: ready ? 204 : 503 });
     if (request.method !== "POST") return new globalThis.Response(null, { status: 405 });
 
     const body = (await request.json().catch(() => ({}))) as { query?: unknown };

@@ -72,6 +72,8 @@ targets:
         NSLocalNetworkUsageDescription: Find Jellyfin servers and your iPhone on your network.
         NSBonjourServices: [_bumper._tcp]
         UIBackgroundModes: [audio]
+        # services/search (falls back to on-device reading when it's off or down).
+        BumperSearchEndpoint: https://bumper-search.signalnerve.workers.dev/v1/interpret
 
   # Bumper for iPhone. For now it's the TV's companion (talks to the Apple TV
   # app over the local network: Packages/JellyfinAppKit/Sources/Companion);

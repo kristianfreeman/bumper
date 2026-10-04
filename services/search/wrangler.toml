@@ -9,10 +9,10 @@ SEARCH_ENABLED = "true"
 # "stub": answer without calling Jev (local development and the app's UI test).
 JEV_MODE = "live"
 
-# Filled in by `wrangler kv namespace create INTENTS` (see README.md).
+# Created with `wrangler kv namespace create INTENTS`.
 [[kv_namespaces]]
 binding = "INTENTS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "891b95c0cddf44a1a70757a9f801d7d7"
 
 # Secrets (wrangler secret put …): TYPESAFE_API_KEY, and optionally
 # CLIENT_TOKEN (the app sends it as a bearer token).

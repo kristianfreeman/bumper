@@ -57,7 +57,8 @@ describe("worker", () => {
 
   it("health check and flag: 204 when on, 503 when off; 502 when Jev fails", async () => {
     const head = new Request("https://search.local/v1/interpret", { method: "HEAD" });
-    expect((await worker.fetch(head, { INTENTS: memoryKV(), SEARCH_ENABLED: "true" })).status).toBe(204);
+    expect((await worker.fetch(head, { INTENTS: memoryKV(), SEARCH_ENABLED: "true", TYPESAFE_API_KEY: "k" })).status).toBe(204);
+    expect((await worker.fetch(head, { INTENTS: memoryKV(), SEARCH_ENABLED: "true" })).status).toBe(503);   // no key yet
     expect((await worker.fetch(head, { INTENTS: memoryKV(), SEARCH_ENABLED: "false" })).status).toBe(503);
     vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 500 })));
     expect((await worker.fetch(post("scary"), { INTENTS: memoryKV(), SEARCH_ENABLED: "true", TYPESAFE_API_KEY: "k" })).status).toBe(502);
