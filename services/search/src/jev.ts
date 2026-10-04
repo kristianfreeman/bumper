@@ -104,7 +104,7 @@ export function stubAnswers(tokens: string[]): Answers {
   const year = decade ? (decade.length === 3 ? (Number(decade[0]) >= 3 ? 1900 : 2000) + Number(decade[0]) * 10 : Number(decade.slice(0, 4))) : undefined;
   return {
     kind: c(genre === "none" && !year && !has("new", "unwatched", "short") ? "title" : "browse"),
-    media: c(has("show", "series", "episode") ? "series" : has("film", "movie") ? "movie" : "any"),
+    media: c(has("show", "shows", "series", "episode", "episodes") ? "series" : has("film", "films", "movie", "movies") ? "movie" : "any"),
     genre: c(genre),
     decade: c(year ? `d${year}` : "none"),
     length: c(has("short", "quick") ? "under_90" : "any"),

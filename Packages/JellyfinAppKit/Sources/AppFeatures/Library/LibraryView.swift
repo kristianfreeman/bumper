@@ -330,13 +330,23 @@ struct CollectionPage: View {
     }
 
     private func ask() {
-        guard !words.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        var next = filter
-        let changed = next.apply(words: words, genres: model.genres)
-        understood = changed.isEmpty ? "Didn't catch anything to filter on in “\(words)”." : "Showing " + changed.map(next.text).joined(separator: ", ") + "."
+        let said = words.trimmingCharacters(in: .whitespaces)
         words = ""
-        filter = next
-        TraceFile.write("collection", "ask → \(next.sentence)")
+        guard !said.isEmpty else { return }
+        let current = filter
+        Task {
+            switch await app.search.understand(said, in: current, genres: model.genres) {
+            case .filter(let next, let changed, _):
+                understood = "Showing " + changed.map(next.text).joined(separator: ", ") + "."
+                filter = next
+            case .title(let term):
+                var next = current
+                next.searchTerm = term
+                understood = "Looking for titles matching “\(term)”."
+                filter = next
+            }
+            TraceFile.write("collection", "ask → \(filter.sentence)")
+        }
     }
 }
 
@@ -403,7 +413,7 @@ struct FilterSentence: View {
     private func choices(for editing: Editing) -> [Choice] {
         switch editing {
         case .add:
-            return CollectionFilter.Part.allCases.filter { !filter.parts.contains($0) }.map { Choice(id: "add.\($0.rawValue)", title: title($0), symbol: symbol($0)) }
+            return CollectionFilter.Part.allCases.filter { $0 != .search && !filter.parts.contains($0) }.map { Choice(id: "add.\($0.rawValue)", title: title($0), symbol: symbol($0)) }
         case .sort:
             return CollectionFilter.Sort.allCases.map { sort in
                 var copy = filter
@@ -419,6 +429,8 @@ struct FilterSentence: View {
 
     private func options(for part: CollectionFilter.Part) -> [Choice] {
         switch part {
+        case .search:
+            return []
         case .added:
             return [CollectionFilter.Added.week, .month, .year].map { Choice(id: "added.\($0.rawValue)", title: label($0), current: filter.added == $0) }
         case .watched:
@@ -456,6 +468,7 @@ struct FilterSentence: View {
             }
             let value = choice.id.split(separator: ".", maxSplits: 1).last.map(String.init) ?? ""
             switch part {
+            case .search: break
             case .added: filter.added = CollectionFilter.Added(rawValue: value) ?? .any
             case .watched: filter.watched = CollectionFilter.Watched(rawValue: value) ?? .any
             case .favourites: filter.favourites = true
@@ -517,6 +530,7 @@ struct FilterSentence: View {
 
     private func title(_ part: CollectionFilter.Part) -> String {
         switch part {
+        case .search: "Title"
         case .added: "When added"
         case .watched: "Watched or not"
         case .favourites: "Favourites"
@@ -529,6 +543,7 @@ struct FilterSentence: View {
 
     private func symbol(_ part: CollectionFilter.Part) -> String {
         switch part {
+        case .search: "magnifyingglass"
         case .added: "calendar"
         case .watched: "eye"
         case .favourites: "heart.fill"

@@ -84,7 +84,11 @@ final class CompanionBridge {
             connection.send(.results(query: words, items: items.map { Self.item($0, client: client) }, understood: nil))
         case .ask(let words):
             var filter = CollectionFilter(base: ItemQuery(includeItemTypes: [.movie, .series], limit: 24), libraryName: "Everything")
-            let changed = filter.apply(words: words)
+            var changed: [CollectionFilter.Part] = []
+            switch await app.search.understand(words, in: filter) {
+            case .filter(let next, let parts, _): filter = next; changed = parts
+            case .title(let term): filter.searchTerm = term
+            }
             var q = filter.query
             q.limit = 60
             let items = ((try? await client.items(q).items) ?? []).filter { filter.matches($0) }.prefix(24)

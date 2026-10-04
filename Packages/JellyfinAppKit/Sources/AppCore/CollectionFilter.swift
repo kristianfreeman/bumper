@@ -22,6 +22,8 @@ public struct CollectionFilter: Sendable, Hashable, Codable {
     public var maxMinutes: Int?
     public var minRating: Double?
     public var sort: Sort = .name
+    /// Words matched against titles (a request that names something).
+    public var searchTerm: String?
 
     /// Starts from a collection's own query: its filters, genre and order
     /// become parts of the sentence you can change.
@@ -55,12 +57,13 @@ public struct CollectionFilter: Sendable, Hashable, Codable {
 
     // MARK: The sentence
 
-    public enum Part: String, Sendable, CaseIterable { case added, watched, favourites, genre, decade, length, rating }
+    public enum Part: String, Sendable, CaseIterable { case search, added, watched, favourites, genre, decade, length, rating }
 
     /// The set parts, in reading order.
     public var parts: [Part] {
         Part.allCases.filter { part in
             switch part {
+            case .search: searchTerm != nil
             case .added: added != .any
             case .watched: watched != .any
             case .favourites: favourites
@@ -74,6 +77,7 @@ public struct CollectionFilter: Sendable, Hashable, Codable {
 
     public func text(_ part: Part) -> String {
         switch part {
+        case .search: searchTerm.map { "matching “\($0)”" } ?? ""
         case .added:
             switch added {
             case .any: "added any time"
@@ -95,6 +99,7 @@ public struct CollectionFilter: Sendable, Hashable, Codable {
 
     public mutating func clear(_ part: Part) {
         switch part {
+        case .search: searchTerm = nil
         case .added: added = .any
         case .watched: watched = .any
         case .favourites: favourites = false
@@ -118,6 +123,7 @@ public struct CollectionFilter: Sendable, Hashable, Codable {
         if let genre { q.genres = [genre] }
         if let decade { q.years = Array(decade..<(decade + 10)) }
         if let minRating { q.minCommunityRating = minRating }
+        if let searchTerm { q.searchTerm = searchTerm }
         // "Added recently" pages newest-first so we can stop at the cutoff.
         let effective: Sort = added != .any ? .added : sort
         switch effective {

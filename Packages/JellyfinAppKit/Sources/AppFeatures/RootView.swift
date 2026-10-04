@@ -57,7 +57,7 @@ struct RootView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
             if let session = app.session {
-                MainTabView(session: session)
+                MainTabView(session: session, initialTab: app.options.route == "search" ? "search" : nil)
                     .id(session.id)
                     .fullScreenCover(isPresented: $app.showsAudiobook) {
                         if let player = app.audiobook {
@@ -107,6 +107,11 @@ nonisolated struct GridSpec: Hashable, Sendable {
         self.title = title
         filter = CollectionFilter(base: query, libraryName: library)
     }
+
+    init(title: String, filter: CollectionFilter) {
+        self.title = title
+        self.filter = filter
+    }
 }
 
 struct MainTabView: View {
@@ -114,6 +119,11 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var app
     @State private var plan = SidebarPlan(views: [], hasAudiobooks: { _ in false })
     @State private var selection = "home"
+
+    init(session: UserSession, initialTab: String? = nil) {
+        self.session = session
+        _selection = State(initialValue: initialTab ?? "home")
+    }
 
     var body: some View {
         // One stack *around* the tabs, not one per tab: pushed pages cover

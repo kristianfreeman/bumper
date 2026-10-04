@@ -113,6 +113,8 @@ final class AppModel {
     let accounts: AccountStore
     let themes: ThemeStore
     let sleepTimer = SleepTimer()
+    /// Words → filters (services/search, falling back to the device's own reading).
+    let search = SmartSearch.configured()
     /// Tonight's plan (per account).
     let tonight = TonightStore()
     /// What's focused anywhere in the app, and what's playing (the companion shows both).

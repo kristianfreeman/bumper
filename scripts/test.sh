@@ -12,6 +12,7 @@
 #   scripts/test.sh player [test]          ~15 s  player controls on real clips (TestMedia/)
 #   scripts/test.sh profile [test]         ~15 s  Home profile corner: menu, sleep timer, stats
 #   scripts/test.sh settings [test]        ~15 s  Settings tab navigation
+#   scripts/test.sh search [test]          ~20 s  global search, with the search service running locally
 #   scripts/test.sh device                 playback + seek speed on the real Apple TV (the playback truth)
 #   scripts/test.sh seek                   seek/skip speed in the simulator (EXTENSIVE=1: every clip)
 #   scripts/test.sh ui                     full UI + performance suite (CI)
@@ -141,6 +142,15 @@ case "${1:-fast}" in
   player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
   tonight) step build_for_testing; step ui_run -only-testing:"BumperUITests/TonightTests" ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
+  search)
+    # The search service, locally, answering without Jev.
+    step build_for_testing
+    (cd services/search && [[ -d node_modules ]] || npm install --silent)
+    (cd services/search && exec npx wrangler dev --port 8787 --var JEV_MODE:stub >"$PWD/../../build/wrangler.log" 2>&1) &
+    WRANGLER=$!
+    for _ in $(seq 1 60); do curl -s -o /dev/null -w '%{http_code}' -I localhost:8787/v1/interpret | grep -q 204 && break; sleep 0.5; done
+    step ui_run -only-testing:"BumperUITests/SearchTests${2:+/$2}"
+    kill_tree "$WRANGLER" ;;
   books) step build_for_testing; step ui_run -only-testing:"BumperUITests/AudiobookTests${2:+/$2}" ;;
   shots) step build_for_testing; SHOTS="$PWD/perf-results/shots"; rm -rf "$SHOTS"; TEST_RUNNER_SHOTS_DIR="$SHOTS" step ui_run -only-testing:"BumperUITests/PlayerShots" -only-testing:"BumperUITests/SettingsShots" -only-testing:"BumperUITests/HomeShots" -only-testing:"BumperUITests/BookShots"; echo "shots: $SHOTS" ;;
   ui) CONFIG=Release; step build_for_testing; PERF_ITERATIONS="${PERF_ITERATIONS:-5}" step ui_run ;;
