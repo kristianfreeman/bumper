@@ -33,4 +33,41 @@ final class CollectionTests: XCTestCase {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/collection-filtered.png"))
         }
     }
+
+    /// Add → When added → This week: a pill appears, with no menus, and
+    /// focus comes back to it.
+    func testAddingAFilterInline() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset", "-route", "grid:view-movies"]
+        app.launch()
+        let add = app.buttons["filter.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !add.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.3) }
+        for _ in 0..<4 where !add.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(add.hasFocus, "couldn't reach Add")
+        remote.press(.select)
+        let whenAdded = app.buttons["filter.option.add.added"]
+        XCTAssertTrue(whenAdded.waitForExistence(timeout: 2), "Add didn't open its row")
+        for _ in 0..<6 where !whenAdded.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.select)
+        let week = app.buttons["filter.option.added.week"]
+        XCTAssertTrue(week.waitForExistence(timeout: 2), "no When added choices")
+        for _ in 0..<6 where !week.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
+        if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/filter-week.png"))
+        }
+        print("FILTER-DEBUG week focused: \(week.hasFocus)")
+        remote.press(.select)
+        let pill = app.buttons["filter.added"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 2), "no 'added this week' pill")
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(pill.hasFocus, "focus didn't come back to the new pill")
+        XCTAssertFalse(week.exists, "the choice row didn't close")
+        if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
+            remote.press(.select)                                       // reopen it, for the screenshot
+            Thread.sleep(forTimeInterval: 0.8)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/filter-row.png"))
+        }
+    }
 }

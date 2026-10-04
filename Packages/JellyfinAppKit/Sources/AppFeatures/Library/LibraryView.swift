@@ -340,77 +340,171 @@ struct CollectionPage: View {
     }
 }
 
-/// "Movies · added in the last month · unwatched  [+ Add]  [A–Z]  [Ask]"
+/// "Movies · added this week · unwatched · Add · Sorted by name · Ask" —
+/// every part a pill that always shows its words. Selecting one opens a
+/// row of choices beneath (no menus: focus stays on the page, nothing
+/// collapses); picking a choice applies it and closes the row.
 struct FilterSentence: View {
     @Binding var filter: CollectionFilter
     let genres: [String]
     let ask: () -> Void
+    @State private var editing: Editing?
+    @FocusState private var focus: Focus?
+
+    enum Editing: Hashable { case part(CollectionFilter.Part), add, sort }
+    enum Focus: Hashable { case part(CollectionFilter.Part), add, sort, ask, option(String) }
 
     var body: some View {
-        FlowLayout(spacing: 16) {
-            Text(filter.libraryName)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .frame(height: 64)
-            ForEach(filter.parts, id: \.self) { part in
-                Menu {
-                    options(for: part)
-                    Divider()
-                    Button("Remove", role: .destructive) { filter.clear(part) }
-                } label: {
-                    PillFace(filter.text(part), size: .small, active: true, alwaysShowsTitle: true) { PillSymbol(symbol(part), size: .small) }
+        VStack(alignment: .leading, spacing: 18) {
+            FlowLayout(spacing: 14) {
+                Text(filter.libraryName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(height: 64)
+                ForEach(filter.parts, id: \.self) { part in
+                    Pill(filter.text(part), systemImage: symbol(part), size: .small, active: true, alwaysShowsTitle: true) { toggle(.part(part)) }
+                        .focused($focus, equals: .part(part))
+                        .accessibilityIdentifier("filter.\(part.rawValue)")
                 }
-                .buttonStyle(PillButtonStyle())
-                .accessibilityIdentifier("filter.\(part.rawValue)")
+                Pill("Add", systemImage: "plus", size: .small, active: editing == .add, alwaysShowsTitle: true) { toggle(.add) }
+                    .focused($focus, equals: .add)
+                    .accessibilityIdentifier("filter.add")
+                Pill(filter.sort == .name ? "Sorted A–Z" : "Sorted by \(filter.sortTitle.lowercased())", systemImage: "arrow.up.arrow.down", size: .small, active: editing == .sort, alwaysShowsTitle: true) { toggle(.sort) }
+                    .focused($focus, equals: .sort)
+                    .accessibilityIdentifier("filter.sort")
+                Pill("Ask", systemImage: "mic", size: .small, alwaysShowsTitle: true, action: ask)
+                    .focused($focus, equals: .ask)
+                    .accessibilityIdentifier("filter.ask")
             }
-            Menu {
-                ForEach(CollectionFilter.Part.allCases.filter { !filter.parts.contains($0) }, id: \.self) { part in
-                    Menu(title(part)) { options(for: part) }
+            .focusSection()
+            if let editing {
+                ChoiceRow(choices: choices(for: editing), focus: $focus) { choice in
+                    choose(choice, in: editing)
                 }
-            } label: {
-                PillFace("Add", size: .small) { PillSymbol("plus", size: .small) }
+                .focusSection()
+                .id(editing)
             }
-            .buttonStyle(PillButtonStyle())
-            .accessibilityIdentifier("filter.add")
-            Menu {
-                ForEach(CollectionFilter.Sort.allCases, id: \.self) { sort in
-                    Button { filter.sort = sort } label: {
-                        var copy = filter
-                        let _ = (copy.sort = sort)
-                        if filter.sort == sort { Label(copy.sortTitle, systemImage: "checkmark") } else { Text(copy.sortTitle) }
-                    }
-                }
-            } label: {
-                PillFace("Sort", detail: filter.sortTitle, size: .small) { PillSymbol("arrow.up.arrow.down", size: .small) }
+        }
+        // On every change of row (one row replacing another doesn't "appear").
+        .onChange(of: editing) { _, now in if let now { focusFirstChoice(in: now) } }
+        .onExitCommand(perform: editing == nil ? nil : { close() })
+    }
+
+    // MARK: Choices
+
+    struct Choice: Identifiable, Hashable {
+        let id: String
+        let title: String
+        var symbol: String? = nil
+        var current = false
+        var destructive = false
+    }
+
+    private func choices(for editing: Editing) -> [Choice] {
+        switch editing {
+        case .add:
+            return CollectionFilter.Part.allCases.filter { !filter.parts.contains($0) }.map { Choice(id: "add.\($0.rawValue)", title: title($0), symbol: symbol($0)) }
+        case .sort:
+            return CollectionFilter.Sort.allCases.map { sort in
+                var copy = filter
+                copy.sort = sort
+                return Choice(id: "sort.\(sort.rawValue)", title: copy.sortTitle, current: filter.sort == sort)
             }
-            .buttonStyle(PillButtonStyle())
-            Pill("Ask", systemImage: "mic", detail: "Say what you want", size: .small, action: ask)
-                .accessibilityIdentifier("filter.ask")
+        case .part(let part):
+            var list = options(for: part)
+            if filter.parts.contains(part) { list.append(Choice(id: "remove", title: "Remove", symbol: "xmark", destructive: true)) }
+            return list
         }
     }
 
-    @ViewBuilder
-    private func options(for part: CollectionFilter.Part) -> some View {
+    private func options(for part: CollectionFilter.Part) -> [Choice] {
         switch part {
         case .added:
-            ForEach(CollectionFilter.Added.allCases.filter { $0 != .any }, id: \.self) { a in
-                Button { filter.added = a } label: { Text(label(a)) }
-            }
+            return [CollectionFilter.Added.week, .month, .year].map { Choice(id: "added.\($0.rawValue)", title: label($0), current: filter.added == $0) }
         case .watched:
-            Button("Unwatched") { filter.watched = .unwatched }
-            Button("Watched") { filter.watched = .watched }
+            return [Choice(id: "watched.unwatched", title: "Unwatched", current: filter.watched == .unwatched),
+                    Choice(id: "watched.watched", title: "Watched", current: filter.watched == .watched)]
         case .favourites:
-            Button("Favourites only") { filter.favourites = true }
+            return [Choice(id: "favourites.on", title: "Favourites only", current: filter.favourites)]
         case .genre:
-            ForEach(genres, id: \.self) { g in Button(g) { filter.genre = g } }
+            return genres.map { Choice(id: "genre.\($0)", title: $0, current: filter.genre == $0) }
         case .decade:
-            ForEach([2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950], id: \.self) { d in Button("\(d)s") { filter.decade = d } }
+            return [2020, 2010, 2000, 1990, 1980, 1970, 1960, 1950].map { Choice(id: "decade.\($0)", title: "\($0)s", current: filter.decade == $0) }
         case .length:
-            ForEach([60, 90, 120, 150], id: \.self) { m in Button(m % 60 == 0 ? "Under \(m / 60) h" : "Under \(m) minutes") { filter.maxMinutes = m } }
+            return [60, 90, 120, 150].map { Choice(id: "length.\($0)", title: $0 % 60 == 0 ? "Under \($0 / 60) h" : "Under \($0) min", current: filter.maxMinutes == $0) }
         case .rating:
-            ForEach([6.0, 7.0, 7.5, 8.0, 8.5], id: \.self) { r in Button("Rated \(r.formatted())+") { filter.minRating = r } }
+            return [6.0, 7.0, 7.5, 8.0, 8.5].map { Choice(id: "rating.\($0)", title: "\($0.formatted())+", current: filter.minRating == $0) }
         }
     }
+
+    private func choose(_ choice: Choice, in editing: Editing) {
+        switch editing {
+        case .add:
+            if let part = CollectionFilter.Part(rawValue: String(choice.id.dropFirst(4))) {
+                self.editing = .part(part)                       // now pick its value
+            }
+            return
+        case .sort:
+            if let sort = CollectionFilter.Sort(rawValue: String(choice.id.dropFirst(5))) { filter.sort = sort }
+            close(focusing: .sort)
+            return
+        case .part(let part):
+            if choice.id == "remove" {
+                filter.clear(part)
+                close(focusing: .add)
+                return
+            }
+            let value = choice.id.split(separator: ".", maxSplits: 1).last.map(String.init) ?? ""
+            switch part {
+            case .added: filter.added = CollectionFilter.Added(rawValue: value) ?? .any
+            case .watched: filter.watched = CollectionFilter.Watched(rawValue: value) ?? .any
+            case .favourites: filter.favourites = true
+            case .genre: filter.genre = value
+            case .decade: filter.decade = Int(value)
+            case .length: filter.maxMinutes = Int(value)
+            case .rating: filter.minRating = Double(value)
+            }
+            close(focusing: .part(part))
+        }
+    }
+
+    private func toggle(_ e: Editing) { editing = editing == e ? nil : e }
+
+    private func close(focusing target: Focus? = nil) {
+        let fallback: Focus? = switch editing {
+        case .part(let p): .part(p)
+        case .add: .add
+        case .sort: .sort
+        case nil: nil
+        }
+        editing = nil
+        let wanted = target ?? fallback
+        Task {
+            // The pill may only exist after this render (a part just added),
+            // and the closing row takes focus with it: settle it on the pill.
+            for _ in 0..<8 {
+                try? await Task.sleep(for: .milliseconds(40))
+                focus = wanted
+            }
+        }
+    }
+
+    private func focusFirstChoice(in editing: Editing) {
+        let list = choices(for: editing)
+        guard let target = list.first(where: \.current) ?? list.first else { return }
+        Task {
+            // The row replacing another (Add → a part's values) takes focus
+            // away mid-swap; keep placing it until the swap has settled.
+            for _ in 0..<12 {
+                try? await Task.sleep(for: .milliseconds(50))
+                guard self.editing == editing else { return }
+                if case .option = focus { if focus == .option(target.id) { return } else { continue } }   // it's in the row: leave it
+                focus = .option(target.id)
+            }
+        }
+    }
+
+    // MARK: Words
 
     private func label(_ a: CollectionFilter.Added) -> String {
         switch a {
@@ -423,8 +517,8 @@ struct FilterSentence: View {
 
     private func title(_ part: CollectionFilter.Part) -> String {
         switch part {
-        case .added: "When Added"
-        case .watched: "Watched"
+        case .added: "When added"
+        case .watched: "Watched or not"
         case .favourites: "Favourites"
         case .genre: "Genre"
         case .decade: "Decade"
@@ -442,6 +536,30 @@ struct FilterSentence: View {
         case .decade: "clock.arrow.circlepath"
         case .length: "timer"
         case .rating: "star.fill"
+        }
+    }
+
+    /// One row of choices, scrolling sideways when there are many (genres).
+    private struct ChoiceRow: View {
+        let choices: [Choice]
+        var focus: FocusState<Focus?>.Binding
+        let pick: (Choice) -> Void
+
+        var body: some View {
+            ScrollView(.horizontal) {
+                HStack(spacing: 14) {
+                    ForEach(choices) { choice in
+                        Pill(choice.title, systemImage: choice.symbol ?? (choice.current ? "checkmark" : "circle"), size: .small,
+                             active: choice.current, alwaysShowsTitle: true) { pick(choice) }
+                            .focused(focus, equals: .option(choice.id))
+                            .accessibilityIdentifier("filter.option.\(choice.id)")
+                    }
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 6)
+            }
+            .scrollClipDisabled()
+            .scrollIndicators(.hidden)
         }
     }
 }
