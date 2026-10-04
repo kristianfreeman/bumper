@@ -139,14 +139,14 @@ public struct PillFace<Icon: View>: View {
 
     private var foreground: Color {
         if focused { return .black }
-        if prominent { return .black }
-        return active ? theme.accent : .white
+        if prominent { return theme.colorScheme == .light ? .white : .black }
+        return active ? theme.accent : theme.primaryText
     }
 
     private var background: Color {
         if focused { return .white }
         if prominent { return theme.accent }
-        return active ? theme.accent.opacity(0.22) : .white.opacity(0.14)
+        return active ? theme.accent.opacity(0.22) : theme.primaryText.opacity(0.12)
     }
 }
 

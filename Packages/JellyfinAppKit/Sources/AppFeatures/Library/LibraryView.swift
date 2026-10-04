@@ -141,6 +141,7 @@ struct LibraryView: View {
     let library: BaseItem
     @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
+    @Environment(\.theme) private var theme
     @State private var model = LibraryModel()
     @State private var tracker = FocusTracker()
     @FocusState private var firstCardFocused: Bool
@@ -153,8 +154,8 @@ struct LibraryView: View {
                 Task { await model.loadGenre(id, client: client) }
             }) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(library.name ?? "Library").font(.system(size: 64, weight: .bold)).foregroundStyle(.white)
-                    if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(.white.opacity(0.75)) }
+                    Text(library.name ?? "Library").font(.system(size: 64, weight: .bold)).foregroundStyle(theme.primaryText)
+                    if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(theme.secondaryText) }
                 }
                 .padding(.top, 20)
             }
@@ -356,6 +357,7 @@ struct CollectionPage: View {
 /// collapses); picking a choice applies it and closes the row.
 struct FilterSentence: View {
     @Binding var filter: CollectionFilter
+    @Environment(\.theme) private var theme
     let genres: [String]
     let ask: () -> Void
     @State private var editing: Editing?
@@ -369,7 +371,7 @@ struct FilterSentence: View {
             FlowLayout(spacing: 14) {
                 Text(filter.libraryName)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(theme.secondaryText)
                     .frame(height: 64)
                 ForEach(filter.parts, id: \.self) { part in
                     Pill(filter.text(part), systemImage: symbol(part), size: .small, active: true, alwaysShowsTitle: true) { toggle(.part(part)) }

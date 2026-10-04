@@ -113,3 +113,12 @@ struct PerfRecorderTests {
         #expect(before == after)
     }
 }
+
+@MainActor @Suite struct DefaultThemeTests {
+    @Test func bumperUntilSomeonePicksAnother() {
+        let defaults = UserDefaults(suiteName: "theme-\(UUID())")!
+        #expect(AppSettings(defaults: defaults).themeId == "bumper")
+        AppSettings(defaults: defaults).themeId = "abyss"
+        #expect(AppSettings(defaults: defaults).themeId == "abyss")
+    }
+}

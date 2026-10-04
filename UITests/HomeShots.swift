@@ -3,6 +3,19 @@ import XCTest
 /// Home and a library page, row by row, for design review (`scripts/test.sh shots`).
 @MainActor
 final class HomeShots: XCTestCase {
+    /// Bumper Light (any theme: `-appearance.theme <id>` sets it for one launch).
+    func testHomeLight() throws {
+        let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] ?? NSTemporaryDirectory()
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset", "-appearance.theme", "bumper-light"]
+        app.launch()
+        Thread.sleep(forTimeInterval: 2.5)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/home-light.png"))
+        XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 1)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/home-light-2.png"))
+    }
+
     func testHomeRows() throws {
         let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] ?? NSTemporaryDirectory()
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)

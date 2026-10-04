@@ -167,6 +167,7 @@ struct TrackedHero: View {
 
 struct HomeView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.theme) private var theme
     @State private var model = HomeModel()
     @State private var tracker = FocusTracker()
     @FocusState private var firstCardFocused: Bool
@@ -179,10 +180,10 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(page.copy.greeting)
                         .font(.system(size: 64, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.primaryText)
                     Text(page.copy.lede)
                         .font(.title3)
-                        .foregroundStyle(.white.opacity(0.75))
+                        .foregroundStyle(theme.secondaryText)
                         .frame(maxWidth: 1200, alignment: .leading)
                 }
                 .padding(.top, 10)

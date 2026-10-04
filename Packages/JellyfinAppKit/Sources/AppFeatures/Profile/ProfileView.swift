@@ -246,10 +246,10 @@ struct UserAvatar: View {
     var body: some View {
         let account = app.session?.account
         ZStack {
-            Circle().fill(theme.accent.gradient)
+            Circle().fill(theme.surface)
             Text(initials(account?.userName ?? "?"))
                 .font(.system(size: size * 0.4, weight: .semibold))
-                .foregroundStyle(theme.colorScheme == .light ? .white : .black.opacity(0.8))
+                .foregroundStyle(theme.primaryText)
             if let account, let tag = account.imageTag, let client = app.session?.client {
                 RemoteImage(request: ImageRequest(url: client.userImageURL(userId: account.userId, tag: tag, size: Int(size * scale)), maxPixelSize: Int(size * scale)))
             }

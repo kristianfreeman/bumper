@@ -61,7 +61,10 @@ targets:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UILaunchScreen: {}
+        # Soot, with the still sticker (scripts/import-brand.sh).
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchSymbol
         UIRequiredDeviceCapabilities: [arm64]
         UIUserInterfaceStyle: Automatic
         UIAppSupportsHDR: true
@@ -92,6 +95,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     info:

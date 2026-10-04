@@ -36,6 +36,30 @@ public struct Theme: Identifiable, Hashable, Sendable {
 
 extension Theme {
     // Free
+    /// The brand's own (BrandTheme.swift, from the brand kit). Cyan is for
+    /// focus, progress and what's playing only; the mark's red plate is
+    /// never a theme colour.
+    public static let bumper = Theme(
+        id: "bumper", name: "Bumper Dark", tagline: "Keeps things playing.", isPremium: false, colorScheme: .dark,
+        backgroundTop: BumperBrand.Palette.soot, backgroundBottom: BumperBrand.Palette.ink,
+        surface: BumperBrand.Palette.graphite, accent: BumperBrand.Palette.signal,
+        primaryText: BumperBrand.Palette.paper, secondaryText: Color(red: 0.667, green: 0.643, blue: 0.592),   // #AAA497, 7.3:1 on soot
+        progress: BumperBrand.Palette.signal,
+        cardCornerRadius: 16, focusStyle: .lift
+    )
+
+    /// Bumper on paper: ink text, and a deep cyan for focus and progress
+    /// (the signal cyan is unreadable on cream: 1.2 : 1).
+    public static let bumperLight = Theme(
+        id: "bumper-light", name: "Bumper Light", tagline: "Paper and ink.", isPremium: false, colorScheme: .light,
+        backgroundTop: BumperBrand.Palette.paper, backgroundBottom: Color(red: 0.867, green: 0.835, blue: 0.757),   // #DDD5C1
+        surface: Color(red: 0.839, green: 0.804, blue: 0.714),                                                    // #D6CDB6
+        accent: Color(red: 0.0, green: 0.416, blue: 0.447),                                                       // #006A72, 5.0 : 1 on paper
+        primaryText: BumperBrand.Palette.ink, secondaryText: Color(red: 0.361, green: 0.341, blue: 0.302),        // #5C574D, 5.7 : 1
+        progress: Color(red: 0.0, green: 0.416, blue: 0.447),
+        cardCornerRadius: 16, focusStyle: .lift
+    )
+
     public static let abyss = Theme(
         id: "abyss", name: "Abyss", tagline: "Deep water, bright edges.", isPremium: false, colorScheme: .dark,
         backgroundTop: Color(red: 0.03, green: 0.07, blue: 0.12), backgroundBottom: Color(red: 0.01, green: 0.02, blue: 0.04),
@@ -85,7 +109,7 @@ extension Theme {
         cardCornerRadius: 0, focusStyle: .lift
     )
 
-    public static let signature: [Theme] = [.abyss, .midnight, .aurora, .ember, .paper, .mono]
+    public static let signature: [Theme] = [.bumper, .bumperLight, .abyss, .midnight, .aurora, .ember, .paper, .mono]
     public static let all: [Theme] = signature + catalog
 
     /// Picker sections, in display order.
@@ -95,7 +119,7 @@ extension Theme {
         return order.map { name in (name, all.filter { $0.family == name }) }
     }
 
-    public static func named(_ id: String) -> Theme { all.first { $0.id == id } ?? .abyss }
+    public static func named(_ id: String) -> Theme { all.first { $0.id == id } ?? .bumper }
 
     /// Accent choices for the premium "custom accent" option.
     public static let accentPalette: [Color] = [

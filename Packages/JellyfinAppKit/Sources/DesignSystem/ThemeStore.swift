@@ -50,7 +50,7 @@ public final class ThemeStore {
 
     private func apply() {
         var base = Theme.named(settings.themeId)
-        if base.isPremium && !isUnlocked { base = .abyss }
+        if base.isPremium && !isUnlocked { base = .bumper }
         if isUnlocked, let idx = customAccentIndex, Theme.accentPalette.indices.contains(idx) {
             base = base.withAccent(Theme.accentPalette[idx])
         }

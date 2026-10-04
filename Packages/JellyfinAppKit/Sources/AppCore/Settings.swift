@@ -132,12 +132,15 @@ public final class AppSettings {
         autoplayNextEpisode = defaults.object(forKey: "playback.autoplayNext") as? Bool ?? true
         skipIntrosAutomatically = defaults.object(forKey: "playback.autoSkipIntro") as? Bool ?? false
         showPerformanceHUD = defaults.object(forKey: "debug.perfHUD") as? Bool ?? false
-        themeId = defaults.string(forKey: "appearance.theme") ?? "abyss"
+        themeId = defaults.string(forKey: "appearance.theme") ?? Self.defaultTheme
         playThemeMusic = defaults.object(forKey: "detail.themeMusic") as? Bool ?? true
         themeMusicForMovies = defaults.object(forKey: "detail.themeMusicMovies") as? Bool ?? false
         onlineThemeFallback = defaults.object(forKey: "detail.themeMusicOnline") as? Bool ?? true
         hideSpoilers = defaults.object(forKey: "browse.hideSpoilers") as? Bool ?? true
     }
+
+    /// Bumper Dark, until someone picks another theme.
+    public static let defaultTheme = "bumper"
 
     private func save(_ value: Any, _ key: String) { defaults.set(value, forKey: key) }
 }

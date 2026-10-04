@@ -33,16 +33,23 @@ struct OnboardingView: View {
 /// The page's words: a small eyebrow, a headline, a line of lede — the
 /// same voice as Home and the collection pages.
 private struct OnboardingHeader: View {
-    let eyebrow: String
+    var eyebrow: String? = nil
+    /// The boiling wordmark in place of the eyebrow (the welcome page).
+    var showsMark = false
     let title: String
     let lede: String
     @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(eyebrow.uppercased())
-                .font(.caption.weight(.bold)).tracking(2)
-                .foregroundStyle(theme.accent)
+            if showsMark {
+                BrandMark(.wordmark, height: 84).padding(.bottom, 14)
+            }
+            if let eyebrow {
+                Text(eyebrow.uppercased())
+                    .font(.caption.weight(.bold)).tracking(2)
+                    .foregroundStyle(theme.secondaryText)
+            }
             Text(title)
                 .font(.system(size: 64, weight: .bold))
                 .foregroundStyle(theme.primaryText)
@@ -84,8 +91,8 @@ private struct ServerRowFace: View {
             Image(systemName: symbol)
                 .font(.system(size: 30, weight: .semibold))
                 .frame(width: 72, height: 72)
-                .background(focused ? Color.black.opacity(0.08) : theme.accent.opacity(0.22), in: .circle)
-                .foregroundStyle(focused ? .black : theme.accent)
+                .background(focused ? Color.black.opacity(0.08) : theme.primaryText.opacity(0.08), in: .circle)
+                .foregroundStyle(focused ? .black : theme.primaryText)
             VStack(alignment: .leading, spacing: 4) {
                 Text(name).font(.headline)
                 Text(detail).font(.callout).opacity(0.65)
@@ -98,11 +105,11 @@ private struct ServerRowFace: View {
                 Image(systemName: "arrow.right").font(.headline).opacity(focused ? 1 : 0)
             }
         }
-        .foregroundStyle(focused ? .black : .white)
+        .foregroundStyle(focused ? .black : theme.primaryText)
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
         .frame(width: 820)
-        .background(focused ? Color.white : Color.white.opacity(0.08), in: .rect(cornerRadius: 28))
+        .background(focused ? Color.white : theme.primaryText.opacity(0.08), in: .rect(cornerRadius: 28))
         .scaleEffect(focused ? 1.04 : 1)
         .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 20, y: 10)
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
@@ -129,7 +136,7 @@ struct ServerConnectView: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 40) {
                 OnboardingHeader(
-                    eyebrow: "Welcome to \(Brand.displayName)",
+                    showsMark: true,
                     title: "Let's find your library.",
                     lede: "\(Brand.displayName) plays straight from your Jellyfin server. It's usually right here on your network — pick it below."
                 )
@@ -376,8 +383,8 @@ private struct ProfileFace: View {
     var body: some View {
         VStack(spacing: 20) {
             ZStack {
-                Circle().fill(theme.accent.gradient)
-                Text(initials).font(.system(size: size * 0.38, weight: .semibold)).foregroundStyle(.black.opacity(0.75))
+                Circle().fill(theme.surface)
+                Text(initials).font(.system(size: size * 0.38, weight: .semibold)).foregroundStyle(theme.primaryText)
                 if let tag = user.primaryImageTag {
                     let px = Int(size * scale)
                     RemoteImage(request: ImageRequest(url: app.accounts.client(for: server).userImageURL(userId: user.id, tag: tag, size: px), maxPixelSize: px))
@@ -386,7 +393,7 @@ private struct ProfileFace: View {
             }
             .frame(width: size, height: size)
             .clipShape(.circle)
-            .overlay { Circle().strokeBorder(.white, lineWidth: focused ? 6 : 0) }
+            .overlay { Circle().strokeBorder(theme.colorScheme == .light ? theme.primaryText : .white, lineWidth: focused ? 6 : 0) }
             .scaleEffect(focused ? 1.1 : 1)
             .shadow(color: .black.opacity(focused ? 0.4 : 0), radius: 24, y: 12)
             Text(user.name ?? "")
@@ -413,7 +420,7 @@ private struct QuickConnectCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Label("Quick Connect", systemImage: "iphone.radiowaves.left.and.right")
-                .font(.headline).foregroundStyle(theme.accent)
+                .font(.headline).foregroundStyle(theme.primaryText)
             HStack(spacing: 10) {
                 ForEach(Array(code.enumerated()), id: \.offset) { _, c in
                     if c == " " { Color.clear.frame(width: 14, height: 1) } else {
@@ -421,7 +428,7 @@ private struct QuickConnectCard: View {
                         .font(.system(size: 64, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(theme.primaryText)
                         .frame(width: 64, height: 92)
-                        .background(.white.opacity(0.08), in: .rect(cornerRadius: 16))
+                        .background(theme.primaryText.opacity(0.08), in: .rect(cornerRadius: 16))
                     }
                 }
             }

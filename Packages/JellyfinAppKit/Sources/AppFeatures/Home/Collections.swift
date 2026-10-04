@@ -208,7 +208,7 @@ struct ViewAllTile: View {
             VStack(spacing: 14) {
                 Image(systemName: "square.grid.2x2").font(.system(size: 34, weight: .semibold))
                     .frame(width: 80, height: 80)
-                    .background(focused ? Color.black.opacity(0.08) : Color.white.opacity(0.12), in: .circle)
+                    .background(focused ? Color.black.opacity(0.08) : theme.primaryText.opacity(0.12), in: .circle)
                 VStack(spacing: 2) {
                     Text("View all").font(.callout.weight(.semibold))
                     if let count { Text(count.formatted()).font(.caption).opacity(0.7) }
