@@ -1,0 +1,13 @@
+*.xcodeproj/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+.DS_Store
+.build/
+.swiftpm/
+App/Info.plist
+DerivedData/
+TestMedia/
+Vendor/VLCKit.xcframework/
+build/
+perf-results/
+Companion/Info.plist

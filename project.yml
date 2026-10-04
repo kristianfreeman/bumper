@@ -1,0 +1,158 @@
+# Generate the Xcode project with:  xcodegen generate
+# (The .xcodeproj is a build artifact; this file is the source of truth.)
+name: JellyfinApp
+
+options:
+  bundleIdPrefix: app.jellyfinapp
+  deploymentTarget:
+    tvOS: "26.0"     # Apple TV 4K (2017) stops at tvOS 26; tvOS 27 APIs used when available
+    iOS: "26.0"      # the companion app (Apple Intelligence's on-device model where available)
+  xcodeVersion: "27.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    # ── Branding: the ONLY place the user-facing name lives. ──
+    APP_DISPLAY_NAME: JellyfinApp
+    PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.tv
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+    # ──────────────────────────────────────────────────────────
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "3"
+    DEVELOPMENT_TEAM: 5SBY45UWAH
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    DEAD_CODE_STRIPPING: YES
+    # Every Apple TV (and every Apple-silicon simulator host) is arm64.
+    "EXCLUDED_ARCHS[sdk=appletvsimulator*]": x86_64
+  configs:
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: -O
+      SWIFT_COMPILATION_MODE: wholemodule
+      LLVM_LTO: YES_THIN
+
+packages:
+  JellyfinAppKit:
+    path: Packages/JellyfinAppKit
+
+targets:
+  JellyfinApp:
+    type: application
+    platform: tvOS
+    sources:
+      - path: App
+        excludes: ["*.storekit"]
+      - path: App/Configuration.storekit
+        buildPhase: none
+    dependencies:
+      - package: JellyfinAppKit
+        product: AppFeatures
+    settings:
+      base:
+        PRODUCT_NAME: $(APP_DISPLAY_NAME)
+        ASSETCATALOG_COMPILER_APPICON_NAME: App Icon & Top Shelf Image
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities: [arm64]
+        UIUserInterfaceStyle: Automatic
+        UIAppSupportsHDR: true
+        # Jellyfin servers on home networks are usually plain HTTP.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Find Jellyfin servers and your iPhone on your network.
+        NSBonjourServices: [_jellyfinapp._tcp]
+        UIBackgroundModes: [audio]
+
+  # Proof of concept: the iPhone companion — talks to the Apple TV app over the
+  # local network (Packages/JellyfinAppKit/Sources/Companion).
+  JellyfinCompanion:
+    type: application
+    platform: iOS
+    sources: [Companion]
+    dependencies:
+      - package: JellyfinAppKit
+        product: Companion
+    settings:
+      base:
+        PRODUCT_NAME: JellyfinCompanion
+        PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.companion
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        GENERATE_INFOPLIST_FILE: YES
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    info:
+      path: Companion/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Find and talk to your Apple TV.
+        NSBonjourServices: [_jellyfinapp._tcp]
+
+  JellyfinCompanionUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [CompanionUITests]
+    dependencies:
+      - target: JellyfinCompanion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.companion.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: JellyfinCompanion
+        TARGETED_DEVICE_FAMILY: "1"
+
+  JellyfinAppUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    sources: [UITests]
+    dependencies:
+      - target: JellyfinApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.jellyfinapp.tv.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: JellyfinApp
+
+schemes:
+  JellyfinApp:
+    build:
+      targets:
+        JellyfinApp: all
+        JellyfinAppUITests: [test]
+    run:
+      config: Debug
+      storeKitConfiguration: App/Configuration.storekit
+      commandLineArguments:
+        "-mock": false
+        "-perfHUD": false
+    test:
+      config: Release
+      gatherCoverageData: false
+      targets:
+        - JellyfinAppUITests
+    profile:
+      config: Release
+  JellyfinCompanion:
+    build:
+      targets:
+        JellyfinCompanion: all
+        JellyfinCompanionUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - JellyfinCompanionUITests

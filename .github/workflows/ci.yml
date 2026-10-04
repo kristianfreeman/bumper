@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      SIM_NAME: Apple TV 4K (3rd generation)
+      OS: "27.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.0.app
+
+      - name: Tools
+        run: brew install xcodegen meson ninja pkgconf
+
+      # FFmpeg only rebuilds when the build script (pinned versions) changes.
+      - name: Cache FFmpeg
+        id: ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: |
+            Vendor/FFmpeg.xcframework
+            Vendor/FFmpeg.VERSION
+          key: ffmpeg-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+
+      - name: Build FFmpeg
+        if: steps.ffmpeg.outputs.cache-hit != 'true'
+        run: scripts/build-ffmpeg.sh
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Fast + optimized unit tests (macOS)
+        run: scripts/test.sh fast && scripts/test.sh perf
+
+      - name: Unit tests (tvOS simulator)
+        run: scripts/test.sh unit
+
+      - name: UI + performance budgets
+        run: scripts/test.sh ui
+
+      - name: Smoothness benchmark (harness-free)
+        run: scripts/test.sh bench
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: perf-results/
