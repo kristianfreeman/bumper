@@ -1,0 +1,18 @@
+name = "bumper-search"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+# The feature flag: anything but "true" answers 503, and the app falls back
+# to its own parser / a plain Jellyfin search.
+SEARCH_ENABLED = "true"
+# "stub": answer without calling Jev (local development and the app's UI test).
+JEV_MODE = "live"
+
+# Filled in by `wrangler kv namespace create INTENTS` (see README.md).
+[[kv_namespaces]]
+binding = "INTENTS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Secrets (wrangler secret put …): TYPESAFE_API_KEY, and optionally
+# CLIENT_TOKEN (the app sends it as a bearer token).
