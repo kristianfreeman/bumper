@@ -32,6 +32,27 @@ final class PhoneDownloadTests: XCTestCase {
         XCTAssertTrue(card.waitForNonExistence(timeout: 5), "removing didn't take it off the page")
     }
 
+    static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia").path
+
+    /// Downloaded clips play in the same player: an MP4 (AVPlayer) and an
+    /// MKV with DTS and ASS subtitles (VLCKit), from the file on the device.
+    func testDownloadedFilesPlay() {
+        for id in ["media-6", "media-1"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-mock", "-reset", "-mockMedia", Self.media, "-route", "item:\(id)"]
+            app.launch()
+            let download = app.buttons["detail.download"]
+            XCTAssertTrue(download.waitForExistence(timeout: 10), "\(id): no Download button")
+            download.tap()
+            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Downloaded'")).firstMatch.waitForExistence(timeout: 60), "\(id): never finished downloading")
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play' OR label BEGINSWITH 'Resume'")).firstMatch.tap()
+            XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 10), "\(id): the downloaded file didn't play")
+            Thread.sleep(forTimeInterval: 2)
+            shot(app, "playing-\(id)")
+            app.terminate()
+        }
+    }
+
     private func shot(_ app: XCUIApplication, _ name: String) {
         let a = XCTAttachment(screenshot: app.screenshot())
         a.name = name
