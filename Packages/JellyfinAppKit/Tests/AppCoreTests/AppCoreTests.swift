@@ -3,6 +3,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import Instrumentation
+import JellyfinAPI
 @testable import JellyfinMocks
 import Testing
 
@@ -120,5 +121,19 @@ struct PerfRecorderTests {
         #expect(AppSettings(defaults: defaults).themeId == "bumper")
         AppSettings(defaults: defaults).themeId = "abyss"
         #expect(AppSettings(defaults: defaults).themeId == "abyss")
+    }
+}
+
+@MainActor @Suite struct LibraryUsageTests {
+    let movies = { var b = BaseItem(id: "m", name: "Movies", kind: .collectionFolder); b.collectionType = "movies"; return b }()
+    let shows = { var b = BaseItem(id: "s", name: "Shows", kind: .collectionFolder); b.collectionType = "tvshows"; return b }()
+    let books = { var b = BaseItem(id: "b", name: "Audiobooks", kind: .collectionFolder); b.collectionType = "books"; return b }()
+
+    @Test func filmsAndShowsFirstThenWhatYouUse() {
+        let usage = LibraryUsage(defaults: UserDefaults(suiteName: "usage-\(UUID())")!)
+        #expect(usage.ordered([books, shows, movies]).map(\.id) == ["m", "s", "b"])   // no history: by kind
+        usage.recordPlay(BaseItem(id: "x", name: "A book", kind: .audioBook), libraries: [books, shows, movies])
+        usage.record("s", weight: LibraryUsage.openWeight)
+        #expect(usage.ordered([books, shows, movies]).map(\.id) == ["b", "s", "m"])   // played beats opened
     }
 }

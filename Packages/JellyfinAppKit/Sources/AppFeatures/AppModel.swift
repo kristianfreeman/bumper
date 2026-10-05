@@ -117,6 +117,10 @@ final class AppModel {
     let accounts: AccountStore
     let themes: ThemeStore
     let sleepTimer = SleepTimer()
+    /// Which libraries get used most (orders the sidebar, Home and the Top Shelf).
+    let libraryUsage: LibraryUsage
+    /// The server's libraries, most used first (set as the sidebar loads them).
+    var libraries: [BaseItem] = []
     /// Words → filters (services/search, falling back to the device's own reading).
     let search = SmartSearch.configured()
     /// Judges which subtitle the server found fits (Jev on the search service, else on the device).
@@ -175,6 +179,7 @@ final class AppModel {
             }
         }
         settings = AppSettings(defaults: defaults)
+        libraryUsage = LibraryUsage(defaults: defaults)
         accounts = AccountStore(defaults: defaults, keychain: Keychain(service: Brand.bundleIdentifier + (options.mock ? ".mock" : "")), protocolClasses: protocols)
         themes = ThemeStore(settings: settings)
         capabilities = Perf.measureSync("capabilities.probe", "launch.capabilities") { DeviceCapabilities.probe() }
@@ -362,6 +367,7 @@ final class AppModel {
     /// Start (or resume) a book and show its Now Playing screen.
     func listen(_ book: Audiobook, from start: Double? = nil) {
         guard let client = session?.client else { return }
+        if let lib = libraries.first(where: { $0.collectionType == "books" }) { libraryUsage.record(lib.id, weight: LibraryUsage.playWeight) }
         if audiobook?.book.id == book.id, start == nil {
             showsAudiobook = true
             return
@@ -395,6 +401,7 @@ final class AppModel {
 
     func play(_ item: BaseItem, resume: Bool = true, mediaSourceId: String? = nil, audioIndex: Int? = nil, subtitleIndex: Int? = nil) {
         if audiobook != nil { stopAudiobook() }             // one thing plays at a time
+        libraryUsage.recordPlay(item, libraries: libraries)
         playback = PlaybackRequest(item: item, resume: resume, mediaSourceId: mediaSourceId, audioIndex: audioIndex, subtitleIndex: subtitleIndex)
     }
 

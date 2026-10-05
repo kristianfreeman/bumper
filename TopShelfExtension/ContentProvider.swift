@@ -15,7 +15,7 @@ final class ContentProvider: TVTopShelfContentProvider {
             let items = section.items.prefix(12).map { item in
                 let shelf = TVTopShelfSectionedItem(identifier: item.id)
                 shelf.title = item.subtitle.map { "\(item.title) · \($0)" } ?? item.title
-                shelf.imageShape = .poster                          // tall and small: about seven across
+                shelf.imageShape = item.shape == .wide ? .hdtv : .poster   // things are posters; libraries, their wide pictures
                 if let url = item.imageURL { shelf.setImageURL(url, for: [.screenScale1x, .screenScale2x]) }
                 if let progress = item.progress { shelf.playbackProgress = progress }
                 shelf.playAction = TVTopShelfAction(url: item.playURL)

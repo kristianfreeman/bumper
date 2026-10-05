@@ -31,7 +31,7 @@ final class HomeModel {
     private(set) var error: String?
     private(set) var loadedOnce = false
 
-    func load(_ session: UserSession) async {
+    func load(_ session: UserSession, usage: [String: Double] = [:]) async {
         let key = "home-\(session.id)"
         if sections.isEmpty, let cached = await ContentCache.shared.value([BrowseSection].self, for: key), !cached.isEmpty {
             BlurHashCache.shared.prewarm(cached.flatMap(\.items))
@@ -39,10 +39,10 @@ final class HomeModel {
             LaunchClock.markFirstContent()
         }
         do {
-            let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client) }
+            let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client, usage: usage) }
             BlurHashCache.shared.prewarm(fresh.flatMap(\.items))
             if fresh != sections { sections = fresh }
-            TopShelfWriter.update(fresh, client: session.client)
+            TopShelfWriter.update(fresh, client: session.client, usage: usage)
             error = nil
             LaunchClock.markFirstContent()
             await ContentCache.shared.store(fresh, for: key)
@@ -53,12 +53,12 @@ final class HomeModel {
     }
 
     /// All home rows in parallel: total latency ≈ the slowest single request.
-    nonisolated static func fetch(_ client: JellyfinClient) async throws -> [BrowseSection] {
+    nonisolated static func fetch(_ client: JellyfinClient, usage: [String: Double] = [:]) async throws -> [BrowseSection] {
         async let resume = client.resumeItems(limit: 20)
         async let nextUp = client.nextUp(limit: 20)
         async let views = client.userViews()
 
-        let libraries = try await views.items.filter { $0.collectionType == "movies" || $0.collectionType == "tvshows" }
+        let libraries = LibraryOrder.ordered(try await views.items, scores: usage).filter { $0.collectionType == "movies" || $0.collectionType == "tvshows" }
         let latest = try await withThrowingTaskGroup(of: (Int, BrowseSection).self) { group in
             for (i, lib) in libraries.enumerated() {
                 group.addTask {
@@ -207,7 +207,7 @@ struct HomeView: View {
         .environment(\.focusTracker, tracker)
         .task {
             tracker.onDwell = { [app] item in Self.prefetch(item, app: app) }
-            if let session = app.session { await model.load(session) }
+            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores) }
             app.tonight.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(model.sections.first?.items.first)
         }

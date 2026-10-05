@@ -11,16 +11,20 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
         public var imageURL: URL?
         /// 0…1, for the progress bar on in-progress things.
         public var progress: Double?
-        /// A link instead of something to play (Movies, Tonight, Search…).
+        /// A link instead of something to play (a library).
         public var link: URL?
+        /// Tall posters for things, wide pictures for libraries.
+        public var shape: Shape?
+        public enum Shape: String, Codable, Sendable { case poster, wide }
 
-        public init(id: String, title: String, subtitle: String? = nil, imageURL: URL? = nil, progress: Double? = nil, link: URL? = nil) {
+        public init(id: String, title: String, subtitle: String? = nil, imageURL: URL? = nil, progress: Double? = nil, link: URL? = nil, shape: Shape? = nil) {
             self.id = id
             self.title = title
             self.subtitle = subtitle
             self.imageURL = imageURL
             self.progress = progress
             self.link = link
+            self.shape = shape
         }
 
         /// Select on the shelf: play (resuming), or follow the link.

@@ -183,6 +183,14 @@ struct MainTabView: View {
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
+            .onChange(of: selection) { _, tab in
+                // Opening a library counts toward its place in the order.
+                if tab == "audiobooks" {
+                    for lib in app.libraries where lib.collectionType == "books" { app.libraryUsage.record(lib.id, weight: LibraryUsage.openWeight) }
+                } else if app.libraries.contains(where: { $0.id == tab }) {
+                    app.libraryUsage.record(tab, weight: LibraryUsage.openWeight)
+                }
+            }
             .onChange(of: app.pendingTab) { _, tab in
                 guard let tab else { return }
                 selection = tab
@@ -211,6 +219,9 @@ struct MainTabView: View {
     }
 
     private func apply(_ views: [BaseItem], hasAudiobooks: (BaseItem) -> Bool) {
+        // Most used first (Movies and TV Shows until there's history).
+        let views = app.libraryUsage.ordered(views)
+        app.libraries = views
         let next = SidebarPlan(views: views, hasAudiobooks: hasAudiobooks)
         if next != plan { plan = next }
         app.collectionLibraries = next.collections
