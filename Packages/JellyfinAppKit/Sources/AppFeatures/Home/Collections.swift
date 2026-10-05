@@ -206,13 +206,15 @@ struct ViewAllTile: View {
         @Environment(\.theme) private var theme
 
         var body: some View {
-            VStack(spacing: 14) {
-                Image(systemName: "square.grid.2x2").font(.system(size: 34, weight: .semibold))
-                    .frame(width: 80, height: 80)
+            // Sized to the card: the TV's 80 pt circle overflowed a phone's.
+            let circle = min(80, max(34, width * aspect * 0.42))
+            VStack(spacing: circle * 0.16) {
+                Image(systemName: "square.grid.2x2").font(.system(size: circle * 0.42, weight: .semibold))
+                    .frame(width: circle, height: circle)
                     .background(focused ? Color.black.opacity(0.08) : theme.primaryText.opacity(0.12), in: .circle)
-                VStack(spacing: 2) {
-                    Text("View all").font(.callout.weight(.semibold))
-                    if let count { Text(count.formatted()).font(.caption).opacity(0.7) }
+                VStack(spacing: 1) {
+                    Text("View all").font((Layout.device == .phone ? Font.caption : .callout).weight(.semibold))
+                    if let count { Text(count.formatted()).font(Layout.device == .phone ? .caption2 : .caption).opacity(0.7) }
                 }
             }
             .foregroundStyle(focused ? .black : theme.primaryText)
