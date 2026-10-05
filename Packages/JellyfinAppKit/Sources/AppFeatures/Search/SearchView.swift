@@ -15,7 +15,7 @@ struct SearchView: View {
     @State private var results: [BaseItem] = []
     @State private var searching = false
     @State private var understood: Understood?
-    @State private var width: CGFloat = 1600
+    @Environment(\.pageWidth) private var width
 
     struct Understood: Equatable {
         let words: String
@@ -58,10 +58,7 @@ struct SearchView: View {
             }
             .padding(.vertical, 40)
         }
-        .scrollClipDisabled()
-        // The scroll view's width (the screen's), not the content's: measuring the content
-        // sized it from its own first guess, and stayed TV-wide on an iPhone.
-        .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
+        .tvScrollClipDisabled()
         .onAppear {
             // Tests: `-searchQuery <words>` types for you.
             let args = ProcessInfo.processInfo.arguments

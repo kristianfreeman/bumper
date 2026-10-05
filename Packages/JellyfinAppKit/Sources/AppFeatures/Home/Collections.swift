@@ -20,7 +20,7 @@ struct CollectionList<Header: View>: View {
     @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
     /// The page's usable width (inside the safe area and margins): cards are sized from it.
-    @State private var width: CGFloat = 1600
+    @Environment(\.pageWidth) private var width
     /// The collection the page last settled on (focus moving into another one moves the page).
     @State private var settled: String?
     @State private var settling: Task<Void, Never>?
@@ -73,10 +73,7 @@ struct CollectionList<Header: View>: View {
                 .padding(.bottom, 120)
                 .overlay(alignment: .top) { Color.clear.frame(height: 0).id(Self.top) }
             }
-            .scrollClipDisabled()
-            // The scroll view's width (the screen's), not the content's: measuring the content
-            // sized it from its own first guess, and stayed TV-wide on an iPhone.
-            .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
+            .tvScrollClipDisabled()
             .onScrollPhaseChange { _, phase in motion.scrolling = phase != .idle }
             .onGeometryChange(for: [CGFloat].self) { [$0.safeAreaInsets.top, $0.size.height] } action: { frame = ($0[0], max($0[1], 1)) }
             .task(id: sections.count) {

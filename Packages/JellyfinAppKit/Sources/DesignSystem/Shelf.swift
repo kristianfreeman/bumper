@@ -61,7 +61,7 @@ public struct Shelf<Content: View>: View {
                 .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 28)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
             .scrollIndicators(.hidden)
             .onScrollTargetVisibilityChange(idType: BaseItem.ID.self, threshold: 0.01) { visible in
                 prefetch(after: visible)

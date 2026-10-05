@@ -353,7 +353,7 @@ private struct FoundSubtitles: View {
                 }
                 .padding(.horizontal, 8)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
             .frame(maxHeight: 560)
         }
     }
@@ -438,7 +438,7 @@ struct MenuCard: View {
                     }
                     .padding(.horizontal, 8)
                 }
-                .scrollClipDisabled()
+                .tvScrollClipDisabled()
                 .frame(maxHeight: min(560, CGFloat(controller.subtitleOptions.count + 2 + (controller.foundSubtitle == nil ? 0 : 1)) * 76))
             } else {
                 FoundSubtitles(controller: controller, focus: focus, close: close)

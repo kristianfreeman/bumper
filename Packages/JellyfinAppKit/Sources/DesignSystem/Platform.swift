@@ -176,69 +176,34 @@ extension View {
         #endif
     }
 
-    /// Keeps `width` at this view's width minus the page margins — once a
-    /// resize settles (a window drag, the Mac's sidebar opening), not on
-    /// every frame of it: each update re-lays out the whole page.
-    public func tracksPageWidth(_ width: Binding<CGFloat>) -> some View {
-        modifier(PageWidth(width: width))
-    }
-}
-
-private struct PageWidth: ViewModifier {
-    @Binding var width: CGFloat
-    @Environment(\.pageViewportWidth) private var viewport
-    @State private var pending: Task<Void, Never>?
-    @State private var measured = false
-
-    func body(content: Content) -> some View {
-        content
-            .onGeometryChange(for: CGFloat.self) { $0.size.width - $0.safeAreaInsets.trailing } action: { w in
-                // The Mac measures in its shell instead: measured here, the
-                // page's width followed its own content while the sidebar
-                // opened, and never settled.
-                guard viewport == nil else { return }
-                apply(w)
-            }
-            .onChange(of: viewport, initial: true) { _, w in
-                if let w { apply(w) }
-            }
-    }
-
-    private func apply(_ page: CGFloat) {
-        let new = page - 2 * Layout.horizontalMargin
-        guard abs(new - width) > 0.5 else { return }
-        pending?.cancel()
-        if Platform.isTV || !measured {
-            measured = true
-            width = new                                   // the first measure (and the TV, which never resizes): at once
-            return
-        }
-        pending = Task {
-            try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled else { return }
-            withAnimation(.smooth(duration: 0.2)) { width = new }
-        }
-    }
+    /// Gives the pages inside this the width they're offered, as
+    /// `\.pageWidth` (the shared navigation stack wraps every page in it).
+    public func readsPageWidth() -> some View { modifier(PageWidthReader()) }
 }
 
 extension EnvironmentValues {
-    /// The Mac's page width, measured once by the window's shell (its size
-    /// already leaves out what the sidebar covers).
-    @Entry public var pageViewportWidth: CGFloat? = nil
+    /// The page's usable width: what it's offered, inside the safe area (on
+    /// the Mac that leaves out the sidebar) and the page margins. Pages size
+    /// their cards from it.
+    @Entry public var pageWidth: CGFloat = 1600
 }
 
-extension View {
-    /// Measures this (a page column whose size doesn't follow its content)
-    /// and gives pages inside it that width.
-    public func measuresPageViewport() -> some View { modifier(ViewportMeasure()) }
-}
-
-private struct ViewportMeasure: ViewModifier {
-    @State private var width: CGFloat?
-
+/// Read during layout from a GeometryReader, which takes exactly the space
+/// it's offered whatever its content asks for. Pages used to measure
+/// themselves and keep the width as state: a beat behind every resize, so a
+/// window resize or the Mac's sidebar opening laid out the page twice (or,
+/// when the content widened the column, never settled).
+private struct PageWidthReader: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .environment(\.pageViewportWidth, width)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        GeometryReader { geo in
+            content.environment(\.pageWidth, Self.usable(geo))
+        }
+    }
+
+    private static func usable(_ geo: GeometryProxy) -> CGFloat {
+        // The TV's scroll views run under its sideways safe area (the
+        // screen's overscan), so its pages lay out from the full width.
+        let width = Platform.isTV ? geo.size.width + geo.safeAreaInsets.leading : geo.size.width
+        return max(0, (width - 2 * Layout.horizontalMargin).rounded(.down))
     }
 }

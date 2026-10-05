@@ -206,7 +206,7 @@ struct ChapterList: View {
             }
             .padding(.vertical, 10)
         }
-        .scrollClipDisabled()
+        .tvScrollClipDisabled()
         .frame(maxHeight: 420, alignment: .top)
         .defaultFocus($focused, current ?? 0)
         .task { if let current { focused = current } }     // opened over the player: start on the chapter playing

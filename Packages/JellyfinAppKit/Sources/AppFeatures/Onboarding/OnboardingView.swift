@@ -279,7 +279,7 @@ struct SignInView: View {
                         .padding(.vertical, 30)
                         .padding(.horizontal, 10)
                     }
-                    .scrollClipDisabled()
+                    .tvScrollClipDisabled()
                     .tvFocusSection()
                 }
                 HStack(spacing: 18) {

@@ -96,7 +96,7 @@ struct ProfileView: View {
                 }
                 .padding(.vertical, 40)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
         }
         .padding(.horizontal, 40)
         .padding(.top, 40)

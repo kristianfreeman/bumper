@@ -228,12 +228,7 @@ struct MainTabView: View {
         } detail: {
             RoutedStack(initial: selection == "home" ? app.launchRoute : []) { page(for: selection) }
                 .id(selection)
-                // Its own size, not its content's: a vertical scroll view
-                // reports its content's width as its ideal, and the cards are
-                // laid out for the last width — the page kept its width and
-                // squeezed the sidebar when it opened.
                 .frame(minWidth: 520, idealWidth: 960, maxWidth: .infinity)
-                .measuresPageViewport()
                 .navigationSplitViewColumnWidth(min: 520, ideal: 960)
         }
         .onChange(of: selection) { _, tab in recordOpen(tab) }
@@ -271,27 +266,27 @@ struct MainTabView: View {
         RoutedStack(initial: app.launchRoute) {
             TabView(selection: $selection) {
                 Tab("Home", systemImage: "house", value: "home") {
-                    HomeView()
+                    HomeView().readsPageWidth()          // each tab its own area (the iPad's sidebar takes some)
                 }
                 // At most four library tabs: past seven entries the sidebar
                 // stops opening (see SidebarPlan).
                 ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
                     if case .library(let view) = entry {
-                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { LibraryView(library: view) }
+                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { LibraryView(library: view).readsPageWidth() }
                     } else if case .audiobooks(let libraries) = entry {
-                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { AudiobookLibraryView(libraries: libraries) }
+                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { AudiobookLibraryView(libraries: libraries).readsPageWidth() }
                     } else if case .more(let libraries) = entry {
-                        Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries) }
+                        Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries).readsPageWidth() }
                     }
                 }
                 if let remoteTab {
                     Tab("Remote", systemImage: "appletvremote.gen4", value: "remote") { remoteTab }
                 }
                 Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
-                    SearchView()
+                    SearchView().readsPageWidth()
                 }
                 Tab("Settings", systemImage: "gearshape", value: "settings") {
-                    SettingsView()
+                    SettingsView().readsPageWidth()
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
@@ -360,26 +355,9 @@ struct RoutedStack<Root: View>: View {
     var body: some View {
         NavigationStack(path: $path) {
             root()
+                .readsPageWidth()
                 .navigationDestination(for: Route.self) { route in
-                    switch route {
-                    case .item(let item): ItemDetailView(item: item)
-                    case .library(let library):
-                        if library.collectionType == "books" { AudiobookLibraryView(libraries: [library]) } else { LibraryView(library: library) }
-                    case .grid(let spec): CollectionPage(spec: spec)
-                    case .profile: ProfileView()
-                    case .audiobook(let id): AudiobookDetailView(bookId: id)
-                    case .queue: QueuePage()
-                    case .settings(let page):
-                        switch page {
-                        case "themes": ThemesView()
-                        case "capabilities": CapabilitiesView()
-                        #if DEBUG
-                        case "budgets": BudgetsView()
-                        #endif
-                        // Everything else is a section of the one Settings page.
-                        default: SettingsView(start: page == "root" ? nil : page)
-                        }
-                    }
+                    destination(route).readsPageWidth()
                 }
         }
         .environment(\.navigate, NavigateAction { path.append($0) })
@@ -387,6 +365,28 @@ struct RoutedStack<Root: View>: View {
             guard let route else { return }
             path.append(route)
             app.pendingRoute = nil
+        }
+    }
+
+    @ViewBuilder private func destination(_ route: Route) -> some View {
+        switch route {
+        case .item(let item): ItemDetailView(item: item)
+        case .library(let library):
+            if library.collectionType == "books" { AudiobookLibraryView(libraries: [library]) } else { LibraryView(library: library) }
+        case .grid(let spec): CollectionPage(spec: spec)
+        case .profile: ProfileView()
+        case .audiobook(let id): AudiobookDetailView(bookId: id)
+        case .queue: QueuePage()
+        case .settings(let page):
+            switch page {
+            case "themes": ThemesView()
+            case "capabilities": CapabilitiesView()
+            #if DEBUG
+            case "budgets": BudgetsView()
+            #endif
+            // Everything else is a section of the one Settings page.
+            default: SettingsView(start: page == "root" ? nil : page)
+            }
         }
     }
 }

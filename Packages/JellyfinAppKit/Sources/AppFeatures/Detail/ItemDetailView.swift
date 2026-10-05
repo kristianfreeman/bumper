@@ -124,7 +124,7 @@ struct ItemDetailView: View {
                 }
                 .padding(.bottom, 80)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
         }
         // Land on Play: it's what the user came here to press. With a
         // sidebarAdaptable TabView the sidebar otherwise keeps focus on a
@@ -282,7 +282,7 @@ struct ItemDetailView: View {
             .padding(.horizontal, Layout.horizontalMargin)
             .padding(.vertical, 12)
         }
-        .scrollClipDisabled()
+        .tvScrollClipDisabled()
         .tvFocusSection()
     }
 
@@ -317,7 +317,7 @@ struct CastShelf: View {
                 .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 28)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
         }
         .tvFocusSection()
     }

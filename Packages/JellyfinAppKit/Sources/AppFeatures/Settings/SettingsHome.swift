@@ -18,7 +18,7 @@ struct SettingsView: View {
     @Environment(\.navigate) private var navigate
     @State private var editing: String?
     @State private var preview: (setting: String, option: String)?
-    @State private var width: CGFloat = 1600
+    @Environment(\.pageWidth) private var width
     @State private var cleared = false
     @State private var confirmSignOut = false
     @FocusState private var focus: SettingsFocus?
@@ -66,10 +66,7 @@ struct SettingsView: View {
                 .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 60)
             }
-            .scrollClipDisabled()
-            // The scroll view's width (the screen's), not the content's: measuring the content
-            // sized it from its own first guess, and stayed TV-wide on an iPhone.
-            .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
+            .tvScrollClipDisabled()
             .onAppear {
                 guard let start else { return }
                 // Focus decides where a tvOS page sits: put it in the section
@@ -145,7 +142,7 @@ struct SettingsView: View {
                 .padding(.vertical, 12)
                 .padding(.horizontal, 6)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
             .tvFocusSection()
             .id(editing)
             .onAppear { focusCurrent(of: tile) }
@@ -217,7 +214,7 @@ struct SettingsView: View {
                 }
                 .padding(.vertical, 20)
             }
-            .scrollClipDisabled()
+            .tvScrollClipDisabled()
         }
         .tvFocusSection()
         .id("look")

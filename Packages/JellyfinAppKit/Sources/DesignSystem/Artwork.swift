@@ -165,7 +165,7 @@ public struct Artwork: View {
     @Environment(\.theme) private var theme
     /// Keyed by request: a reused view (the hero logo as focus moves) must
     /// never show the previous item's image or skip loading the new one.
-    @State private var loaded: (key: String, image: CGImage)?
+    @State private var loaded: (key: String, source: ArtworkSource, image: CGImage)?
 
     public init(_ source: ArtworkSource?, kind: ArtworkKind, width: CGFloat, contentMode: ContentMode = .fill, spoiler: Bool = false, spoilerAlternative: ArtworkSource? = nil) {
         self.storedSource = source
@@ -202,7 +202,10 @@ public struct Artwork: View {
     public var body: some View {
         let request = request
         let fresh = loaded.flatMap { $0.key == request?.key ? $0.image : nil }
-        let image = fresh ?? request.flatMap { ImagePipeline.shared.cachedImage(for: $0) }
+        // The same artwork at its last size while a resize's loads (a window
+        // being resized otherwise flashes every card back to its placeholder).
+        let stale = loaded.flatMap { $0.source == source ? $0.image : nil }
+        let image = fresh ?? request.flatMap { ImagePipeline.shared.cachedImage(for: $0) } ?? stale
         ZStack {
             if kind != .logo {
                 if let hash = source?.blurHash, let blur = hidden ? BlurHashCache.shared.decode(hash) : BlurHashCache.shared.cached(hash) {
@@ -219,10 +222,10 @@ public struct Artwork: View {
             }
         }
         .task(id: request) {
-            guard let request, image == nil else { return }
+            guard let request, let source, fresh == nil, ImagePipeline.shared.cachedImage(for: request) == nil else { return }
             if let fetched = try? await ImagePipeline.shared.image(for: request) {
                 // Ease in rather than pop.
-                withAnimation(.easeOut(duration: 0.2)) { loaded = (request.key, fetched) }
+                withAnimation(.easeOut(duration: 0.2)) { loaded = (request.key, source, fetched) }
             }
         }
     }
