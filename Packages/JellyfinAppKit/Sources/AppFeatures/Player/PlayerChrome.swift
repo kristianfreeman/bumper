@@ -365,8 +365,9 @@ struct MenuCard: View {
         .padding(.trailing, 90)
         .padding(.bottom, 290)
         .defaultFocus(focus, defaultOption)
-        .onChange(of: controller.subtitleSearch) {
+        .onChange(of: controller.subtitleSearch) { _, now in
             // Searching → results: focus onto the best match.
+            guard now != .idle else { return }
             Task {
                 for _ in 0..<5 {
                     try? await Task.sleep(for: .milliseconds(40))
@@ -374,7 +375,7 @@ struct MenuCard: View {
                 }
             }
         }
-        .onDisappear { controller.subtitleSearch = .idle }
+        .onDisappear { if controller.subtitleSearch != .idle { controller.subtitleSearch = .idle } }
         .task {
             // After the card's buttons are in the focus graph (an immediate
             // assignment can land before they exist and leave focus on the icon).
