@@ -1,5 +1,11 @@
+public import AppCore
 public import JellyfinAPI
 public import SwiftUI
+
+extension EnvironmentValues {
+    /// This device's downloads (nil on the TV): cards mark what's downloaded.
+    @Entry public var downloadStore: DownloadStore? = nil
+}
 
 /// Focus treatment shared by every card. `.lift` uses the system highlight
 /// (parallax + specular, the native tvOS feel); `.glow` (premium themes) adds
@@ -63,6 +69,7 @@ public struct PosterCard: View {
                 Artwork(item: item, kind: .poster, width: width)
                     .frame(width: width, height: width * 1.5)
                     .overlay(alignment: .topTrailing) { WatchedBadge(item: item).padding(10) }
+                    .overlay(alignment: .topLeading) { DownloadedBadge(item: item).padding(10) }
                     .overlay(alignment: .bottom) {
                         if let p = item.progress, !item.isPlayed { ProgressStrip(p).padding(12) }
                     }
@@ -155,6 +162,7 @@ public struct LandscapeCard: View {
                         }
                     }
                     .overlay(alignment: .topTrailing) { WatchedBadge(item: item).padding(10) }
+                    .overlay(alignment: .topLeading) { DownloadedBadge(item: item).padding(10) }
                     .cardFocus()
                 // Always two lines (an empty one if there's no subtitle): every
                 // card is the same height, so grids never re-measure as they scroll.
@@ -194,6 +202,25 @@ public struct PersonCard: View {
             .frame(width: Layout.castWidth + 20)
         }
         .buttonStyle(.borderless)
+    }
+}
+
+/// A film or episode on this device, or a show with episodes on it.
+struct DownloadedBadge: View {
+    let item: BaseItem
+    @Environment(\.downloadStore) private var store
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        // Reads the marks only (they change when a download finishes), not progress.
+        if let store, item.kind == .series ? store.showsWithDownloads.contains(item.id) : store.downloaded.contains(item.id) {
+            Image(systemName: "arrow.down")
+                .font(.caption2.bold())
+                .foregroundStyle(theme.primaryText)
+                .padding(7)
+                .background(.black.opacity(0.55), in: .circle)
+                .accessibilityLabel("Downloaded")
+        }
     }
 }
 

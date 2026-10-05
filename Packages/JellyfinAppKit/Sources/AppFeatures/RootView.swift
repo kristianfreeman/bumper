@@ -23,6 +23,7 @@ public struct AppRoot: View {
             .environment(\.theme, app.themes.theme)
             .environment(\.jellyfin, app.session?.client)
             .environment(\.hideSpoilers, app.settings.hideSpoilers)
+            .environment(\.downloadStore, app.downloads)
             .preferredColorScheme(app.themes.theme.colorScheme)
             .tint(app.themes.theme.accent)
             .onOpenURL { app.open($0) }                     // the Top Shelf: bumper://play/<id>
@@ -101,6 +102,8 @@ nonisolated enum Route: Hashable, Sendable {
     case profile
     case audiobook(String)
     case queue
+    case downloads
+    case downloadedShow(String)
 }
 
 nonisolated struct GridSpec: Hashable, Sendable {
@@ -189,6 +192,7 @@ struct MainTabView: View {
             case .more: out.append(Place(id: "more", title: "More", icon: "square.grid.2x2"))
             }
         }
+        if app.downloads != nil { out.append(Place(id: "downloads", title: "Downloads", icon: "arrow.down.circle")) }
         out.append(Place(id: "search", title: "Search", icon: "magnifyingglass"))
         out.append(Place(id: "settings", title: "Settings", icon: "gearshape"))
         return out
@@ -199,6 +203,7 @@ struct MainTabView: View {
         switch id {
         case "home": HomeView()
         case "search": SearchView()
+        case "downloads": DownloadsView()
         case "settings": SettingsView()
         case "remote": remoteTab
         default:
@@ -281,6 +286,9 @@ struct MainTabView: View {
                     } else if case .more(let libraries) = entry {
                         Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries).tabPage() }
                     }
+                }
+                if app.downloads != nil {
+                    Tab("Downloads", systemImage: "arrow.down.circle", value: "downloads") { DownloadsView().tabPage() }
                 }
                 if let remoteTab {
                     Tab("Remote", systemImage: "appletvremote.gen4", value: "remote") { remoteTab.tabPage() }
@@ -417,6 +425,8 @@ struct RoutedStack<Root: View>: View {
         case .profile: ProfileView()
         case .audiobook(let id): AudiobookDetailView(bookId: id)
         case .queue: QueuePage()
+        case .downloads: DownloadsView()
+        case .downloadedShow(let id): DownloadedShowView(seriesId: id)
         case .settings(let page):
             switch page {
             case "themes": ThemesView()

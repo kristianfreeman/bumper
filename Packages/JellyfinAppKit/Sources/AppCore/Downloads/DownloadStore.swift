@@ -60,7 +60,21 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
 @MainActor
 @Observable
 public final class DownloadStore {
-    public private(set) var records: [String: DownloadRecord] = [:]
+    /// Everything, live (progress included: read it only where progress shows).
+    public private(set) var records: [String: DownloadRecord] = [:] { didSet { refreshMarks() } }
+    /// Finished downloads' ids, and shows with any — what a card's mark reads.
+    /// They change only when a download finishes or goes, not on every byte.
+    public private(set) var downloaded: Set<String> = []
+    public private(set) var showsWithDownloads: Set<String> = []
+    /// iPhone/iPad: whether pieces may come over cellular.
+    @ObservationIgnored public var allowsCellular = false
+
+    private func refreshMarks() {
+        let done = records.values.filter(\.isDone)
+        let ids = Set(done.map(\.id)), shows = Set(done.compactMap(\.item.seriesId))
+        if ids != downloaded { downloaded = ids }
+        if shows != showsWithDownloads { showsWithDownloads = shows }
+    }
 
     /// How many pieces download at once, and how big each is.
     public static let parallelPieces = 4
@@ -90,6 +104,7 @@ public final class DownloadStore {
         } else {
             records = Self.rebuild(from: base)
         }
+        refreshMarks()
         downloader.setHandler { [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
@@ -134,6 +149,21 @@ public final class DownloadStore {
     public func episodes(seriesId: String, seasonId: String? = nil) -> [DownloadRecord] {
         records.values.filter { $0.item.seriesId == seriesId && (seasonId == nil || $0.item.seasonId == seasonId) }
             .sorted { ($0.item.parentIndexNumber ?? 0, $0.item.indexNumber ?? 0) < ($1.item.parentIndexNumber ?? 0, $1.item.indexNumber ?? 0) }
+    }
+
+    /// A show's downloads at a glance: how many episodes, how many done.
+    public func summary(seriesId: String, seasonId: String? = nil) -> (total: Int, done: Int, active: Int) {
+        let eps = records.values.filter { $0.item.seriesId == seriesId && (seasonId == nil || $0.item.seasonId == seasonId) }
+        return (eps.count, eps.filter(\.isDone).count, eps.filter(\.isActive).count)
+    }
+
+    /// Space left on the device for downloads.
+    public var freeBytes: Int64? {
+        #if os(tvOS)
+        nil                                                       // no downloads there
+        #else
+        (try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage
+        #endif
     }
 
     /// Bytes on disk (finished files and pieces so far).
@@ -206,6 +236,13 @@ public final class DownloadStore {
         r.state = .downloading
         records[id] = r
         let url = client.downloadURL(itemId: id)
+        if r.item.mediaSources?.isEmpty ?? true, let full = try? await client.item(id: id) {
+            // A card's item has no media sources: the snapshot needs them to play offline.
+            r.item = full
+            r.mediaSourceId = full.mediaSources?.first?.id
+            records[id]?.item = full
+            records[id]?.mediaSourceId = r.mediaSourceId
+        }
         if r.pieces.isEmpty {
             // How big, and can it come in pieces?
             var head = URLRequest(url: url)
@@ -270,17 +307,25 @@ public final class DownloadStore {
             inFlightPieces[id, default: []].insert(i)
             let resume = r.pieces[i].resumeData
             records[id]?.pieces[i].resumeData = nil
-            downloader.fetch(url, range: r.pieces[i].range, download: id, piece: i, resumeData: resume)
+            downloader.fetch(url, range: r.pieces[i].range, download: id, piece: i, resumeData: resume, allowsCellular: allowsCellular)
         }
     }
 
     @ObservationIgnored private var inFlightPieces: [String: Set<Int>] = [:]
+    @ObservationIgnored private var liveReceived: [String: [Int: Int64]] = [:]
+    @ObservationIgnored private var lastPublish: [String: ContinuousClock.Instant] = [:]
 
     private func handle(_ event: SegmentedDownloader.Event) {
         switch event {
         case .progress(let id, let piece, let received):
-            guard records[id]?.pieces.indices.contains(piece) == true else { return }
-            records[id]?.pieces[piece].received = received
+            // Held here, shown a few times a second (every byte redrew the page).
+            liveReceived[id, default: [:]][piece] = received
+            if ContinuousClock.now - (lastPublish[id] ?? .now - .seconds(1)) >= .milliseconds(250) {
+                lastPublish[id] = .now
+                guard var r = records[id] else { return }
+                for (p, bytes) in liveReceived[id] ?? [:] where r.pieces.indices.contains(p) && r.pieces[p].file == nil { r.pieces[p].received = bytes }
+                records[id] = r
+            }
             if ContinuousClock.now - lastProgressSave > .seconds(5) { lastProgressSave = .now; save() }
         case .finished(let id, let piece, let file):
             inFlightPieces[id]?.remove(piece)

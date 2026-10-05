@@ -21,6 +21,7 @@ struct SettingsView: View {
     @Environment(\.pageWidth) private var width
     @State private var cleared = false
     @State private var confirmSignOut = false
+    @State private var confirmRemoveDownloads = false
     @FocusState private var focus: SettingsFocus?
 
     var body: some View {
@@ -55,6 +56,7 @@ struct SettingsView: View {
                         .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio to your receiver as is.", $settings.preferPassthrough),
                     ])
                     look
+                    if let store = app.downloads { storage(store, settings) }
                     section("audiobooks", "Audiobooks", "Listening.", [
                         .choice("rate", "Speed", "gauge.with.dots.needle.50percent", "Voices keep their pitch at any speed.",
                                 options: audiobookRates.map { (String($0), rateTitle($0)) },
@@ -147,6 +149,31 @@ struct SettingsView: View {
             .id(editing)
             .onAppear { focusCurrent(of: tile) }
         }
+    }
+
+    // MARK: Storage (downloads; not on the TV)
+
+    private func storage(_ store: DownloadStore, _ settings: AppSettings) -> some View {
+        let count = store.records.values.filter(\.isDone).count
+        var tiles: [SettingTile] = [
+            .link("downloads", "Downloads", "arrow.down.circle",
+                  "\(DownloadWords.bytes(store.bytesUsed)) on this \(DownloadWords.device)\(store.freeBytes.map { ", \(DownloadWords.bytes($0)) free" } ?? ""). Remove a show, a season or an episode there.",
+                  value: count == 0 ? "None" : String(count)) { navigate(.downloads) },
+        ]
+        if Layout.device == .phone || Layout.device == .pad {
+            tiles.append(.toggle("cellular", "Download on Cellular", "antenna.radiowaves.left.and.right", "Off: downloads wait for Wi-Fi.",
+                                 Binding(get: { settings.downloadsOverCellular }, set: { settings.downloadsOverCellular = $0; store.allowsCellular = $0 })))
+        }
+        if !store.records.isEmpty {
+            tiles.append(.action("removeDownloads", "Remove All Downloads", "trash", "Frees \(DownloadWords.bytes(store.bytesUsed)).", value: nil) { confirmRemoveDownloads = true })
+        }
+        return section("storage", "Storage", "What's downloaded to this \(DownloadWords.device).", tiles)
+            .confirmationDialog("Remove every download?", isPresented: $confirmRemoveDownloads, titleVisibility: .visible) {
+                Button("Remove All", role: .destructive) { store.remove(Array(store.records.keys)) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("They stay in your library; only this \(DownloadWords.device)'s copies go.")
+            }
     }
 
     // MARK: Subtitles: a live preview beside the tiles

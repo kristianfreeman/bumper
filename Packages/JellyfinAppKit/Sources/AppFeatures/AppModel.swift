@@ -188,6 +188,7 @@ final class AppModel {
             }
         }
         settings = AppSettings(defaults: defaults)
+        downloads?.allowsCellular = settings.downloadsOverCellular
         libraryUsage = LibraryUsage(defaults: defaults)
         accounts = AccountStore(defaults: defaults, keychain: Keychain(service: Brand.bundleIdentifier + (options.mock ? ".mock" : "")), protocolClasses: protocols)
         themes = ThemeStore(settings: settings)
@@ -350,6 +351,7 @@ final class AppModel {
     var launchRoute: [Route] {
         guard let route = options.route else { return [] }
         if route == "queue" { return [.queue] }
+        if route == "downloads" { return [.downloads] }
         let parts = route.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return [] }
         switch parts[0] {

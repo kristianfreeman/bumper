@@ -66,12 +66,13 @@ public final class SegmentedDownloader: NSObject, URLSessionDownloadDelegate, Se
     private var session: URLSession { sessionBox.withLock { $0! } }
 
     /// Starts (or, with `resumeData`, resumes) one piece: `range` nil for the whole file.
-    public func fetch(_ url: URL, range: ClosedRange<Int64>?, download: String, piece: Int, headers: [String: String] = [:], resumeData: Data? = nil) {
+    public func fetch(_ url: URL, range: ClosedRange<Int64>?, download: String, piece: Int, headers: [String: String] = [:], resumeData: Data? = nil, allowsCellular: Bool = true) {
         let task: URLSessionDownloadTask
         if let resumeData {
             task = session.downloadTask(withResumeData: resumeData)
         } else {
             var request = URLRequest(url: url)
+            request.allowsCellularAccess = allowsCellular
             for (k, v) in headers { request.setValue(v, forHTTPHeaderField: k) }
             if let range { request.setValue("bytes=\(range.lowerBound)-\(range.upperBound)", forHTTPHeaderField: "Range") }
             task = session.downloadTask(with: request)

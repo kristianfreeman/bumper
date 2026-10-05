@@ -248,6 +248,13 @@ struct ItemDetailView: View {
                     Pill("Audio and Subtitles", systemImage: "captions.bubble") { showTracks = true }
                 }
             }
+            // Downloads (iPhone, iPad, Mac): a film or episode, or a show's season.
+            if item.kind.isPlayable {
+                DownloadPill(item: model.item)
+            } else if item.kind == .series, let season = model.selectedSeason {
+                SeasonDownloadPill(seriesId: item.id, seasonId: season,
+                                   seasonName: model.seasons.first { $0.id == season }?.name ?? "Season", episodes: model.episodes)
+            }
             Pill(model.item.isPlayed ? "Watched" : "Mark Watched", systemImage: model.item.isPlayed ? "checkmark.circle.fill" : "checkmark.circle",
                  active: model.item.isPlayed) { toggleWatched() }
             Pill(model.item.isFavorite ? "Favourite" : "Add to Favourites", systemImage: model.item.isFavorite ? "heart.fill" : "heart",
