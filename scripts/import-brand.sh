@@ -61,6 +61,15 @@ for mark in wordmark symbol wordmark-light symbol-light; do
   done
 done
 
+# The clean still marks (vectors) for places where the mark sits still at
+# small sizes, like the sidebar header.
+for mark in wordmark wordmark-light symbol symbol-light; do
+  dir="$TV/BumperMark-$mark.imageset"
+  rm -rf "$dir"; mkdir -p "$dir"
+  cp "$DIST/$mark.svg" "$dir/$mark.svg"
+  printf '{ "images" : [ { "filename" : "%s.svg", "idiom" : "universal" } ], "properties" : { "preserves-vector-representation" : true }, %s }\n' "$mark" "$INFO" > "$dir/Contents.json"
+done
+
 # iPhone: one 1024 icon.
 PHONE=iPhone/Assets.xcassets
 mkdir -p "$PHONE/AppIcon.appiconset"

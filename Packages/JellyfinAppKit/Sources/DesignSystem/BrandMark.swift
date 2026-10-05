@@ -20,7 +20,7 @@ public struct BrandMark: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.theme) private var theme
 
-    /// `still`: frame 0 only (the sidebar, anywhere it sits beside content).
+    /// `still`: the clean vector mark, no boil (the sidebar, anywhere it sits beside content).
     public init(_ kind: Kind = .wordmark, height: CGFloat, still: Bool = false) {
         self.kind = kind
         self.height = height
@@ -29,7 +29,12 @@ public struct BrandMark: View {
 
     public var body: some View {
         Group {
-            if reduceMotion || still {
+            if still {
+                // The clean vector mark (frame 0 has the boil baked in).
+                Image("BumperMark-\(kind.rawValue)\(theme.colorScheme == .light ? "-light" : "")")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else if reduceMotion {
                 frame(0)
             } else {
                 TimelineView(.periodic(from: .now, by: 1 / BumperBrand.Boil.framesPerSecond)) { context in

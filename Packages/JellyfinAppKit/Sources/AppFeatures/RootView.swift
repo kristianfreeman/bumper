@@ -120,16 +120,26 @@ nonisolated struct GridSpec: Hashable, Sendable {
 private struct SidebarBrandHeader: ViewModifier {
     func body(content: Content) -> some View {
         if #available(tvOS 27.0, *) {
-            content.tabViewSidebarHeader {
-                BrandMark(.wordmark, height: 44, still: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .accessibilityIdentifier("sidebar.brand")
-            }
+            content.tabViewSidebarHeader { SidebarMark() }
         } else {
             content
         }
+    }
+}
+
+/// The word where it fits, the sticker where it doesn't (the collapsed
+/// icon column): still, 38 pt tall, on the sidebar's leading inset.
+private struct SidebarMark: View {
+    @State private var width: CGFloat = 300
+
+    var body: some View {
+        BrandMark(width < 120 ? .symbol : .wordmark, height: 38, still: true)
+            .frame(maxWidth: .infinity, alignment: width < 120 ? .center : .leading)
+            .padding(.horizontal, width < 120 ? 0 : 20)
+            .padding(.vertical, 12)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .focusable(false)
+            .accessibilityIdentifier("sidebar.brand")
     }
 }
 
