@@ -182,7 +182,6 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
         GENERATE_INFOPLIST_FILE: YES
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_IDENTITY: "-"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
     info:
       path: Mac/Info.plist
