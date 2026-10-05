@@ -68,6 +68,12 @@ struct PlayerView: View {
                 .focused($focus, equals: .surface)
                 .ignoresSafeArea()
                 .accessibilityIdentifier("player.surface")
+                #if !os(tvOS)
+                // Tap / click the picture: the controls (or a menu) come and go.
+                .onTapGesture {
+                    if openMenu != nil { closeMenu() } else if chromeVisible { chromeVisible = false } else { showChrome() }
+                }
+                #endif
             if let controller {
                 RemoteGestures(transport: controller.transport, active: focus == .surface && openMenu == nil) {
                     showChrome()
@@ -81,6 +87,12 @@ struct PlayerView: View {
                              openMenu: openMenu, focus: $focus, open: { open($0) }, leave: { focus = .surface })
                     .transition(.opacity)
             }
+            #if !os(tvOS)
+            if chromeVisible, openMenu == nil, let controller, let engine = controller.engine {
+                TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() })
+                    .transition(.opacity)
+            }
+            #endif
             if let menu = openMenu, let controller {
                 MenuCard(menu: menu, controller: controller, focus: $focus, close: { closeMenu() })
                     .id(menu)
@@ -103,6 +115,14 @@ struct PlayerView: View {
         content
             .defaultFocus($focus, .surface)
             .tvExitCommand(perform: handleExit)
+            #if !os(tvOS)
+            // A keyboard (Mac, iPad): Space plays and pauses, arrows skip, Escape leaves.
+            .focusable()
+            .onKeyPress(.space) { controller?.togglePlayPause(); showChrome(); return .handled }
+            .onKeyPress(.leftArrow) { Task { await controller?.skip(by: .seconds(-10)) }; showChrome(); return .handled }
+            .onKeyPress(.rightArrow) { Task { await controller?.skip(by: .seconds(30)) }; showChrome(); return .handled }
+            .onKeyPress(.escape) { handleExit(); return .handled }
+            #endif
             .animation(.easeInOut(duration: 0.22), value: chromeVisible)
             .animation(.spring(duration: 0.28), value: openMenu)
             .task {
@@ -221,6 +241,10 @@ struct PlayerView: View {
         if controller?.transport.cancel() == true { showChrome(); return }
         if case .control = focus { focus = .surface; return }
         if chromeVisible && controller?.isPlaying == true { chromeVisible = false; return }
+        leavePlayer()
+    }
+
+    private func leavePlayer() {
         Task {
             await controller?.stop()
             app.playback = nil

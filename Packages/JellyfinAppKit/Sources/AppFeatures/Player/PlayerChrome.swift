@@ -106,13 +106,15 @@ struct TransportBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
-            HStack(alignment: .bottom, spacing: 40) {
+            // Beside each other on the TV, Mac and iPad; stacked on a phone.
+            let layout = Layout.device == .phone ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18)) : AnyLayout(HStackLayout(alignment: .bottom, spacing: 40))
+            layout {
                 VStack(alignment: .leading, spacing: 8) {
                     if let kicker {
                         Text(kicker).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                     }
                     Text(controller.item.name ?? "")
-                        .font(.system(size: 52, weight: .bold))
+                        .font(.system(size: Platform.isTV ? 52 : Layout.pageTitleSmall, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -125,9 +127,11 @@ struct TransportBar: View {
                         }
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     }
                 }
-                Spacer(minLength: 0)
+                if Layout.device != .phone { Spacer(minLength: 0) }
                 HStack(spacing: 22) {
                     ForEach(PlayerMenu.allCases, id: \.self) { menu in
                         Pill(menu.title, systemImage: menu.symbol + (openMenu == menu || badge(for: menu) ? ".fill" : ""), active: badge(for: menu)) { open(menu) }
@@ -142,11 +146,12 @@ struct TransportBar: View {
             .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
             .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
             Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                     scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused)
+                     scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused,
+                     seek: { t in Task { await controller.seek(to: t) } })
         }
-        .padding(.horizontal, 90)
-        .padding(.top, 60)
-        .padding(.bottom, 64)
+        .padding(.horizontal, Platform.isTV ? 90 : Layout.horizontalMargin + 8)
+        .padding(.top, Platform.isTV ? 60 : 24)
+        .padding(.bottom, Platform.isTV ? 64 : 28)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
     }
@@ -215,35 +220,50 @@ private struct Timeline: View {
     let scrubTime: Duration?
     let scrubThumb: CGImage?
     let paused: Bool
+    /// Touch and the pointer: drag along the bar, let go to seek there.
+    var seek: (Duration) -> Void = { _ in }
+    @State private var dragging: Duration?
 
-    private static let thumbSize = CGSize(width: 384, height: 216)
+    private static let thumbSize = CGSize(width: 384 * Layout.pillScale, height: 216 * Layout.pillScale)
 
     var body: some View {
         VStack(spacing: 14) {
             GeometryReader { geo in
                 let width = geo.size.width
+                let shown = dragging ?? scrubTime
                 let played = fraction(time) * width
-                let head = fraction(scrubTime ?? time) * width
+                let head = fraction(shown ?? time) * width
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.25))
-                    Capsule().fill(.white.opacity(scrubTime == nil ? 1 : 0.45)).frame(width: max(8, played))
-                    if scrubTime != nil {
+                    Capsule().fill(.white.opacity(shown == nil ? 1 : 0.45)).frame(width: max(8, played))
+                    if shown != nil {
                         Capsule().fill(.white).frame(width: 4, height: 34).offset(x: head - 2)
                     }
-                    if let scrubTime {
-                        preview(scrubTime)
+                    if let shown, scrubTime != nil || !Platform.isTV {
+                        preview(shown)
                             .position(x: min(max(head, Self.thumbSize.width / 2), width - Self.thumbSize.width / 2), y: -Self.thumbSize.height / 2 - 54)
                     }
                 }
-                .frame(height: scrubTime == nil ? 8 : 12)
+                .frame(height: shown == nil ? 8 : 12)
                 .frame(maxHeight: .infinity)
-                .animation(.easeOut(duration: 0.12), value: scrubTime == nil)
+                .animation(.easeOut(duration: 0.12), value: shown == nil)
+                .contentShape(.rect)
+                #if !os(tvOS)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in dragging = at(g.location.x, width) }
+                        .onEnded { g in
+                            seek(at(g.location.x, width))
+                            dragging = nil
+                        }
+                )
+                #endif
             }
             .frame(height: 34)
             HStack {
                 Text(time.clockString)
                 Spacer()
-                if paused && scrubTime == nil { Text("Swipe to scrub").foregroundStyle(.white.opacity(0.55)) }
+                if paused && scrubTime == nil && Platform.isTV { Text("Swipe to scrub").foregroundStyle(.white.opacity(0.55)) }
                 Spacer()
                 Text("−" + max(.zero, duration - time).clockString)
             }
@@ -274,6 +294,10 @@ private struct Timeline: View {
                 .background(.white, in: .capsule)
         }
         .accessibilityIdentifier("scrub.preview")
+    }
+
+    private func at(_ x: CGFloat, _ width: CGFloat) -> Duration {
+        .seconds(duration.seconds * Double(min(1, max(0, x / max(1, width)))))
     }
 
     private func fraction(_ t: Duration) -> CGFloat {
