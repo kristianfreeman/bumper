@@ -9,7 +9,7 @@ final class SettingsShots: XCTestCase {
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         func shot(_ name: String) { try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png")) }
         let remote = XCUIRemote.shared
-        for page in ["playback", "subtitles", "appearance", "advanced", "themes"] {
+        for page in ["root", "subtitles", "look", "about", "themes"] {
             let app = XCUIApplication()
             app.launchArguments = ["-mock", "-route", "settings:\(page)"]
             app.launch()

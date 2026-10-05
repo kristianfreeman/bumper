@@ -237,22 +237,13 @@ struct RoutedStack<Root: View>: View {
                     case .tonight: TonightPage()
                     case .settings(let page):
                         switch page {
-                        case "playback": PlaybackSettings()
-                        case "subtitles": SubtitleSettings()
-                        case "subtitle-style": SubtitleStylePage()
-                        case "subtitle-font": SubtitleFontPage()
-                        case "subtitle-size": SubtitleSizePage()
-                        case "bitrate": BitrateSettings()
-                        case "appearance": AppearanceSettings()
-                        case "account": AccountSettings()
                         case "themes": ThemesView()
-                        case "advanced": AdvancedSettings()
-                        case "about": AboutSettings()
                         case "capabilities": CapabilitiesView()
                         #if DEBUG
                         case "budgets": BudgetsView()
                         #endif
-                        default: SettingsView()
+                        // Everything else is a section of the one Settings page.
+                        default: SettingsView(start: page == "root" ? nil : page)
                         }
                     }
                 }

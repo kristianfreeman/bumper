@@ -383,8 +383,7 @@ private struct ProfileFace: View {
     var body: some View {
         VStack(spacing: 20) {
             ZStack {
-                Circle().fill(theme.surface)
-                Text(initials).font(.system(size: size * 0.38, weight: .semibold)).foregroundStyle(theme.primaryText)
+                Monogram(user.name ?? "?", size: size)
                 if let tag = user.primaryImageTag {
                     let px = Int(size * scale)
                     RemoteImage(request: ImageRequest(url: app.accounts.client(for: server).userImageURL(userId: user.id, tag: tag, size: px), maxPixelSize: px))
@@ -407,9 +406,6 @@ private struct ProfileFace: View {
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
     }
 
-    private var initials: String {
-        (user.name ?? "?").split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-    }
 }
 
 /// The code, big, with where to enter it.

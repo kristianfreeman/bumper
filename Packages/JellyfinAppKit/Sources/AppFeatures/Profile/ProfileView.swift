@@ -236,7 +236,7 @@ extension View {
     func focusTile() -> some View { modifier(FocusTile()) }
 }
 
-/// The signed-in user's Jellyfin picture, or initials on the accent colour.
+/// The signed-in user's Jellyfin picture, or their monogram.
 struct UserAvatar: View {
     let size: CGFloat
     @Environment(AppModel.self) private var app
@@ -246,10 +246,7 @@ struct UserAvatar: View {
     var body: some View {
         let account = app.session?.account
         ZStack {
-            Circle().fill(theme.surface)
-            Text(initials(account?.userName ?? "?"))
-                .font(.system(size: size * 0.4, weight: .semibold))
-                .foregroundStyle(theme.primaryText)
+            Monogram(account?.userName ?? "?", size: size)
             if let account, let tag = account.imageTag, let client = app.session?.client {
                 RemoteImage(request: ImageRequest(url: client.userImageURL(userId: account.userId, tag: tag, size: Int(size * scale)), maxPixelSize: Int(size * scale)))
             }
@@ -258,9 +255,6 @@ struct UserAvatar: View {
         .clipShape(.circle)
     }
 
-    private func initials(_ name: String) -> String {
-        name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-    }
 }
 
 /// Minimal async image through the shared pipeline (memory/disk cached).
