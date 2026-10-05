@@ -3,9 +3,9 @@ import Foundation
 import JellyfinAPI
 import Testing
 
-/// Tonight's times add up; suggestions fit before "done by"; finishing moves on.
-@Suite("Tonight")
-struct TonightPlanTests {
+/// Queue's times add up; suggestions fit before "done by"; finishing moves on.
+@Suite("Queue")
+struct QueuePlanTests {
     static func item(_ id: String, minutes: Int, watched: Int = 0) -> BaseItem {
         var i = BaseItem(id: id, name: id, kind: .movie)
         i.runTimeTicks = Int64(minutes) * 60 * BaseItem.ticksPerSecond
@@ -17,7 +17,7 @@ struct TonightPlanTests {
 
     @Test func plansTheEvening() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        var plan = TonightPlan()
+        var plan = QueuePlan()
         plan.add(Self.item("film", minutes: 120, watched: 30))           // 90 left
         plan.add(Self.item("episode", minutes: 45))
         plan.doneBy = now.addingTimeInterval(3 * 3600)                     // 180 min

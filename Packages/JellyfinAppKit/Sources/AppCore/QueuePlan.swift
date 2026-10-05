@@ -1,13 +1,13 @@
 public import Foundation
 public import JellyfinAPI
 
-/// Tonight: what you mean to watch, in order, with the time each starts and
+/// Queue: what you mean to watch, in order, with the time each starts and
 /// when it all ends — and, optionally, when you want to be done ("done by
 /// 11:30"), which is when playback stops. Ambient suggestions (the next
 /// episode of something in the plan) fill in after your own picks.
 ///
 /// Pure: the store persists it, the views draw it, tests check the times.
-public struct TonightPlan: Sendable, Codable, Equatable {
+public struct QueuePlan: Sendable, Codable, Equatable {
     public struct Entry: Sendable, Codable, Equatable, Identifiable {
         public var item: BaseItem
         /// A suggestion the plan added, not something you picked.

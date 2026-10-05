@@ -54,6 +54,7 @@ final class PlayerController {
     }
 
     var item: BaseItem { details ?? plan?.item ?? request.item }
+    var isBackground: Bool { request.background }
     /// The full item (year, rating, trickplay…): shelves and episode lists
     /// hand the player a lightweight one.
     private(set) var details: BaseItem?
@@ -133,9 +134,12 @@ final class PlayerController {
                 }
             }
 
-            let reporter = PlaybackReporter(client: client, plan: plan)
-            self.reporter = reporter
-            Task { await reporter.start(position: plan.startPosition) }
+            // Background Noise tells the server nothing: no reporter at all.
+            if !request.background {
+                let reporter = PlaybackReporter(client: client, plan: plan)
+                self.reporter = reporter
+                Task { await reporter.start(position: plan.startPosition) }
+            }
             updateNowPlaying()
             configureRemoteCommands()
 
@@ -221,8 +225,9 @@ final class PlayerController {
         async let segs = Self.loadSegments(client: client, item: plan.item)
         if plan.item.kind == .episode, let seriesId = plan.item.seriesId {
             if let eps = try? await client.episodes(seriesId: seriesId, seasonId: nil).items,
-               let idx = eps.firstIndex(where: { $0.id == plan.item.id }), idx + 1 < eps.count {
-                nextEpisode = eps[idx + 1]
+               let idx = eps.firstIndex(where: { $0.id == plan.item.id }) {
+                // Background Noise goes round: after the last, the first again.
+                if idx + 1 < eps.count { nextEpisode = eps[idx + 1] } else if request.background { nextEpisode = eps.first }
             }
         }
         segments = await segs
@@ -276,12 +281,18 @@ final class PlayerController {
             app.playback = nil
             return
         }
-        // Tonight first: the next thing in the plan, in order.
-        if app.tonight.contains(item.id) {
-            let next = app.tonight.next(after: item.id)
-            app.tonight.finished(item.id)
+        // Background Noise: on to the next (round to the first; a film again),
+        // still telling the server nothing.
+        if request.background {
+            app.playback = PlaybackRequest(item: nextEpisode ?? request.item, resume: false, background: true)
+            return
+        }
+        // Queue first: the next thing in the plan, in order.
+        if app.queue.contains(item.id) {
+            let next = app.queue.next(after: item.id)
+            app.queue.finished(item.id)
             if let next {
-                TraceFile.write("tonight", "next in plan: \(next.name ?? next.id)")
+                TraceFile.write("queue", "next in plan: \(next.name ?? next.id)")
                 app.playback = PlaybackRequest(item: next, resume: true)
                 return
             }

@@ -1,7 +1,7 @@
 public import Foundation
 
 /// The Apple TV ⇄ iPhone companion protocol: the TV tells the phone what it
-/// shows (focus, playback, Tonight); the phone asks the TV to do things.
+/// shows (focus, playback, Queue); the phone asks the TV to do things.
 /// JSON, one message per length-prefixed frame (`Frames`), over a TCP
 /// connection found by Bonjour (`CompanionService.type`).
 public enum CompanionService {
@@ -65,29 +65,29 @@ public struct CompanionState: Codable, Sendable, Hashable {
     /// What's under focus on the TV right now.
     public var focused: CompanionItem?
     public var playing: CompanionNowPlaying?
-    public var tonight: [CompanionPlanEntry]
+    public var queue: [CompanionPlanEntry]
     public var doneBy: Date?
     /// "Three things — done around 11:40 PM."
-    public var tonightSummary: String
+    public var queueSummary: String
 
     public init(tvName: String, userName: String? = nil, focused: CompanionItem? = nil, playing: CompanionNowPlaying? = nil,
-                tonight: [CompanionPlanEntry] = [], doneBy: Date? = nil, tonightSummary: String = "") {
+                queue: [CompanionPlanEntry] = [], doneBy: Date? = nil, queueSummary: String = "") {
         self.tvName = tvName
         self.userName = userName
         self.focused = focused
         self.playing = playing
-        self.tonight = tonight
+        self.queue = queue
         self.doneBy = doneBy
-        self.tonightSummary = tonightSummary
+        self.queueSummary = queueSummary
     }
 }
 
 /// What the phone asks for.
 public enum CompanionCommand: Codable, Sendable, Hashable {
     case play(itemId: String)
-    case addToTonight(itemId: String)
-    case removeFromTonight(itemId: String)
-    case moveInTonight(itemId: String, by: Int)
+    case addToQueue(itemId: String)
+    case removeFromQueue(itemId: String)
+    case moveInQueue(itemId: String, by: Int)
     case setDoneBy(Date?)
     case playPause
     /// Titles matching words (the TV searches its library).

@@ -14,8 +14,8 @@ struct CollectionList<Header: View>: View {
     var firstCardFocus: FocusState<Bool>.Binding? = nil
     /// A collection is about to scroll into view: load it if it loads lazily.
     var onNear: ((String) -> Void)? = nil
-    /// Home: Tonight's plan leads the page, and the profile pills sit top right.
-    var showsTonight = false
+    /// Home: The queue leads the page, and the profile pills sit top right.
+    var showsQueue = false
     var showsProfile = false
     @ViewBuilder var header: () -> Header
     @Environment(AppModel.self) private var app
@@ -45,24 +45,24 @@ struct CollectionList<Header: View>: View {
                     // Not lazy: a lazy stack estimates the height of collections it
                     // hasn't built, and corrects it as they appear — the page jumped.
                     VStack(alignment: .leading, spacing: 80 - Self.snapInset) {   // the markers make up the gap
-                        // Launch focus goes to the first card on the page: Tonight's when it leads.
-                        let tonightLeads = showsTonight && !app.tonight.isEmpty
-                        if tonightLeads {
-                            SnapPoint(id: "tonight", inset: 0) {
-                                TonightSection(store: app.tonight, available: width, firstCardFocus: firstCardFocus)
+                        // Launch focus goes to the first card on the page: Queue's when it leads.
+                        let queueLeads = showsQueue && !app.queue.isEmpty
+                        if queueLeads {
+                            SnapPoint(id: "queue", inset: 0) {
+                                QueueSection(store: app.queue, available: width, firstCardFocus: firstCardFocus)
                             }
-                            .id("tonight")
-                            .onFocused { settle("tonight", first: true, proxy) }
+                            .id("queue")
+                            .onFocused { settle("queue", first: true, proxy) }
                         }
                         ForEach(sections) { section in
                             // The first collection snaps to the page's top: no marker
                             // above it (one pushed the first row down, and the page
                             // started scrolled).
-                            SnapPoint(id: section.id, inset: !tonightLeads && section.id == sections.first?.id ? 0 : Self.snapInset) {
-                                CollectionSection(section: section, available: width, firstCardFocus: !tonightLeads && section.id == sections.first?.id ? firstCardFocus : nil)
+                            SnapPoint(id: section.id, inset: !queueLeads && section.id == sections.first?.id ? 0 : Self.snapInset) {
+                                CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
                             }
                             .id(section.id)
-                            .onFocused { settle(section.id, first: !tonightLeads && section.id == sections.first?.id, proxy) }
+                            .onFocused { settle(section.id, first: !queueLeads && section.id == sections.first?.id, proxy) }
                                 .onAppear {
                                     if section.items.isEmpty { onNear?(section.id) }
                                     prepare(after: section)

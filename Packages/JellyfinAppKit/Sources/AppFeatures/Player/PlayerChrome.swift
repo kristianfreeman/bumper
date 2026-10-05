@@ -158,6 +158,7 @@ struct TransportBar: View {
     private var facts: [Fact] {
         let item = controller.item
         var out: [Fact] = []
+        if controller.isBackground { out.append(Fact(text: "Background · not marking watched", boxed: true)) }
         if item.seriesName == nil, let year = item.productionYear { out.append(Fact(text: String(year))) }
         if let rating = item.officialRating, !rating.isEmpty { out.append(Fact(text: rating, boxed: true)) }
         let total = engine.duration ?? item.runtime

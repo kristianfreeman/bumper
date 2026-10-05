@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The iPhone companion against the Apple TV app, both in simulators on this
 # Mac (Bonjour works between them): the phone finds the TV, shows what's
-# focused on it, and adds it to Tonight.
+# focused on it, and adds it to Queue.
 #   scripts/companion-check.sh
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -21,6 +21,6 @@ TEST_RUNNER_EXPECT_TITLE="Endless Voyage" TEST_RUNNER_SHOTS_DIR="$PWD/$OUT" scri
   -destination "id=$PHONE" -derivedDataPath build/test/companion -collect-test-diagnostics never >"$OUT/phone-test.log" 2>&1
 grep -E "Test Case.*(passed|failed)|error:" "$OUT/phone-test.log" | cut -c1-220
 C=$(xcrun simctl get_app_container "$TV" "$BID" data 2>/dev/null)
-grep -E "companion|tonight" "$C/Library/Caches/perf/trace.log" 2>/dev/null | tail -6
+grep -E "companion|queue" "$C/Library/Caches/perf/trace.log" 2>/dev/null | tail -6
 echo "results: $OUT"
 grep -q "Test Case.*passed" "$OUT/phone-test.log"

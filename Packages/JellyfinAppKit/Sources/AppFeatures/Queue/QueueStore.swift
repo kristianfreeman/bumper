@@ -5,16 +5,16 @@ import Instrumentation
 import JellyfinAPI
 import Observation
 
-/// Tonight, kept per account: what you've added, in order, and when you
+/// Queue, kept per account: what you've added, in order, and when you
 /// want to be done. "Done by" arms the sleep timer for that time, so the
 /// plan *is* the sleep timer for the evening.
 @MainActor
 @Observable
-final class TonightStore {
-    private(set) var plan = TonightPlan()
+final class QueueStore {
+    private(set) var plan = QueuePlan()
     /// Ticks once a minute so the times on screen stay true.
     private(set) var now = Date.now
-    @ObservationIgnored private var key = "tonight"
+    @ObservationIgnored private var key = "tonight"      // the stored key from before the rename (keeps saved queues)
     /// The app's settings store (the mock profile has its own, cleared by -reset).
     @ObservationIgnored private var defaults: UserDefaults = .standard
     @ObservationIgnored private weak var sleepTimer: SleepTimer?
@@ -28,8 +28,8 @@ final class TonightStore {
         key = "tonight-\(account)"
         self.sleepTimer = sleepTimer
         self.defaults = defaults
-        plan = TonightPlan()
-        if let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(TonightPlan.self, from: data) {
+        plan = QueuePlan()
+        if let data = defaults.data(forKey: key), let saved = try? JSONDecoder().decode(QueuePlan.self, from: data) {
             plan = saved
             if let doneBy = plan.doneBy, doneBy < .now { plan.doneBy = nil }    // yesterday's
         }
@@ -45,9 +45,9 @@ final class TonightStore {
 
     var isEmpty: Bool { plan.entries.isEmpty }
     func contains(_ id: String) -> Bool { plan.contains(id) }
-    var timeline: [TonightPlan.Slot] { plan.timeline(now: now) }
+    var timeline: [QueuePlan.Slot] { plan.timeline(now: now) }
 
-    func add(_ item: BaseItem) { change { $0.add(item) }; TraceFile.write("tonight", "add \(item.name ?? item.id)") }
+    func add(_ item: BaseItem) { change { $0.add(item) }; TraceFile.write("queue", "add \(item.name ?? item.id)") }
     func remove(_ id: String) { change { $0.remove(id) } }
     func move(_ id: String, by offset: Int) { change { $0.move(id, by: offset) } }
     func finished(_ id: String) { change { $0.finished(id) } }
@@ -66,14 +66,14 @@ final class TonightStore {
         return (0..<6).map { start.addingTimeInterval(Double($0) * 30 * 60) }
     }
 
-    func replace(with plan: TonightPlan) {
+    func replace(with plan: QueuePlan) {
         self.plan = plan
         save()
         armSleepTimer()
         onChange?()
     }
 
-    private func change(_ edit: (inout TonightPlan) -> Void) {
+    private func change(_ edit: (inout QueuePlan) -> Void) {
         edit(&plan)
         plan.suggest(candidates.filter { !plan.contains($0.id) }, now: now)
         save()

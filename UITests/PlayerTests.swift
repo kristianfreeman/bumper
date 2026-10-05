@@ -77,6 +77,23 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 5), "the found subtitle didn't come on (VLCKit reports '\(status.label)')")
     }
 
+    /// Background Noise from a page: it plays, and says it isn't marking anything watched.
+    func testBackgroundNoiseSaysItIsNotMarkingWatched() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-route", "item:media-0"]
+        app.launch()
+        let background = app.buttons["detail.background"]
+        XCTAssertTrue(background.waitForExistence(timeout: 8), "no Background Noise on the page")
+        let remote = XCUIRemote.shared
+        for _ in 0..<6 where !background.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(background.hasFocus, "couldn't reach Background Noise")
+        remote.press(.select)
+        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
+        remote.press(.playPause)                                    // chrome up
+        let note = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'not marking watched'")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 3), "the player doesn't say it's in the background")
+    }
+
     /// One press of Play/Pause pauses — and stays paused. (It could arrive
     /// twice, via SwiftUI and the Now Playing command, and cancel itself.)
     func testPlayPauseButtonPausesOnce() {

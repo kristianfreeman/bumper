@@ -35,6 +35,10 @@ nonisolated struct PlaybackRequest: Identifiable, Sendable {
     var mediaSourceId: String?
     var audioIndex: Int?
     var subtitleIndex: Int?
+    /// Background Noise: plays on and on (next episode, then back to the
+    /// first) and tells the server nothing — nothing marked watched, no
+    /// resume points, Continue Watching and Next Up untouched.
+    var background = false
 }
 
 /// Launch configuration, parsed once from the process arguments.
@@ -125,8 +129,8 @@ final class AppModel {
     let search = SmartSearch.configured()
     /// Judges which subtitle the server found fits (Jev on the search service, else on the device).
     let subtitleRanker = SubtitleRanker.configured()
-    /// Tonight's plan (per account).
-    let tonight = TonightStore()
+    /// The queue (per account).
+    let queue = QueueStore()
     /// What's focused anywhere in the app, and what's playing (the companion shows both).
     var focusedItem: BaseItem?
     var nowPlaying: NowPlayingInfo?
@@ -200,7 +204,7 @@ final class AppModel {
         }
         Self.configureAudioSession()
         InputTrace.install()
-        if let session { tonight.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults) }
+        if let session { queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults) }
         self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
@@ -281,7 +285,7 @@ final class AppModel {
 
     func didSignIn(_ session: UserSession) {
         self.session = session
-        tonight.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults)
+        queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults)
         reportCapabilities(session)
     }
 
@@ -317,7 +321,7 @@ final class AppModel {
     /// Initial navigation stack for the Home tab from `-route`.
     var launchRoute: [Route] {
         guard let route = options.route else { return [] }
-        if route == "tonight" { return [.tonight] }
+        if route == "queue" { return [.queue] }
         let parts = route.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return [] }
         switch parts[0] {
@@ -331,7 +335,7 @@ final class AppModel {
             lib.collectionType = "books"
             return [.library(lib)]
         case "audiobook": return [.audiobook(parts[1])]
-        case "tonight": return [.tonight]
+        case "queue": return [.queue]
         case "settings": return [.settings(parts[1])]
         case "profile": return [.profile]
         case "grid":
@@ -354,8 +358,8 @@ final class AppModel {
                 if let item = try? await client.item(id: id) { pendingRoute = .item(item) }
             case .library(let id):
                 if let library = try? await client.item(id: id) { pendingRoute = .library(library) }
-            case .tonight:
-                pendingRoute = .tonight
+            case .queue:
+                pendingRoute = .queue
             case .search:
                 pendingTab = "search"
             }
@@ -363,6 +367,21 @@ final class AppModel {
     }
 
     // MARK: Playback
+
+    /// Background Noise: a show from a random episode (or this episode, or
+    /// this film), on a loop, without marking anything watched.
+    func playInBackground(_ item: BaseItem) {
+        guard let client = session?.client else { return }
+        TraceFile.write("player", "background: \(item.name ?? item.id)")
+        Task {
+            var start = item
+            if item.kind == .series, let eps = try? await client.episodes(seriesId: item.id, seasonId: nil).items, let pick = eps.randomElement() {
+                start = pick
+            }
+            if audiobook != nil { stopAudiobook() }
+            playback = PlaybackRequest(item: start, resume: false, background: true)
+        }
+    }
 
     /// Start (or resume) a book and show its Now Playing screen.
     func listen(_ book: Audiobook, from start: Double? = nil) {

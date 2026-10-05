@@ -141,7 +141,7 @@ case "${1:-fast}" in
   profile) step build_for_testing; step ui_run -only-testing:"BumperUITests/ProfileTests${2:+/$2}" ;;
   settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
   player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
-  tonight) step build_for_testing; step ui_run -only-testing:"BumperUITests/TonightTests" ;;
+  queue) step build_for_testing; step ui_run -only-testing:"BumperUITests/QueueTests" ;;
   scroll) step build_for_testing; step ui_run -only-testing:"BumperUITests/ScrollTests" ;;
   sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/SidebarTests${2:+/$2}" ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;

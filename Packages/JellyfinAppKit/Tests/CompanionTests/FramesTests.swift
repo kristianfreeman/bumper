@@ -9,8 +9,8 @@ struct FramesTests {
         let item = CompanionItem(id: "m1", title: "Endless Voyage", subtitle: "1982 · 2 h 13 min", imageURL: URL(string: "http://tv.local/i.jpg"), minutes: 133)
         let messages: [CompanionMessage] = [
             .hello(name: "Living Room", version: CompanionService.version),
-            .state(CompanionState(tvName: "Living Room", focused: item, tonight: [CompanionPlanEntry(item: item, start: Date(timeIntervalSince1970: 1_800_000_000), suggested: false, overruns: false)], tonightSummary: "One thing.")),
-            .command(.moveInTonight(itemId: "m1", by: -1)),
+            .state(CompanionState(tvName: "Living Room", focused: item, queue: [CompanionPlanEntry(item: item, start: Date(timeIntervalSince1970: 1_800_000_000), suggested: false, overruns: false)], queueSummary: "One thing.")),
+            .command(.moveInQueue(itemId: "m1", by: -1)),
             .command(.setDoneBy(nil)),
             .results(query: "funny", items: [item], understood: "comedy"),
         ]

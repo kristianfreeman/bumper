@@ -17,7 +17,7 @@ struct NowPlayingInfo: Equatable {
 
 /// The TV's side of the iPhone companion: advertises the TV on the local
 /// network, keeps phones up to date (what's focused, what's playing,
-/// Tonight), and carries out what they ask.
+/// Queue), and carries out what they ask.
 @MainActor
 final class CompanionBridge {
     private unowned let app: AppModel
@@ -55,9 +55,9 @@ final class CompanionBridge {
             focused: app.focusedItem.map { Self.item($0, client: client) },
             playing: app.nowPlaying.map { CompanionNowPlaying(item: Self.item($0.item, client: client), position: $0.position, duration: $0.duration, paused: $0.paused) }
                 ?? app.audiobook.map { CompanionNowPlaying(item: Self.item($0.book.card, client: client), position: $0.position, duration: $0.book.duration, paused: !$0.isPlaying) },
-            tonight: app.tonight.timeline.map { CompanionPlanEntry(item: Self.item($0.entry.item, client: client), start: $0.start, suggested: $0.entry.ambient, overruns: $0.overruns) },
-            doneBy: app.tonight.plan.doneBy,
-            tonightSummary: TonightWords.summary(app.tonight))
+            queue: app.queue.timeline.map { CompanionPlanEntry(item: Self.item($0.entry.item, client: client), start: $0.start, suggested: $0.entry.ambient, overruns: $0.overruns) },
+            doneBy: app.queue.plan.doneBy,
+            queueSummary: QueueWords.summary(app.queue))
         host.publish(state)
     }
 
@@ -67,14 +67,14 @@ final class CompanionBridge {
         switch command {
         case .play(let id):
             if let item = try? await client.item(id: id) { app.play(item) }
-        case .addToTonight(let id):
-            if let item = try? await client.item(id: id) { app.tonight.add(item) }
-        case .removeFromTonight(let id):
-            app.tonight.remove(id)
-        case .moveInTonight(let id, let by):
-            app.tonight.move(id, by: by)
+        case .addToQueue(let id):
+            if let item = try? await client.item(id: id) { app.queue.add(item) }
+        case .removeFromQueue(let id):
+            app.queue.remove(id)
+        case .moveInQueue(let id, let by):
+            app.queue.move(id, by: by)
         case .setDoneBy(let date):
-            app.tonight.setDoneBy(date)
+            app.queue.setDoneBy(date)
         case .playPause:
             if let book = app.audiobook { book.togglePlayPause() } else { NotificationCenter.default.post(name: .companionPlayPause, object: nil) }
         case .search(let words):

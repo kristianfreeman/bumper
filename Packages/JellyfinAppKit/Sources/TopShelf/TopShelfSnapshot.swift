@@ -89,9 +89,9 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
     }
 
     /// Links the app opens: `bumper://play/<id>`, `bumper://item/<id>`,
-    /// `bumper://library/<id>`, `bumper://tonight`, `bumper://search`.
+    /// `bumper://library/<id>`, `bumper://queue`, `bumper://search`.
     public enum Link: Equatable, Sendable {
-        case play(String), item(String), library(String), tonight, search
+        case play(String), item(String), library(String), queue, search
 
         public init?(_ url: URL) {
             guard url.scheme == TopShelfSnapshot.scheme else { return nil }
@@ -100,7 +100,7 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
             case ("play", let id?): self = .play(id)
             case ("item", let id?): self = .item(id)
             case ("library", let id?): self = .library(id)
-            case ("tonight", _): self = .tonight
+            case ("queue", _), ("tonight", _): self = .queue         // "tonight": the name before
             case ("search", _): self = .search
             default: return nil
             }
@@ -112,7 +112,7 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
             case .play(let id): return URL(string: "\(s)://play/\(id)")!
             case .item(let id): return URL(string: "\(s)://item/\(id)")!
             case .library(let id): return URL(string: "\(s)://library/\(id)")!
-            case .tonight: return URL(string: "\(s)://tonight")!
+            case .queue: return URL(string: "\(s)://queue")!
             case .search: return URL(string: "\(s)://search")!
             }
         }

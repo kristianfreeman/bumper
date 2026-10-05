@@ -5,8 +5,8 @@ import JellyfinAPI
 import SwiftUI
 
 /// Words for the plan: "Three things — done around 11:40 PM."
-enum TonightWords {
-    static func summary(_ store: TonightStore) -> String {
+enum QueueWords {
+    static func summary(_ store: QueueStore) -> String {
         let slots = store.timeline
         guard let end = slots.last?.end else { return "Nothing planned yet." }
         let count = slots.count == 1 ? "One thing" : "\(["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"][min(slots.count, 8)]) things"
@@ -17,14 +17,14 @@ enum TonightWords {
         return over > 0 ? "\(count) — runs \(over) minutes past \(byText)." : "\(count), done by \(byText). Playback stops then."
     }
 
-    static func time(_ slot: TonightPlan.Slot) -> String {
+    static func time(_ slot: QueuePlan.Slot) -> String {
         slot.start.formatted(date: .omitted, time: .shortened)
     }
 }
 
 /// Home's first collection when there's a plan.
-struct TonightSection: View {
-    let store: TonightStore
+struct QueueSection: View {
+    let store: QueueStore
     var available: CGFloat
     var firstCardFocus: FocusState<Bool>.Binding? = nil
     @Environment(AppModel.self) private var app
@@ -37,13 +37,13 @@ struct TonightSection: View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Tonight").font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
-                    Text(TonightWords.summary(store)).font(.callout).foregroundStyle(theme.secondaryText)
+                    Text("Queue").font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
+                    Text(QueueWords.summary(store)).font(.callout).foregroundStyle(theme.secondaryText)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("collection.tonight")
+                .accessibilityIdentifier("collection.queue")
                 Spacer()
-                TonightControls(store: store)
+                QueueControls(store: store)
             }
             // Up from the left half of the plan goes to the sidebar, not
             // across to the controls on the right (as it does on any page).
@@ -55,7 +55,7 @@ struct TonightSection: View {
                     LandscapeCard(slot.entry.item, width: width) { app.play(slot.entry.item) }
                         .overlay(alignment: .topLeading) { TimeBadge(slot: slot).padding(12) }
                         .contextMenu { ItemContextMenu(item: slot.entry.item) }
-                        .accessibilityIdentifier("card.tonight.\(slot.entry.id)")
+                        .accessibilityIdentifier("card.queue.\(slot.entry.id)")
                         .modifier(FirstFocus(binding: slot.entry.id == store.timeline.first?.entry.id ? firstCardFocus : nil))
                 }
             }
@@ -66,8 +66,8 @@ struct TonightSection: View {
 }
 
 /// Play · Done by · Edit (and Clear on the plan's own page).
-struct TonightControls: View {
-    let store: TonightStore
+struct QueueControls: View {
+    let store: QueueStore
     var showsEdit = true
     @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
@@ -75,8 +75,8 @@ struct TonightControls: View {
     var body: some View {
         HStack(spacing: 16) {
             if let first = store.plan.entries.first {
-                Pill("Play Tonight", systemImage: "play.fill", size: .small, prominent: true) { app.play(first.item) }
-                    .accessibilityIdentifier("tonight.play")
+                Pill("Play Queue", systemImage: "play.fill", size: .small, prominent: true) { app.play(first.item) }
+                    .accessibilityIdentifier("queue.play")
             }
             Menu {
                 ForEach(store.doneByChoices(), id: \.self) { date in
@@ -91,25 +91,25 @@ struct TonightControls: View {
                 }
             }
             .buttonStyle(PillButtonStyle())
-            .accessibilityIdentifier("tonight.doneBy")
+            .accessibilityIdentifier("queue.doneBy")
             if showsEdit {
-                Pill("Edit Tonight", systemImage: "list.bullet", size: .small) { navigate(.tonight) }
-                    .accessibilityIdentifier("tonight.edit")
+                Pill("Edit Queue", systemImage: "list.bullet", size: .small) { navigate(.queue) }
+                    .accessibilityIdentifier("queue.edit")
             } else if !store.isEmpty {
-                Pill("Clear", systemImage: "trash", size: .small) { store.replace(with: TonightPlan()) }
+                Pill("Clear", systemImage: "trash", size: .small) { store.replace(with: QueuePlan()) }
             }
         }
     }
 }
 
 private struct TimeBadge: View {
-    let slot: TonightPlan.Slot
+    let slot: QueuePlan.Slot
     @Environment(\.theme) private var theme
 
     var body: some View {
         HStack(spacing: 6) {
             if slot.entry.ambient { Image(systemName: "sparkles") }
-            Text(slot.entry.ambient ? "Suggested · \(TonightWords.time(slot))" : TonightWords.time(slot))
+            Text(slot.entry.ambient ? "Suggested · \(QueueWords.time(slot))" : QueueWords.time(slot))
         }
         .font(.caption.weight(.bold))
         .foregroundStyle(slot.overruns ? .white : .black)
@@ -120,27 +120,27 @@ private struct TimeBadge: View {
 }
 
 /// The plan, as a list you can reorder.
-struct TonightPage: View {
+struct QueuePage: View {
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let store = app.tonight
+        let store = app.queue
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Tonight").font(.system(size: 56, weight: .bold)).foregroundStyle(theme.primaryText)
-                    Text(TonightWords.summary(store)).font(.title3).foregroundStyle(theme.secondaryText)
-                    TonightControls(store: store, showsEdit: false).padding(.top, 10)
+                    Text("Queue").font(.system(size: 56, weight: .bold)).foregroundStyle(theme.primaryText)
+                    Text(QueueWords.summary(store)).font(.title3).foregroundStyle(theme.secondaryText)
+                    QueueControls(store: store, showsEdit: false).padding(.top, 10)
                 }
                 .focusSection()
                 if store.isEmpty {
-                    Text("Add things from any page with “Add to Tonight” — or hold Select on a card.")
+                    Text("Add things from any page with “Add to Queue” — or hold Select on a card.")
                         .font(.callout).foregroundStyle(theme.secondaryText)
                 }
                 VStack(spacing: 14) {
                     ForEach(store.timeline, id: \.entry.id) { slot in
-                        TonightRow(slot: slot, store: store)
+                        QueueRow(slot: slot, store: store)
                     }
                 }
             }
@@ -152,28 +152,28 @@ struct TonightPage: View {
     }
 }
 
-private struct TonightRow: View {
-    let slot: TonightPlan.Slot
-    let store: TonightStore
+private struct QueueRow: View {
+    let slot: QueuePlan.Slot
+    let store: QueueStore
     @Environment(\.theme) private var theme
 
     var body: some View {
         let item = slot.entry.item
         HStack(spacing: 28) {
-            Text(TonightWords.time(slot)).font(.headline.monospacedDigit()).foregroundStyle(slot.overruns ? .red : theme.primaryText).frame(width: 150, alignment: .leading)
+            Text(QueueWords.time(slot)).font(.headline.monospacedDigit()).foregroundStyle(slot.overruns ? .red : theme.primaryText).frame(width: 150, alignment: .leading)
             Artwork(item: item, kind: .landscape, width: 220)
                 .frame(width: 220, height: 124)
                 .clipShape(.rect(cornerRadius: 14))
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.seriesName ?? item.name ?? "").font(.headline).foregroundStyle(theme.primaryText).lineLimit(1)
-                Text([item.seriesName != nil ? item.name : nil, "\(Int(TonightPlan.remaining(item) / 60)) min", slot.entry.ambient ? "suggested" : nil].compactMap { $0 }.joined(separator: " · "))
+                Text([item.seriesName != nil ? item.name : nil, "\(Int(QueuePlan.remaining(item) / 60)) min", slot.entry.ambient ? "suggested" : nil].compactMap { $0 }.joined(separator: " · "))
                     .font(.callout).foregroundStyle(theme.secondaryText).lineLimit(1)
             }
             Spacer()
             HStack(spacing: 14) {
                 Pill("Earlier", systemImage: "arrow.up", size: .small) { store.move(slot.entry.id, by: -1) }
                 Pill("Later", systemImage: "arrow.down", size: .small) { store.move(slot.entry.id, by: 1) }
-                Pill(slot.entry.ambient ? "Not Tonight" : "Remove", systemImage: "xmark", size: .small) { store.remove(slot.entry.id) }
+                Pill(slot.entry.ambient ? "Not Now" : "Remove", systemImage: "xmark", size: .small) { store.remove(slot.entry.id) }
             }
         }
         .padding(18)

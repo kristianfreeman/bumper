@@ -97,7 +97,7 @@ nonisolated enum Route: Hashable, Sendable {
     case settings(String)          // deep links / screenshots: "root", "subtitles", …
     case profile
     case audiobook(String)
-    case tonight
+    case queue
 }
 
 nonisolated struct GridSpec: Hashable, Sendable {
@@ -263,7 +263,7 @@ struct RoutedStack<Root: View>: View {
                     case .grid(let spec): CollectionPage(spec: spec)
                     case .profile: ProfileView()
                     case .audiobook(let id): AudiobookDetailView(bookId: id)
-                    case .tonight: TonightPage()
+                    case .queue: QueuePage()
                     case .settings(let page):
                         switch page {
                         case "themes": ThemesView()

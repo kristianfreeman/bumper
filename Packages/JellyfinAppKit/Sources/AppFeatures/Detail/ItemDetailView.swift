@@ -237,9 +237,14 @@ struct ItemDetailView: View {
                 if target.resumePosition != nil {
                     Pill("Play from Beginning", systemImage: "gobackward") { app.play(target, resume: false) }
                 }
-                Pill(app.tonight.contains(target.id) ? "In Tonight" : "Add to Tonight", systemImage: app.tonight.contains(target.id) ? "moon.stars.fill" : "moon.stars",
-                     active: app.tonight.contains(target.id)) { app.tonight.toggle(target) }
-                    .accessibilityIdentifier("detail.tonight")
+                Pill(app.queue.contains(target.id) ? "In Queue" : "Add to Queue", systemImage: app.queue.contains(target.id) ? "text.badge.checkmark" : "text.badge.plus",
+                     active: app.queue.contains(target.id)) { app.queue.toggle(target) }
+                    .accessibilityIdentifier("detail.queue")
+                if item.kind == .series || item.kind == .movie {
+                    // On a loop, not marking anything watched (a show from a random episode).
+                    Pill("Background Noise", systemImage: "infinity") { app.playInBackground(item) }
+                        .accessibilityIdentifier("detail.background")
+                }
                 if item.kind.isPlayable, item.mediaSources?.first.map({ $0.audioStreams.count > 1 || !$0.subtitleStreams.isEmpty }) == true {
                     Pill("Audio and Subtitles", systemImage: "captions.bubble") { showTracks = true }
                 }

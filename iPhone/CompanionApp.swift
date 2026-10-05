@@ -46,7 +46,7 @@ struct ConnectView: View {
     }
 }
 
-/// Connected: the TV, live — and Tonight, search and asking.
+/// Connected: the TV, live — and Queue, search and asking.
 struct TVView: View {
     @Environment(CompanionModel.self) private var model
     @State private var query = ""
@@ -70,8 +70,8 @@ struct TVView: View {
                     HStack {
                         Button { model.send(.play(itemId: focused.id)) } label: { Label("Play", systemImage: "play.fill") }
                             .buttonStyle(.borderedProminent)
-                        Button { model.send(.addToTonight(itemId: focused.id)) } label: {
-                            Label(state?.tonight.contains { $0.id == focused.id } == true ? "In Tonight" : "Add to Tonight", systemImage: "moon.stars")
+                        Button { model.send(.addToQueue(itemId: focused.id)) } label: {
+                            Label(state?.queue.contains { $0.id == focused.id } == true ? "In Queue" : "Add to Queue", systemImage: "text.badge.plus")
                         }
                         .buttonStyle(.bordered)
                         .accessibilityIdentifier("phone.addFocused")
@@ -79,22 +79,22 @@ struct TVView: View {
                 }
             }
             Section {
-                ForEach(state?.tonight ?? []) { entry in
+                ForEach(state?.queue ?? []) { entry in
                     ItemRow(item: entry.item, detail: (entry.suggested ? "Suggested · " : "") + entry.start.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(entry.overruns ? .red : .primary)
                 }
                 .onDelete { offsets in
-                    for i in offsets { if let id = state?.tonight[i].id { model.send(.removeFromTonight(itemId: id)) } }
+                    for i in offsets { if let id = state?.queue[i].id { model.send(.removeFromQueue(itemId: id)) } }
                 }
                 .onMove { from, to in
-                    guard let i = from.first, let id = state?.tonight[i].id else { return }
-                    model.send(.moveInTonight(itemId: id, by: (to > i ? to - 1 : to) - i))
+                    guard let i = from.first, let id = state?.queue[i].id else { return }
+                    model.send(.moveInQueue(itemId: id, by: (to > i ? to - 1 : to) - i))
                 }
                 DoneByRow(doneBy: state?.doneBy) { model.send(.setDoneBy($0)) }
             } header: {
-                Text("Tonight")
+                Text("Queue")
             } footer: {
-                Text(state?.tonightSummary ?? "")
+                Text(state?.queueSummary ?? "")
             }
             Section {
                 TextField("Ask: something funny from the 80s…", text: $asking)
@@ -109,7 +109,7 @@ struct TVView: View {
                     ForEach(model.results) { item in
                         ItemRow(item: item, detail: item.subtitle)
                             .swipeActions {
-                                Button { model.send(.addToTonight(itemId: item.id)) } label: { Label("Tonight", systemImage: "moon.stars") }.tint(.indigo)
+                                Button { model.send(.addToQueue(itemId: item.id)) } label: { Label("Queue", systemImage: "text.badge.plus") }.tint(.indigo)
                                 Button { model.send(.play(itemId: item.id)) } label: { Label("Play", systemImage: "play.fill") }.tint(.green)
                             }
                     }

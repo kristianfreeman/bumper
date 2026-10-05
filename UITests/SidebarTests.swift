@@ -190,30 +190,30 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(rightUp.identifier.hasPrefix("profile."), "Up from the right half: focus on \(rightUp.identifier) '\(rightUp.label)'")
     }
 
-    /// With Tonight leading Home, its controls sit top right: Up from the
+    /// With Queue leading Home, its controls sit top right: Up from the
     /// left half still goes to the sidebar.
-    func testUpFromTonightReachesTheSidebar() throws {
+    func testUpFromQueueReachesTheSidebar() throws {
         // tvOS 26's collapsed sidebar has no focusable item: only Left and Menu open it.
         if #unavailable(tvOS 27.0) { throw XCTSkip("Up can't reach the sidebar before tvOS 27") }
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0001"]
         app.launch()
-        let add = app.buttons["detail.tonight"]
+        let add = app.buttons["detail.queue"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         let remote = XCUIRemote.shared
         for _ in 0..<4 where !add.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
         remote.press(.select)
         Thread.sleep(forTimeInterval: 0.5)
         remote.press(.menu)
-        XCTAssertTrue(app.descendants(matching: .any)["collection.tonight"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["collection.queue"].waitForExistence(timeout: 5))
         Thread.sleep(forTimeInterval: 1.2)
-        let card = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'card.tonight.'")).firstMatch
+        let card = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'card.queue.'")).firstMatch
         for _ in 0..<4 where !card.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.4) }
         for _ in 0..<4 where !card.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.4) }
-        XCTAssertTrue(card.hasFocus, "couldn't reach the Tonight card (focus: \(focusedDescription(app)))")
+        XCTAssertTrue(card.hasFocus, "couldn't reach the Queue card (focus: \(focusedDescription(app)))")
         remote.press(.up)
         Thread.sleep(forTimeInterval: 0.8)
         let up = focusedDescription(app)
-        XCTAssertTrue(up.hasPrefix("SIDEBAR"), "Up from the Tonight card: focus on \(up)")
+        XCTAssertTrue(up.hasPrefix("SIDEBAR"), "Up from the Queue card: focus on \(up)")
     }
 }

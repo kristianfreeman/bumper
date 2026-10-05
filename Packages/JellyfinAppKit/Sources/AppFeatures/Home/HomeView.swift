@@ -186,7 +186,7 @@ struct HomeView: View {
         let page = EditorialHome(sections: model.sections, userName: app.session?.account.userName)
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
-            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsTonight: true, showsProfile: true) {
+            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsQueue: true, showsProfile: true) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(page.copy.greeting)
                         .font(.system(size: 64, weight: .bold))
@@ -208,7 +208,7 @@ struct HomeView: View {
         .task {
             tracker.onDwell = { [app] item in Self.prefetch(item, app: app) }
             if let session = app.session { await model.load(session, usage: app.libraryUsage.scores) }
-            app.tonight.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
+            app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(model.sections.first?.items.first)
         }
         // Where focus starts (only on appearing: it doesn't steer later moves,
@@ -421,13 +421,16 @@ struct ItemContextMenu: View {
 
     var body: some View {
         Button(item.kind == .episode ? "Episode Details" : "See Details", systemImage: "info.circle") { navigate(.item(item)) }
+        if [.series, .episode, .movie].contains(item.kind) {
+            Button("Background Noise", systemImage: "infinity") { app.playInBackground(item) }
+        }
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }
             if item.resumePosition != nil {
                 Button("Play from Beginning", systemImage: "gobackward") { app.play(item, resume: false) }
             }
-            Button(app.tonight.contains(item.id) ? "Remove from Tonight" : "Add to Tonight",
-                   systemImage: app.tonight.contains(item.id) ? "moon.stars.fill" : "moon.stars") { app.tonight.toggle(item) }
+            Button(app.queue.contains(item.id) ? "Remove from Queue" : "Add to Queue",
+                   systemImage: app.queue.contains(item.id) ? "text.badge.checkmark" : "text.badge.plus") { app.queue.toggle(item) }
         }
         Button(item.isPlayed ? "Mark Unwatched" : "Mark Watched", systemImage: item.isPlayed ? "eye.slash" : "eye") {
             guard let client = app.session?.client else { return }
