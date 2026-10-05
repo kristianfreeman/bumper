@@ -25,13 +25,16 @@ final class PlayerController {
     private(set) var segments: [MediaSegment] = []
     private(set) var activeSegment: MediaSegment?
     private(set) var nextEpisode: BaseItem?
-    private(set) var subtitleTrack: SubtitleTrack?
-    private(set) var selectedSubtitle: Int?
+    var subtitleTrack: SubtitleTrack?
+    var selectedSubtitle: Int?
+    /// "Find Subtitles": the search and its results, and the found subtitle in use.
+    var subtitleSearch: SubtitleSearchState = .idle
+    var foundSubtitle: FoundSubtitle?
     private(set) var trickplay: TrickplayProvider?
-    private(set) var subtitleText: String?
+    var subtitleText: String?
 
     @ObservationIgnored private let request: PlaybackRequest
-    @ObservationIgnored private let app: AppModel
+    @ObservationIgnored let app: AppModel
     @ObservationIgnored private var reporter: PlaybackReporter?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var skippedSegments: Set<String> = []
@@ -377,6 +380,7 @@ final class PlayerController {
 
     func selectSubtitle(_ index: Int?) async {
         selectedSubtitle = index
+        foundSubtitle = nil
         subtitleTrack = nil
         subtitleText = nil
         guard let plan, let engine else { return }

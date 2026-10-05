@@ -220,7 +220,17 @@ public final class VLCEngine: PlayerEngine {
             return
         }
         if let external {
+            let before = player.textTracks.count
             player.addPlaybackSlave(external, type: .subtitle, enforce: true)
+            // VLC adds the file's track a moment later (later still when
+            // paused) and doesn't always select it: wait for it, then do.
+            for _ in 0..<15 {
+                try? await Task.sleep(for: .milliseconds(150))
+                if player.textTracks.count > before, let added = player.textTracks.last {
+                    if !added.isSelected { added.isSelectedExclusively = true }
+                    break
+                }
+            }
             return
         }
         let embedded = (plan?.mediaSource.subtitleStreams ?? []).filter { $0.isExternal != true }

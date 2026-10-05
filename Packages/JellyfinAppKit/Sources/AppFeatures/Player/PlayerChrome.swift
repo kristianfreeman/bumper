@@ -290,6 +290,57 @@ struct BareButtonStyle: ButtonStyle {
     }
 }
 
+/// "Find Subtitles": searching, then what was found — best fit first, with
+/// how sure we are and why.
+private struct FoundSubtitles: View {
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+
+    var body: some View {
+        switch controller.subtitleSearch {
+        case .idle:
+            EmptyView()
+        case .searching:
+            HStack(spacing: 16) {
+                ProgressView()
+                Text("Looking for subtitles that fit this file…").foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(20)
+            .focusable()
+            .focused(focus, equals: .option("sub-searching"))
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message).foregroundStyle(.white.opacity(0.75)).padding(.horizontal, 20).padding(.bottom, 8)
+                OptionRow(title: "Back", detail: nil, selected: false, id: "sub-back", focus: focus) { controller.subtitleSearch = .idle }
+            }
+        case .results(let found):
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(Array(found.enumerated()), id: \.element.id) { i, sub in
+                        OptionRow(title: sub.release.isEmpty ? "Subtitle \(sub.fileId)" : sub.release,
+                                  detail: Self.detail(sub, best: i == 0), selected: controller.foundSubtitle?.fileId == sub.fileId,
+                                  id: "found-\(sub.fileId)", focus: focus) {
+                            Task { await controller.use(sub) }
+                            close()
+                        }
+                    }
+                    OptionRow(title: "Back", detail: nil, selected: false, id: "sub-back", focus: focus) { controller.subtitleSearch = .idle }
+                }
+                .padding(.horizontal, 8)
+            }
+            .scrollClipDisabled()
+            .frame(maxHeight: 560)
+        }
+    }
+
+    /// "Best match · 94% · Same release group (SPARKS)"
+    static func detail(_ sub: FoundSubtitle, best: Bool) -> String {
+        ([best ? "Best match" : nil, sub.confidenceText, sub.reasons.first, sub.hearingImpaired ? "SDH" : nil] as [String?])
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
 /// The card a chrome icon opens, anchored above the icon row on the right.
 struct MenuCard: View {
     let menu: PlayerMenu
@@ -314,6 +365,16 @@ struct MenuCard: View {
         .padding(.trailing, 90)
         .padding(.bottom, 290)
         .defaultFocus(focus, defaultOption)
+        .onChange(of: controller.subtitleSearch) {
+            // Searching → results: focus onto the best match.
+            Task {
+                for _ in 0..<5 {
+                    try? await Task.sleep(for: .milliseconds(40))
+                    focus.wrappedValue = defaultOption
+                }
+            }
+        }
+        .onDisappear { controller.subtitleSearch = .idle }
         .task {
             // After the card's buttons are in the focus graph (an immediate
             // assignment can land before they exist and leave focus on the icon).
@@ -328,25 +389,35 @@ struct MenuCard: View {
     private var content: some View {
         switch menu {
         case .subtitles:
-            ScrollView {
-                VStack(spacing: 4) {
-                    OptionRow(title: "Off", detail: nil, selected: controller.selectedSubtitle == nil, id: "sub-off", focus: focus) {
-                        Task { await controller.selectSubtitle(nil) }
-                        close()
-                    }
-                    ForEach(controller.subtitleOptions, id: \.index) { stream in
-                        OptionRow(title: stream.displayTitle ?? stream.language ?? "Track \(stream.index)",
-                                  detail: stream.codec?.uppercased(), selected: controller.selectedSubtitle == stream.index,
-                                  id: "sub-\(stream.index)", focus: focus) {
-                            Task { await controller.selectSubtitle(stream.index) }
+            if controller.subtitleSearch == .idle {
+                ScrollView {
+                    VStack(spacing: 4) {
+                        OptionRow(title: "Off", detail: nil, selected: controller.selectedSubtitle == nil && controller.foundSubtitle == nil, id: "sub-off", focus: focus) {
+                            Task { await controller.selectSubtitle(nil) }
                             close()
                         }
+                        ForEach(controller.subtitleOptions, id: \.index) { stream in
+                            OptionRow(title: stream.displayTitle ?? stream.language ?? "Track \(stream.index)",
+                                      detail: stream.codec?.uppercased(), selected: controller.selectedSubtitle == stream.index,
+                                      id: "sub-\(stream.index)", focus: focus) {
+                                Task { await controller.selectSubtitle(stream.index) }
+                                close()
+                            }
+                        }
+                        if let found = controller.foundSubtitle {
+                            OptionRow(title: found.release, detail: "Found · \(found.confidenceText)", selected: true, id: "sub-found", focus: focus) { close() }
+                        }
+                        OptionRow(title: "Find Subtitles…", detail: "Search for ones that fit this file", selected: false, id: "sub-find", focus: focus) {
+                            Task { await controller.findSubtitles() }
+                        }
                     }
+                    .padding(.horizontal, 8)
                 }
-                .padding(.horizontal, 8)
+                .scrollClipDisabled()
+                .frame(maxHeight: min(560, CGFloat(controller.subtitleOptions.count + 2 + (controller.foundSubtitle == nil ? 0 : 1)) * 76))
+            } else {
+                FoundSubtitles(controller: controller, focus: focus, close: close)
             }
-            .scrollClipDisabled()
-            .frame(maxHeight: min(520, CGFloat(controller.subtitleOptions.count + 1) * 76))
         case .audio:
             VStack(spacing: 4) {
                 ForEach(controller.audioOptions) { track in
@@ -370,7 +441,13 @@ struct MenuCard: View {
 
     private var defaultOption: PlayerView.PlayerFocus {
         switch menu {
-        case .subtitles: .option(controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")
+        case .subtitles:
+            switch controller.subtitleSearch {
+            case .results(let found): .option(found.first.map { "found-\($0.fileId)" } ?? "sub-back")
+            case .searching: .option("sub-searching")
+            case .failed: .option("sub-back")
+            case .idle: .option(controller.foundSubtitle != nil ? "sub-found" : controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")
+            }
         case .audio: .option((controller.engine?.selectedAudioTrack ?? controller.audioOptions.first?.id).map { "audio-\($0)" } ?? "audio-none")
         case .info: .option("info")
         }

@@ -148,10 +148,10 @@ case "${1:-fast}" in
     # The search service, locally, answering without Jev.
     step build_for_testing
     (cd services/search && [[ -d node_modules ]] || npm install --silent)
-    (cd services/search && exec npx wrangler dev --port 8787 --var JEV_MODE:stub >"$PWD/../../build/wrangler.log" 2>&1) &
+    (cd services/search && exec npx wrangler dev --port 8787 --var JEV_MODE:stub --var SUBTITLES_MODE:stub >"$PWD/../../build/wrangler.log" 2>&1) &
     WRANGLER=$!
     for _ in $(seq 1 60); do curl -s -o /dev/null -w '%{http_code}' -I localhost:8787/v1/interpret | grep -q 204 && break; sleep 0.5; done
-    step ui_run -only-testing:"BumperUITests/SearchTests${2:+/$2}"
+    step ui_run -only-testing:"BumperUITests/SearchTests${2:+/$2}" -only-testing:"BumperUITests/PlayerTests/testFindSubtitlesUsesTheBestMatch"
     kill_tree "$WRANGLER" ;;
   books) step build_for_testing; step ui_run -only-testing:"BumperUITests/AudiobookTests${2:+/$2}" ;;
   shots) step build_for_testing; SHOTS="$PWD/perf-results/shots"; rm -rf "$SHOTS"; TEST_RUNNER_SHOTS_DIR="$SHOTS" step ui_run -only-testing:"BumperUITests/PlayerShots" -only-testing:"BumperUITests/SettingsShots" -only-testing:"BumperUITests/HomeShots" -only-testing:"BumperUITests/BookShots"; echo "shots: $SHOTS" ;;

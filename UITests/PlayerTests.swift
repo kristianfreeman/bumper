@@ -5,9 +5,9 @@ import XCTest
 final class PlayerTests: XCTestCase {
     static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia").path
 
-    func launchPlaying(_ clip: Int) -> XCUIApplication {
+    func launchPlaying(_ clip: Int, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "media-\(clip)"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "media-\(clip)"] + extra
         app.launch()
         return app
     }
@@ -42,6 +42,46 @@ final class PlayerTests: XCTestCase {
         remote.press(.down)
         remote.press(.select)
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 2), "Subtitle didn't come back")
+    }
+
+    /// Subtitles → Find Subtitles → the best match, in use at once. Against
+    /// the search service running locally in stub mode (scripts/test.sh
+    /// search); skipped when it isn't.
+    func testFindSubtitlesUsesTheBestMatch() throws {
+        let service = URL(string: "http://localhost:8787/v1/subtitles/search")!
+        var head = URLRequest(url: service); head.httpMethod = "HEAD"; head.timeoutInterval = 2
+        let up = XCTestExpectation(); var reachable = false
+        URLSession.shared.dataTask(with: head) { _, r, _ in reachable = (r as? HTTPURLResponse)?.statusCode == 204; up.fulfill() }.resume()
+        wait(for: [up], timeout: 3)
+        guard reachable else { throw XCTSkip("the search service isn't running (scripts/test.sh search starts it)") }
+
+        let app = launchPlaying(1, extra: ["-searchEndpoint", "http://localhost:8787/v1/interpret"])
+        let status = app.staticTexts["player.subtitles"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        let remote = XCUIRemote.shared
+        remote.press(.playPause)
+        remote.press(.up)
+        let icon = app.buttons["control.subtitles"]
+        XCTAssertTrue(icon.waitForExistence(timeout: 2) && waitForFocus(icon))
+        remote.press(.select)
+        let off = app.buttons["option.sub-off"]
+        XCTAssertTrue(off.waitForExistence(timeout: 2))
+        for _ in 0..<4 where !off.hasFocus { remote.press(.up) }
+        remote.press(.select)                                        // Off first, so a change is visible
+        XCTAssertTrue(waitFor(status, label: { $0 == "off" }, timeout: 2))
+        XCTAssertTrue(waitForFocus(icon, timeout: 2))
+        remote.press(.select)
+        let find = app.buttons["option.sub-find"]
+        XCTAssertTrue(find.waitForExistence(timeout: 2), "no Find Subtitles")
+        for _ in 0..<8 where !find.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.25) }
+        XCTAssertTrue(find.hasFocus, "couldn't reach Find Subtitles")
+        remote.press(.select)
+        let best = app.buttons["option.found-1001"]
+        XCTAssertTrue(best.waitForExistence(timeout: 8), "no results")
+        XCTAssertTrue(waitForFocus(best, timeout: 2), "focus didn't land on the best match")
+        XCTAssertTrue(best.label.contains("Best match"), "first result isn't marked: \(best.label)")
+        remote.press(.select)
+        XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 5), "the found subtitle didn't come on (VLCKit reports '\(status.label)')")
     }
 
     /// One press of Play/Pause pauses — and stays paused. (It could arrive

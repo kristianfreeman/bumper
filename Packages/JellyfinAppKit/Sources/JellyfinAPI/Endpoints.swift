@@ -396,3 +396,30 @@ extension JellyfinClient {
         ])
     }
 }
+
+// MARK: - Subtitles
+
+extension JellyfinClient {
+    /// Saves a subtitle file on the server, beside the video, so every app
+    /// sees it. Needs the user to be allowed to manage subtitles (403 if not).
+    public func uploadSubtitle(itemId: String, language: String, format: String, data: Data, hearingImpaired: Bool = false) async throws {
+        struct Body: Encodable {
+            let Language: String, Format: String, IsForced: Bool, IsHearingImpaired: Bool, Data: String
+        }
+        let body = Body(Language: language, Format: format, IsForced: false, IsHearingImpaired: hearingImpaired, Data: data.base64EncodedString())
+        try await send(Request<Void>(.post, "/Videos/\(itemId)/Subtitles", body: try JSONEncoder().encode(body)))
+    }
+
+    /// Bytes of the original file (a range request on the static stream).
+    public func fileBytes(itemId: String, mediaSourceId: String, container: String?, from start: Int64, count: Int) async throws -> Data {
+        var request = URLRequest(url: directStreamURL(itemId: itemId, mediaSourceId: mediaSourceId, container: container, playSessionId: nil))
+        request.setValue("bytes=\(start)-\(start + Int64(count) - 1)", forHTTPHeaderField: "Range")
+        request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 8
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 206 || (http.statusCode == 200 && start == 0) else {
+            throw JellyfinError.transport("No range support")
+        }
+        return data.prefix(count)
+    }
+}

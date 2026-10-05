@@ -119,6 +119,8 @@ final class AppModel {
     let sleepTimer = SleepTimer()
     /// Words → filters (services/search, falling back to the device's own reading).
     let search = SmartSearch.configured()
+    /// Subtitles from the same service (OpenSubtitles, judged by Jev).
+    let subtitleFinder = SubtitleFinder.configured()
     /// Tonight's plan (per account).
     let tonight = TonightStore()
     /// What's focused anywhere in the app, and what's playing (the companion shows both).
