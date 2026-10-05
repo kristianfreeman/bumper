@@ -15,10 +15,14 @@ enum TopShelfWriter {
         let args = ProcessInfo.processInfo.arguments
         guard !args.contains("-mock") || args.contains("-writeTopShelf") else { return }
         let wanted = [("resume", "Continue Watching"), ("nextup", "Next Up")]
-        let shelf = wanted.compactMap { id, title -> TopShelfSnapshot.Section? in
+        var shelf = wanted.compactMap { id, title -> TopShelfSnapshot.Section? in
             guard let section = sections.first(where: { $0.id == id }), !section.items.isEmpty else { return nil }
-            return .init(title: title, items: section.items.prefix(12).map { item($0, client: client) })
+            return .init(title: title, items: section.items.prefix(16).map { item($0, client: client) })
         }
+        // Recently Added: every library's newest, newest first.
+        let latest = sections.filter { $0.id.hasPrefix("latest-") }.flatMap(\.items)
+            .sorted { ($0.dateCreated ?? .distantPast) > ($1.dateCreated ?? .distantPast) }
+        if !latest.isEmpty { shelf.append(.init(title: "Recently Added", items: latest.prefix(16).map { item($0, client: client) })) }
         let result = TopShelfSnapshot(sections: shelf).write()
         if result == .written { TVTopShelfContentProvider.topShelfContentDidChange() }
         TraceFile.write("topshelf", "\(result): " + shelf.map { "\($0.title) (\($0.items.count))" }.joined(separator: ", ") + " of sections " + sections.map(\.id).joined(separator: ","))
@@ -32,7 +36,8 @@ enum TopShelfWriter {
         } else if let year = item.productionYear {
             subtitle = String(year)
         }
-        let image = (ArtworkSource.resolve(item, .landscape) ?? ArtworkSource.resolve(item, .poster))?.request(client: client, pixelWidth: 1000).url
+        // Posters (tall, so about seven fit across): an episode shows its series'.
+        let image = (ArtworkSource.resolve(item, .poster) ?? ArtworkSource.resolve(item, .landscape))?.request(client: client, pixelWidth: 500).url
         return .init(id: item.id, title: item.seriesName ?? item.name ?? "", subtitle: subtitle, imageURL: image, progress: item.progress)
     }
 }
