@@ -19,10 +19,9 @@ enum TopShelfWriter {
             guard let section = sections.first(where: { $0.id == id }), !section.items.isEmpty else { return nil }
             return .init(title: title, items: section.items.prefix(12).map { item($0, client: client) })
         }
-        if TopShelfSnapshot(sections: shelf).write() {
-            TVTopShelfContentProvider.topShelfContentDidChange()
-            TraceFile.write("topshelf", "updated: " + shelf.map { "\($0.title) (\($0.items.count))" }.joined(separator: ", "))
-        }
+        let result = TopShelfSnapshot(sections: shelf).write()
+        if result == .written { TVTopShelfContentProvider.topShelfContentDidChange() }
+        TraceFile.write("topshelf", "\(result): " + shelf.map { "\($0.title) (\($0.items.count))" }.joined(separator: ", ") + " of sections " + sections.map(\.id).joined(separator: ","))
     }
 
     private static func item(_ item: BaseItem, client: JellyfinClient) -> TopShelfSnapshot.Item {

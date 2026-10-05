@@ -47,8 +47,10 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
     public static let scheme = "bumper"
 
     static var url: URL? {
+        // tvOS lets apps write only under Library/Caches, in a shared
+        // container too (the top level is read-only: "Operation not permitted").
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
-            .appending(path: "TopShelf", directoryHint: .isDirectory)
+            .appending(path: "Library/Caches/TopShelf", directoryHint: .isDirectory)
             .appending(path: "snapshot.json")
     }
 
@@ -57,15 +59,23 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
         return try? JSONDecoder().decode(TopShelfSnapshot.self, from: data)
     }
 
-    /// True when it changed (the caller then tells the system to reload the shelf).
+    public enum WriteResult: Equatable, Sendable { case written, unchanged, noContainer, failed(String) }
+
+    /// `.written` when it changed (the caller then tells the system to reload the shelf).
     @discardableResult
-    public func write() -> Bool {
-        guard let url = Self.url else { return false }
+    public func write() -> WriteResult {
+        guard let url = Self.url else { return .noContainer }
         var old = Self.read()
         old?.written = written
-        guard old != self, let data = try? JSONEncoder().encode(self) else { return false }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        return (try? data.write(to: url, options: .atomic)) != nil
+        guard old != self else { return .unchanged }
+        do {
+            let data = try JSONEncoder().encode(self)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            return .written
+        } catch {
+            return .failed(String(describing: error))
+        }
     }
 
     /// Links the app opens: `bumper://play/<id>` or `bumper://item/<id>`.
