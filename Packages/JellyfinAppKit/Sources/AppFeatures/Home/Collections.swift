@@ -109,8 +109,10 @@ struct CollectionSection: View {
                     }
                 }
             } else {
-                let shown = Array(section.items.prefix(columns * Self.rows - (section.seeAll == nil ? 0 : 1)))
-                let tiles = shown.count + (section.seeAll == nil ? 0 : 1)
+                // Two rows at most; with more behind it, the last place is "View all".
+                let more = section.seeAll != nil || section.items.count > columns * Self.rows
+                let shown = Array(section.items.prefix(columns * Self.rows - (more ? 1 : 0)))
+                let tiles = shown.count + (more ? 1 : 0)
                 // A plain grid (two rows at most): laid out exactly, nothing estimated.
                 Grid(alignment: .topLeading, horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
                     ForEach(0..<((tiles + columns - 1) / columns), id: \.self) { row in
@@ -122,9 +124,9 @@ struct CollectionSection: View {
                                         .accessibilityIdentifier("card.\(section.id).\(item.id)")
                                         .reportsFocus(item, row: section.id)
                                         .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
-                                } else if let query = section.seeAll {
-                                    ViewAllTile(count: section.total, width: width, aspect: aspect) {
-                                        navigate(.grid(GridSpec(title: section.title, query: query, library: section.library ?? section.title)))
+                                } else if more {
+                                    ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) {
+                                        navigate(.grid(section.seeAllSpec))
                                     }
                                 }
                             }

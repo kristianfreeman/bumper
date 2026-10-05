@@ -106,6 +106,15 @@ nonisolated enum Route: Hashable, Sendable {
 nonisolated struct GridSpec: Hashable, Sendable {
     var title: String
     var filter: CollectionFilter
+    /// A fixed list instead of a query (a Home row with no query behind it:
+    /// Continue Watching, Next Up). No sentence to change.
+    var items: [BaseItem]? = nil
+
+    init(title: String, items: [BaseItem], library: String) {
+        self.title = title
+        self.items = items
+        filter = CollectionFilter(base: ItemQuery(), libraryName: library)
+    }
 
     init(title: String, query: ItemQuery, library: String) {
         self.title = title
@@ -301,7 +310,7 @@ struct MainTabView: View {
             fresh = try? await session.client.userViews().items
         }
         guard let fresh else { return }
-        TraceFile.write("app", "libraries: " + fresh.map { "\($0.name ?? "?") [\($0.collectionType ?? "nil")]" }.joined(separator: " | "))
+        TraceFile.write("app", "libraries: " + fresh.map { "\($0.name ?? "?") [\($0.collectionType ?? "nil") \($0.id)]" }.joined(separator: " | "))
         // Books libraries without audiobooks (e-books) get no tab.
         var withAudiobooks: Set<String> = []
         for lib in fresh where lib.collectionType == "books" {

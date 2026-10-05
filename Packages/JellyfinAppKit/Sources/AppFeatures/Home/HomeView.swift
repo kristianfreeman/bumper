@@ -19,6 +19,23 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     var total: Int? = nil
     /// The library it's drawn from ("Movies") — the collection page's sentence starts with it.
     var library: String? = nil
+    /// How "View all" narrows `seeAll`, so it opens a page of its own rather
+    /// than the whole library re-sorted ("added in the last month",
+    /// "rated 7.5+", "from the 2020s").
+    var added: CollectionFilter.Added = .any
+    var minRating: Double? = nil
+    var decade: Int? = nil
+
+    /// What "View all" opens: the narrowed query, or (a row with no query
+    /// behind it, like Next Up) the whole row it was cut from.
+    var seeAllSpec: GridSpec {
+        guard let seeAll else { return GridSpec(title: title, items: items, library: library ?? title) }
+        var filter = CollectionFilter(base: seeAll, libraryName: library ?? title)
+        filter.added = added
+        filter.minRating = minRating
+        filter.decade = decade
+        return GridSpec(title: title, filter: filter)
+    }
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.items.map(\.id) == b.items.map(\.id) }
 }
@@ -53,8 +70,9 @@ final class HomeModel {
 
     /// All home rows in parallel: total latency ≈ the slowest single request.
     nonisolated static func fetch(_ client: JellyfinClient, usage: [String: Double] = [:]) async throws -> [BrowseSection] {
-        async let resume = client.resumeItems(limit: 20)
-        async let nextUp = client.nextUp(limit: 20)
+        // More than a row shows: the rest is behind "View all".
+        async let resume = client.resumeItems(limit: 50)
+        async let nextUp = client.nextUp(limit: 50)
         async let views = client.userViews()
 
         let libraries = LibraryOrder.ordered(try await views.items, scores: usage).filter { $0.collectionType == "movies" || $0.collectionType == "tvshows" }
@@ -74,9 +92,9 @@ final class HomeModel {
 
         var sections: [BrowseSection] = []
         let resumeItems = (try? await resume.items) ?? []
-        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape)) }
+        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, total: resumeItems.count)) }
         let nextItems = (try? await nextUp.items) ?? []
-        if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .landscape)) }
+        if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .landscape, total: nextItems.count)) }
         sections += latest.filter { !$0.items.isEmpty }
         return sections
     }

@@ -11,12 +11,15 @@ final class LibraryModel {
     private(set) var sections: [BrowseSection] = []
     private(set) var genreSections: [BrowseSection] = []
 
-    /// "600 films, 42 you haven't seen."
+    /// The library's own noun ("shows"), set as it loads.
+    private var noun: LibraryWords.Noun = ("title", "titles")
+    private var isShows = false
+
+    /// "48 shows, 36 with episodes you haven't seen. The newest is …"
     var lede: String? {
-        guard let all = sections.first(where: { $0.id == "all" })?.total else { return nil }
-        let unwatched = sections.first(where: { $0.id == "unwatched" })?.total ?? 0
-        let noun = all == 1 ? "title" : "titles"
-        return unwatched > 0 ? "\(all.formatted()) \(noun), \(unwatched.formatted()) you haven't seen." : "\(all.formatted()) \(noun)."
+        LibraryWords.lede(all: sections.first(where: { $0.id == "all" })?.total,
+                          unwatched: sections.first(where: { $0.id == "unwatched" })?.total ?? (sections.isEmpty ? nil : 0),
+                          noun: noun, newest: sections.first(where: { $0.id == "recent" })?.items.first, isShows: isShows)
     }
     private var loadedGenres: Set<String> = []
 
@@ -31,6 +34,8 @@ final class LibraryModel {
             return q
         }
         let noun = Self.noun(for: library)
+        self.noun = noun
+        isShows = library.collectionType == "tvshows"
         var specs: [(String, String, ItemQuery, BrowseSection.Style)] = [
             ("recent", "Recently added", query(["DateCreated", "SortName"], .descending), .landscape),
             ("all", Self.allTitle(for: library), query(["SortName"]), .landscape),
@@ -54,7 +59,9 @@ final class LibraryModel {
                     var section = BrowseSection(id: spec.0, title: spec.1, items: page.items, style: spec.3, seeAll: all)
                     section.total = page.totalRecordCount
                     section.library = library.name
-                    section.subtitle = Self.subtitle(spec.0, total: page.totalRecordCount, noun: noun, first: page.items.first)
+                    await Self.narrow(&section, page: page, client: client)
+                    section.subtitle = LibraryWords.subtitle(spec.0, total: page.totalRecordCount, noun: noun, first: page.items.first,
+                                                             minRating: section.minRating, decade: section.decade)
                     return (i, section)
                 }
             }
@@ -68,29 +75,88 @@ final class LibraryModel {
             await ContentCache.shared.store(fresh, for: key)
         }
 
-        // Genre rows: one cheap list call; the rows themselves load lazily as
-        // they scroll into view.
+        // Genre rows: the library's genres by how many titles each has here,
+        // biggest first (the list also has genres only episodes carry: rows
+        // came up empty and vanished, and alphabetical order buried the big
+        // ones). One count per genre, in parallel; the rows load lazily.
         if let genres = try? await client.genres(parentId: library.id).items {
-            genreSections = genres.prefix(12).map { g in
+            let counts: [(BaseItem, ItemQuery)] = genres.map { g in
+                var q = query(["SortName"], limit: 1)
+                q.genres = [g.name ?? ""]
+                q.fields = []
+                return (g, q)
+            }
+            let counted = await withTaskGroup(of: (BaseItem, Int).self) { group in
+                for (g, q) in counts {
+                    group.addTask { (g, (try? await client.items(q))?.totalRecordCount ?? 0) }
+                }
+                var out: [(BaseItem, Int)] = []
+                for await r in group where r.1 > 0 { out.append(r) }
+                return out.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : ($0.0.name ?? "") < ($1.0.name ?? "") }
+            }
+            TraceFile.write("library", "\(library.name ?? "?") genres: " + counted.map { "\($0.0.name ?? "?") \($0.1)" }.joined(separator: " | "))
+            genreSections = counted.prefix(12).map { g, count in
                 var q = query(["Random"], limit: 24)
                 q.genres = [g.name ?? ""]
                 var section = BrowseSection(id: "genre-\(g.name ?? g.id)", title: g.name ?? "", items: [], style: .landscape, seeAll: q, library: library.name)
-                section.subtitle = "A few \((g.name ?? "").lowercased()) \(noun.plural) picked at random."
+                section.total = count
+                section.subtitle = LibraryWords.genre(g.name ?? "", count: count, noun: noun)
                 return section
             }
         }
     }
 
     func loadGenre(_ id: String, client: JellyfinClient) async {
-        guard !loadedGenres.contains(id), let idx = genreSections.firstIndex(where: { $0.id == id }), let q = genreSections[idx].seeAll else { return }
+        guard !loadedGenres.contains(id), let q = genreSections.first(where: { $0.id == id })?.seeAll else { return }
         loadedGenres.insert(id)
-        if let page = try? await client.items(q) {
-            guard !page.items.isEmpty else { genreSections.remove(at: idx); return }
-            BlurHashCache.shared.prewarm(page.items)
-            genreSections[idx].items = page.items
-            genreSections[idx].seeAll?.sortBy = ["SortName"]
-            genreSections[idx].seeAll?.limit = 100
+        guard let page = try? await client.items(q) else { return }
+        // Found again after the wait: the rows can be replaced meanwhile (an
+        // index from before it crashed the app).
+        guard let idx = genreSections.firstIndex(where: { $0.id == id }) else { return }
+        guard !page.items.isEmpty else { genreSections.remove(at: idx); return }
+        BlurHashCache.shared.prewarm(page.items)
+        genreSections[idx].items = page.items
+        genreSections[idx].seeAll?.sortBy = ["SortName"]
+        genreSections[idx].seeAll?.limit = 100
+    }
+
+    /// The rows that are only an order ("Recently added", "Highest rated",
+    /// "Newest releases") opened the whole library re-sorted behind "View
+    /// all" — the same 140 shows each time. Each gets a window of its own,
+    /// and the count that goes with it.
+    nonisolated static func narrow(_ section: inout BrowseSection, page: ItemsPage, client: JellyfinClient, now: Date = .now) async {
+        guard var q = section.seeAll else { return }
+        switch section.id {
+        case "recent":
+            // The shortest window that still fills the row (the row is newest
+            // first). Nothing that recent: left as the whole library, newest first.
+            let dates = page.items.compactMap(\.dateCreated)
+            for window in [CollectionFilter.Added.week, .month, .year] {
+                var f = CollectionFilter(base: q, libraryName: "")
+                f.added = window
+                guard let cutoff = f.addedCutoff(now: now) else { continue }
+                let inside = dates.filter { $0 >= cutoff }.count
+                if inside >= 8 {
+                    section.added = window
+                    // Exact while the window ends inside the loaded page.
+                    section.total = inside < page.items.count ? inside : nil
+                    return
+                }
+            }
+            return
+        case "top":
+            section.minRating = 7.5
+            q.minCommunityRating = 7.5
+        case "released":
+            let decade = Calendar.current.component(.year, from: now) / 10 * 10
+            section.decade = decade
+            q.years = Array(decade..<(decade + 10))
+        default:
+            return
         }
+        q.limit = 1
+        q.fields = []
+        section.total = (try? await client.items(q))?.totalRecordCount
     }
 
     /// "film"/"films", "show"/"shows" — for the copy.
@@ -100,20 +166,6 @@ final class LibraryModel {
         case "tvshows": ("show", "shows")
         case "boxsets": ("collection", "collections")
         default: ("title", "titles")
-        }
-    }
-
-    nonisolated static func subtitle(_ id: String, total: Int, noun: (singular: String, plural: String), first: BaseItem?) -> String? {
-        let n = total == 1 ? "one \(noun.singular)" : "\(total.formatted()) \(noun.plural)"
-        switch id {
-        case "recent": return first.map { "Most recently, \($0.name ?? "something new")." }
-        case "all": return "Every one of them, A to Z — \(n)."
-        case "unwatched": return "\(n.prefix(1).uppercased() + n.dropFirst()) you haven't watched."
-        case "favorites": return "The ones you've starred."
-        case "top": return "What critics and viewers rate highest."
-        case "released": return "The most recent premieres."
-        case "collections": return "Films that belong together."
-        default: return nil
         }
     }
 
@@ -212,6 +264,14 @@ final class CollectionPageModel {
     private var nextIndex = 0
     private var generation = 0
 
+    /// A fixed list (a Home row's whole length): nothing more to load.
+    func show(_ list: [BaseItem]) {
+        items = list
+        total = list.count
+        exhausted = true
+        generation += 1
+    }
+
     func reset() {
         items = []
         total = nil
@@ -270,12 +330,25 @@ struct CollectionPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 34) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(spec.title).font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
-                    FilterSentence(filter: $filter, genres: model.genres) { asking = true }
+                    // Ask sits with the title: at the end of the sentence it
+                    // wrapped onto a line of its own.
+                    HStack(alignment: .firstTextBaseline, spacing: 24) {
+                        Text(spec.title).font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
+                        Spacer(minLength: 0)
+                        if spec.items == nil {
+                            Pill("Ask", systemImage: "mic", size: .small, alwaysShowsTitle: true) { asking = true }
+                                .accessibilityIdentifier("filter.ask")
+                        }
+                    }
                     if let understood {
-                        Text(understood).font(.callout).foregroundStyle(theme.secondaryText).transition(.opacity)
-                    } else if let total = model.total {
-                        Text(total == 1 ? "One title." : "\(total.formatted()) titles.").font(.callout).foregroundStyle(theme.secondaryText)
+                        Text(understood).font(.title3).foregroundStyle(theme.secondaryText).transition(.opacity)
+                    } else if let lede {
+                        Text(lede).font(.title3).foregroundStyle(theme.secondaryText)
+                            .frame(maxWidth: 1200, alignment: .leading)
+                            .transition(.opacity)
+                    }
+                    if spec.items == nil {
+                        FilterSentence(filter: $filter, genres: model.genres)
                     }
                 }
                 .tvFocusSection()
@@ -304,6 +377,7 @@ struct CollectionPage: View {
         .background(theme.backgroundGradient.ignoresSafeArea())
         .hidesNavigationBar()
         .task(id: filter) {
+            if let items = spec.items { model.show(items); return }
             model.reset()
             loadMore()
         }
@@ -322,8 +396,13 @@ struct CollectionPage: View {
         .animation(.easeOut(duration: 0.2), value: filter)
     }
 
+    /// A line about what's here, under the title.
+    private var lede: String? {
+        CollectionWords.lede(title: spec.title, filter: filter, total: model.total, items: model.items, fixed: spec.items != nil)
+    }
+
     private func loadMore() {
-        guard let client = app.session?.client else { return }
+        guard spec.items == nil, let client = app.session?.client else { return }
         let filter = filter
         Task { await model.loadMore(filter, client: client) }
     }
@@ -357,12 +436,11 @@ struct FilterSentence: View {
     @Binding var filter: CollectionFilter
     @Environment(\.theme) private var theme
     let genres: [String]
-    let ask: () -> Void
     @State private var editing: Editing?
     @FocusState private var focus: Focus?
 
     enum Editing: Hashable { case part(CollectionFilter.Part), add, sort }
-    enum Focus: Hashable { case part(CollectionFilter.Part), add, sort, ask, option(String) }
+    enum Focus: Hashable { case part(CollectionFilter.Part), add, sort, option(String) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -382,9 +460,6 @@ struct FilterSentence: View {
                 Pill(filter.sort == .name ? "Sorted A–Z" : "Sorted by \(filter.sortTitle.lowercased())", systemImage: "arrow.up.arrow.down", size: .small, active: editing == .sort, alwaysShowsTitle: true) { toggle(.sort) }
                     .focused($focus, equals: .sort)
                     .accessibilityIdentifier("filter.sort")
-                Pill("Ask", systemImage: "mic", size: .small, alwaysShowsTitle: true, action: ask)
-                    .focused($focus, equals: .ask)
-                    .accessibilityIdentifier("filter.ask")
             }
             .tvFocusSection()
             if let editing {

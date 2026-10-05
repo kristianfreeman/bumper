@@ -332,6 +332,10 @@ final class AppModel {
             var lib = BaseItem(id: parts[1], name: "Movies", kind: .collectionFolder)
             lib.collectionType = "movies"
             return [.library(lib)]
+        case "shows":
+            var lib = BaseItem(id: parts[1], name: "TV Shows", kind: .collectionFolder)
+            lib.collectionType = "tvshows"
+            return [.library(lib)]
         case "books":
             var lib = BaseItem(id: parts[1], name: "Audiobooks", kind: .collectionFolder)
             lib.collectionType = "books"

@@ -50,31 +50,61 @@ public struct Editorial: Sendable {
     /// Account names are often lower-case ("kristian"); greet a person.
     private var firstName: String? { userName?.split(separator: " ").first.map { String($0).capitalizedFirst } }
 
-    /// "Good evening, Kristian."
+    /// "Good evening, Kristian." — with the weekday where it colours the
+    /// moment ("Friday night, Kristian."), and the odd holiday.
     public var greeting: String {
         let name = firstName.map { ", \($0)" } ?? ""
+        let month = calendar.component(.month, from: now), day = calendar.component(.day, from: now)
+        switch (month, day) {
+        case (10, 31): return "Happy Halloween\(name)."
+        case (12, 24), (12, 25): return "Merry Christmas\(name)."
+        case (12, 31): return "Last night of the year\(name)."
+        case (1, 1): return "Happy New Year\(name)."
+        default: break
+        }
+        let weekdayNumber = calendar.component(.weekday, from: now)       // 1 = Sunday … 7 = Saturday
         switch timeOfDay {
-        case .morning: return pick(["Good morning\(name).", "Morning\(name)."], "greeting")
-        case .afternoon: return weekend ? "A slow \(weekday) afternoon\(name)." : "Good afternoon\(name)."
-        case .evening: return pick(["Good evening\(name).", "Evening\(name)."], "greeting")
-        case .late: return pick(["Up late\(name)?", "Still up\(name)?"], "greeting")
+        case .morning:
+            return weekend ? "A slow \(weekday) morning\(name)." : pick(["Good morning\(name).", "Morning\(name).", "Rise and shine\(name)."], "greeting")
+        case .afternoon:
+            return weekend ? pick(["A lazy \(weekday) afternoon\(name).", "\(weekday) afternoon\(name)."], "greeting") : pick(["Good afternoon\(name).", "Afternoon\(name)."], "greeting")
+        case .evening:
+            if weekdayNumber == 6 { return "Friday night\(name)." }
+            if weekdayNumber == 1 { return "Sunday night\(name)." }
+            return pick(["Good evening\(name).", "Evening\(name).", "The evening's yours\(name)."], "greeting")
+        case .late:
+            return pick(["Up late\(name)?", "Still up\(name)?", "Burning the midnight oil\(name)?"], "greeting")
         }
     }
 
-    /// One or two sentences under the greeting.
+    /// One or two sentences under the greeting, from what's going on: what
+    /// you're nearly done with, what's new, what's next.
     public var lede: String {
         var facts: [String] = []
-        if let item = inProgress.first, let left = minutesLeft(item) {
-            facts.append(left <= 30 ? "You're \(minutes(left)) from the end of \(seriesOrName(item))." : "\(seriesOrName(item)) is waiting where you left it.")
+        let resumable = inProgress.compactMap { item in minutesLeft(item).map { (item, $0) } }
+        if let (item, left) = resumable.first {
+            if left <= 30 {
+                facts.append(timeOfDay == .late ? "Something short before bed? You're \(minutes(left)) from the end of \(seriesOrName(item))." : "You're \(minutes(left)) from the end of \(seriesOrName(item)).")
+            } else {
+                facts.append(pick(["\(seriesOrName(item)) is waiting where you left it.", "\(seriesOrName(item)) is right where you paused it.", "You left \(seriesOrName(item)) \(roughly(left)) from the end."], "lede.resume"))
+            }
         }
-        let movies = addedThisWeek(recentMovies), shows = addedThisWeek(recentShows)
-        if movies + shows > 0 {
-            facts.append("\(countPhrase(movies, "film", "films", shows, "show", "shows").capitalizedFirst) arrived this week.")
+        let newMovies = recentMovies.filter(addedThisWeek), newShows = recentShows.filter(addedThisWeek)
+        if newMovies.count + newShows.count == 1, let only = (newMovies + newShows).first {
+            facts.append("\(only.name ?? "Something new") arrived \(when(only.dateCreated))." )
+        } else if newMovies.count + newShows.count > 1 {
+            facts.append("\(countPhrase(newMovies.count, "film", "films", newShows.count, "show", "shows").capitalizedFirst) arrived this week.")
         } else if !nextUp.isEmpty {
-            facts.append("New episodes of \(list(nextUp.prefix(2).map(seriesOrName))) are ready.")
+            let shows = unique(nextUp.map(seriesOrName))
+            facts.append(shows.count == 1 ? "A new episode of \(shows[0]) is ready." : "New episodes of \(list(Array(shows.prefix(2)))) are ready.")
         }
         if facts.isEmpty {
-            return timeOfDay == .late ? "Something short before bed?" : "Here's what's on your shelves."
+            switch timeOfDay {
+            case .morning: return "Ease into the day with something light."
+            case .afternoon: return weekend ? "No plans? Plenty here." : "Here's what's on your shelves."
+            case .evening: return "Here's what's on your shelves tonight."
+            case .late: return "Something short before bed?"
+            }
         }
         return facts.prefix(2).joined(separator: " ")
     }
@@ -82,29 +112,53 @@ public struct Editorial: Sendable {
     // MARK: Collections
 
     public var resume: Copy {
-        let total = inProgress.compactMap(minutesLeft).reduce(0, +)
+        let left = inProgress.compactMap(minutesLeft)
+        let total = left.reduce(0, +)
         let title = pick(["Pick up where you left off", "Still watching", "Unfinished business"], "resume")
-        let subtitle: String
+        let subtitle: String?
         switch inProgress.count {
-        case 0: subtitle = ""
-        case 1: subtitle = "\(minutes(total)) left."
-        default: subtitle = "\(number(inProgress.count).capitalizedFirst) things in progress — \(roughly(total)) in all."
+        case 0: subtitle = nil
+        case 1: subtitle = "\(seriesOrName(inProgress[0])), \(minutes(total)) left."
+        default: subtitle = "\(number(inProgress.count).capitalizedFirst) things on the go — \(roughly(total)) left between them."
         }
-        return Copy(title: title, subtitle: subtitle.isEmpty ? nil : subtitle)
+        return Copy(title: title, subtitle: subtitle)
     }
 
     public var upNext: Copy {
-        let shows = list(nextUp.prefix(3).map(seriesOrName))
+        let shows = unique(nextUp.map(seriesOrName))
+        let named = shows.count > 3 ? "\(shows.prefix(2).joined(separator: ", ")) and \(number(shows.count - 2)) more" : list(shows)
         return Copy(title: pick(["What's next", "Next in your shows", "The next episode"], "nextup"),
-                    subtitle: nextUp.isEmpty ? nil : "Continuing \(shows).")
+                    subtitle: shows.isEmpty ? nil : "New episodes of \(named).")
     }
 
     /// A library's newest arrivals: "New this week" or "Recently added to Movies".
     public func recent(_ items: [BaseItem], library: String) -> Copy {
-        let week = addedThisWeek(items)
+        let week = items.filter(addedThisWeek).count
         if week >= 2 { return Copy(title: "New this week", subtitle: "\(number(week).capitalizedFirst) additions to \(library) since last \(lastWeekday).") }
-        if week == 1, let first = items.first { return Copy(title: "Just added", subtitle: "\(first.name ?? "Something new") arrived in \(library) this week.") }
-        return Copy(title: "Recently added to \(library)", subtitle: items.first.map { "Most recently, \($0.name ?? "something new")." })
+        if week == 1, let first = items.first { return Copy(title: "Just added", subtitle: "\(first.name ?? "Something new") arrived in \(library) \(when(first.dateCreated)).") }
+        return Copy(title: "Recently added to \(library)", subtitle: items.first.map { "Most recently, \($0.name ?? "something new")\(addedClause($0.dateCreated))." })
+    }
+
+    /// "today", "yesterday", "on Tuesday", "last month", "in March".
+    func when(_ date: Date?) -> String {
+        guard let date else { return "recently" }
+        if calendar.isDate(date, inSameDayAs: now) { return "today" }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+        if days == 1 { return "yesterday" }
+        let style = Date.FormatStyle(timeZone: calendar.timeZone)
+        if days < 7 { return "on \(date.formatted(style.weekday(.wide)))" }
+        if days < 14 { return "last week" }
+        if days < 45 { return "\(number(days / 7)) weeks ago" }
+        if calendar.component(.year, from: date) == calendar.component(.year, from: now) { return "in \(date.formatted(style.month(.wide)))" }
+        return "in \(date.formatted(style.month(.wide).year()))"
+    }
+
+    /// ", on Tuesday" — or nothing, when the server didn't say.
+    func addedClause(_ date: Date?) -> String { date.map { ", \(when($0))" } ?? "" }
+
+    private func unique(_ names: [String]) -> [String] {
+        var seen = Set<String>()
+        return names.filter { seen.insert($0).inserted }
     }
 
     // MARK: Words
@@ -121,12 +175,11 @@ public struct Editorial: Sendable {
         return Int(Double(total - pos) / Double(BaseItem.ticksPerSecond) / 60)
     }
 
-    private func addedThisWeek(_ items: [BaseItem]) -> Int {
-        let start = now.addingTimeInterval(-7 * 86_400)
-        return items.filter { ($0.dateCreated ?? .distantPast) > start }.count
+    private func addedThisWeek(_ item: BaseItem) -> Bool {
+        (item.dateCreated ?? .distantPast) > now.addingTimeInterval(-7 * 86_400)
     }
 
-    private var weekday: String { now.formatted(.dateTime.weekday(.wide)) }
+    private var weekday: String { now.formatted(Date.FormatStyle(timeZone: calendar.timeZone).weekday(.wide)) }
     private var lastWeekday: String { now.addingTimeInterval(-7 * 86_400).formatted(.dateTime.weekday(.wide)) }
 
     private func seriesOrName(_ item: BaseItem) -> String { item.seriesName ?? item.name ?? "it" }
