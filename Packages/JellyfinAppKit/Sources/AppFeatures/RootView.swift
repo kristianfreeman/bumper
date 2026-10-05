@@ -119,6 +119,18 @@ nonisolated struct GridSpec: Hashable, Sendable {
         filter = CollectionFilter(base: ItemQuery(), libraryName: library)
     }
 
+    // By what it shows, not every field of every item it carries (the
+    // navigation path compares and hashes its pages on every change).
+    static func == (a: Self, b: Self) -> Bool {
+        a.title == b.title && a.filter == b.filter && a.items?.map(\.id) == b.items?.map(\.id)
+    }
+
+    func hash(into h: inout Hasher) {
+        h.combine(title)
+        h.combine(filter)
+        h.combine(items?.map(\.id))
+    }
+
     init(title: String, query: ItemQuery, library: String) {
         self.title = title
         filter = CollectionFilter(base: query, libraryName: library)
@@ -316,7 +328,7 @@ struct MainTabView: View {
                         .padding(.top, 4)
                 }
             }
-            .hidesNavigationBar()
+            .hidesNavigationBarEntirely()
         }
         .task { await loadLibraries() }
     }
@@ -390,6 +402,7 @@ extension View {
 /// descendant (a card deep inside a shelf) can push a route.
 struct RoutedStack<Root: View>: View {
     @State private var path: [Route]
+    @State private var lastPush: ContinuousClock.Instant?
     let root: () -> Root
 
     init(initial: [Route] = [], @ViewBuilder root: @escaping () -> Root) {
@@ -408,12 +421,22 @@ struct RoutedStack<Root: View>: View {
                     destination(route).readsPageWidth().profileToolbar(app)
                 }
         }
-        .environment(\.navigate, NavigateAction { path.append($0) })
+        .environment(\.navigate, NavigateAction { push($0) })
         .onChange(of: app.pendingRoute) { _, route in
             guard let route else { return }
-            path.append(route)
+            push(route)
             app.pendingRoute = nil
         }
+    }
+
+    /// One push per page: a double tap (or a second push mid-animation) is
+    /// dropped — the same page twice in a row is never what was meant, and
+    /// SwiftUI's navigation has crashed on a path changing under it.
+    private func push(_ route: Route) {
+        if path.last == route { return }
+        if let last = lastPush, ContinuousClock.now - last < .milliseconds(450) { return }
+        lastPush = .now
+        path.append(route)
     }
 
     @ViewBuilder private func destination(_ route: Route) -> some View {

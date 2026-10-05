@@ -110,8 +110,23 @@ extension View {
 }
 
 extension View {
-    /// Pages draw their own titles: no navigation bar (the Mac's window keeps its toolbar).
+    /// Pages draw their own titles. The TV: no navigation bar (Menu goes
+    /// back). iPhone/iPad: a clear bar, so a page opened from another keeps
+    /// the system's Back button and swipe back (hiding the bar took both).
+    /// The Mac's window keeps its toolbar (with its own Back).
     @ViewBuilder public func hidesNavigationBar() -> some View {
+        #if os(tvOS)
+        toolbar(.hidden, for: .navigationBar)
+        #elseif os(iOS)
+        toolbarBackground(.hidden, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
+
+    /// The bottom of the stack (the tabs themselves): no bar at all.
+    @ViewBuilder public func hidesNavigationBarEntirely() -> some View {
         #if os(macOS)
         self
         #else
