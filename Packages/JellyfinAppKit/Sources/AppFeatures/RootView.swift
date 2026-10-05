@@ -23,6 +23,7 @@ public struct AppRoot: View {
             .environment(\.hideSpoilers, app.settings.hideSpoilers)
             .preferredColorScheme(app.themes.theme.colorScheme)
             .tint(app.themes.theme.accent)
+            .onOpenURL { app.open($0) }                     // the Top Shelf: bumper://play/<id>
     }
 
     /// Call from the App's init, as early as possible.
@@ -223,6 +224,8 @@ struct RoutedStack<Root: View>: View {
         self.root = root
     }
 
+    @Environment(AppModel.self) private var app
+
     var body: some View {
         NavigationStack(path: $path) {
             root()
@@ -249,6 +252,11 @@ struct RoutedStack<Root: View>: View {
                 }
         }
         .environment(\.navigate, NavigateAction { path.append($0) })
+        .onChange(of: app.pendingRoute) { _, route in
+            guard let route else { return }
+            path.append(route)
+            app.pendingRoute = nil
+        }
     }
 }
 #endif

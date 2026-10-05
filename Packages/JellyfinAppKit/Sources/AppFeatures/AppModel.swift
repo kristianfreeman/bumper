@@ -11,6 +11,7 @@ import PlaybackCore
 import VLCPlayback
 import os
 import Synchronization
+import TopShelf
 
 /// Process-start reference for the launch → first-content metric.
 nonisolated enum LaunchClock {
@@ -128,6 +129,8 @@ final class AppModel {
     let capabilities: DeviceCapabilities
     private(set) var session: UserSession?
     var playback: PlaybackRequest?
+    /// A page to open from outside the app (a Top Shelf link).
+    var pendingRoute: Route?
     /// The audiobook playing (it keeps playing while you browse) and whether
     /// its Now Playing screen is up.
     var audiobook: AudiobookPlayer?
@@ -316,6 +319,20 @@ final class AppModel {
             q.limit = 100
             return [.grid(GridSpec(title: "All Movies", query: q, library: "Movies"))]
         default: return []
+        }
+    }
+
+    /// `bumper://play/<id>` plays it (resuming), `bumper://item/<id>` opens its page.
+    func open(_ url: URL) {
+        TraceFile.write("app", "open \(url.absoluteString)")
+        guard let link = TopShelfSnapshot.Link(url), let client = session?.client else { return }
+        Task {
+            switch link {
+            case .play(let id):
+                if let item = try? await client.item(id: id) { play(item) }
+            case .item(let id):
+                if let item = try? await client.item(id: id) { pendingRoute = .item(item) }
+            }
         }
     }
 

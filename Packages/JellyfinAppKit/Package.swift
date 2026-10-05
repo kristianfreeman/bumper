@@ -47,9 +47,12 @@ let package = Package(
         .library(name: "AppFeatures", targets: ["AppFeatures"]),
         // The iPhone companion's link to the TV (and the TV's to it).
         .library(name: "Companion", targets: ["Companion"]),
+        // What the Top Shelf extension reads (Foundation only: extensions are small).
+        .library(name: "TopShelf", targets: ["TopShelf"]),
     ],
     targets: [
         .target(name: "Instrumentation", swiftSettings: safeSwift),
+        .target(name: "TopShelf", swiftSettings: safeSwift),
         .target(name: "JellyfinAPI", dependencies: ["Instrumentation"], swiftSettings: safeSwift),
         .target(name: "AppCore", dependencies: ["JellyfinAPI", "Instrumentation"], swiftSettings: safeSwift),
         .target(name: "PlaybackCore", dependencies: ["JellyfinAPI", "AppCore", "Instrumentation"], swiftSettings: safeSwift),
@@ -69,7 +72,7 @@ let package = Package(
         .target(name: "DesignSystem", dependencies: ["AppCore", "JellyfinAPI", "Instrumentation"], swiftSettings: uiSwift),
         .target(
             name: "AppFeatures",
-            dependencies: ["DesignSystem", "AppCore", "PlaybackCore", "VLCPlayback", "JellyfinAPI", "JellyfinMocks", "Instrumentation", "Companion"],
+            dependencies: ["DesignSystem", "AppCore", "PlaybackCore", "VLCPlayback", "JellyfinAPI", "JellyfinMocks", "Instrumentation", "Companion", "TopShelf"],
             swiftSettings: uiSwift
         ),
 
@@ -79,5 +82,6 @@ let package = Package(
         .testTarget(name: "PlaybackCoreTests", dependencies: ["PlaybackCore"], swiftSettings: modernSwift),
         .testTarget(name: "InstrumentationTests", dependencies: ["Instrumentation"], swiftSettings: modernSwift),
         .testTarget(name: "CompanionTests", dependencies: ["Companion"], swiftSettings: modernSwift),
+        .testTarget(name: "TopShelfTests", dependencies: ["TopShelf"], swiftSettings: modernSwift),
     ]
 )

@@ -42,6 +42,7 @@ final class HomeModel {
             let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client) }
             BlurHashCache.shared.prewarm(fresh.flatMap(\.items))
             if fresh != sections { sections = fresh }
+            TopShelfWriter.update(fresh, client: session.client)
             error = nil
             LaunchClock.markFirstContent()
             await ContentCache.shared.store(fresh, for: key)

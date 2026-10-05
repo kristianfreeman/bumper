@@ -50,6 +50,11 @@ targets:
     dependencies:
       - package: JellyfinAppKit
         product: AppFeatures
+      - target: BumperTopShelf
+    entitlements:
+      path: App/Bumper.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.kristianfreeman.bumper]
     settings:
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
@@ -75,8 +80,42 @@ targets:
         NSLocalNetworkUsageDescription: Find Jellyfin servers and your iPhone on your network.
         NSBonjourServices: [_bumper._tcp]
         UIBackgroundModes: [audio]
+        # bumper://play/<id> and bumper://item/<id> (the Top Shelf opens these).
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes: [bumper]
         # services/search (falls back to on-device reading when it's off or down).
         BumperSearchEndpoint: https://bumper-search.signalnerve.workers.dev/v1/interpret
+
+  # The Top Shelf: Continue Watching and Next Up above Bumper's icon on the
+  # Home Screen, from a snapshot the app writes to the app group.
+  BumperTopShelf:
+    type: app-extension
+    platform: tvOS
+    sources: [TopShelfExtension]
+    dependencies:
+      - package: JellyfinAppKit
+        product: TopShelf
+      - sdk: TVServices.framework
+    entitlements:
+      path: TopShelfExtension/BumperTopShelf.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.kristianfreeman.bumper]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper.topshelf
+        PRODUCT_NAME: BumperTopShelf
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        SKIP_INSTALL: YES
+    info:
+      path: TopShelfExtension/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
 
   # Bumper for iPhone. For now it's the TV's companion (talks to the Apple TV
   # app over the local network: Packages/JellyfinAppKit/Sources/Companion);
