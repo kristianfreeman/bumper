@@ -85,6 +85,56 @@ struct ProfileView: View {
     @State private var model = ProfileModel()
 
     var body: some View {
+        Group {
+            if Platform.isTV { tvBody } else { compactBody }
+        }
+        .background(theme.backgroundGradient.ignoresSafeArea())
+        .task {
+            guard let client = app.session?.client else { return }
+            await model.load(client: client)
+        }
+    }
+
+    /// iPhone, iPad, Mac: one column — who, then the numbers, then the rest.
+    private var compactBody: some View {
+        let phone = Layout.device == .phone
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                let header = phone ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 24))
+                header {
+                    UserAvatar(size: phone ? 96 : 112)
+                    VStack(alignment: phone ? .center : .leading, spacing: 6) {
+                        Text(model.user?.name ?? app.session?.account.userName ?? "")
+                            .font(.title.bold()).foregroundStyle(theme.primaryText)
+                        HStack(spacing: 10) {
+                            if model.user?.policy?.isAdministrator == true {
+                                Text("Administrator").font(.caption.weight(.semibold))
+                                    .padding(.horizontal, 10).padding(.vertical, 4)
+                                    .background(theme.accent.opacity(0.2), in: .capsule)
+                                    .foregroundStyle(theme.accent)
+                            }
+                            if let active = model.user?.lastActivityDate {
+                                Text("Active \(active.formatted(.relative(presentation: .named)))")
+                                    .font(.subheadline).foregroundStyle(theme.secondaryText)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: phone ? .center : .leading)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: phone ? 140 : 170), spacing: 14)], spacing: 14) { statTiles(compact: true) }
+                genres
+                details
+            }
+            .frame(maxWidth: 900)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Layout.horizontalMargin)
+            .padding(.vertical, 24)
+        }
+        .hidesNavigationBar()
+    }
+
+    /// The TV: who on the left, the numbers on the right.
+    private var tvBody: some View {
         HStack(alignment: .top, spacing: 80) {
             identity
                 .frame(width: 520)
@@ -100,11 +150,6 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 40)
         .padding(.top, 40)
-        .background(theme.backgroundGradient.ignoresSafeArea())
-        .task {
-            guard let client = app.session?.client else { return }
-            await model.load(client: client)
-        }
     }
 
     private var identity: some View {
@@ -128,15 +173,17 @@ struct ProfileView: View {
     }
 
     private var statGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 32), count: 3), spacing: 32) { statTiles(compact: false) }
+    }
+
+    @ViewBuilder private func statTiles(compact: Bool) -> some View {
         let s = model.stats
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 32), count: 3), spacing: 32) {
-            StatTile(symbol: "film", value: s.map { "\($0.moviesWatched)" }, label: "Movies watched")
-            StatTile(symbol: "tv", value: s.map { "\($0.episodesWatched)" }, label: "Episodes watched")
-            StatTile(symbol: "clock", value: s.map { Self.hours($0.hoursWatched) }, label: "Watched")
-            StatTile(symbol: "rectangle.stack", value: s.map { "\($0.showsStarted)" }, label: "Shows started")
-            StatTile(symbol: "play.circle", value: s.map { "\($0.inProgress)" }, label: "In progress")
-            StatTile(symbol: "heart", value: s.map { "\($0.favorites)" }, label: "Favorites")
-        }
+        StatTile(symbol: "film", value: s.map { "\($0.moviesWatched)" }, label: "Movies watched", compact: compact)
+        StatTile(symbol: "tv", value: s.map { "\($0.episodesWatched)" }, label: "Episodes watched", compact: compact)
+        StatTile(symbol: "clock", value: s.map { Self.hours($0.hoursWatched) }, label: "Watched", compact: compact)
+        StatTile(symbol: "rectangle.stack", value: s.map { "\($0.showsStarted)" }, label: "Shows started", compact: compact)
+        StatTile(symbol: "play.circle", value: s.map { "\($0.inProgress)" }, label: "In progress", compact: compact)
+        StatTile(symbol: "heart", value: s.map { "\($0.favorites)" }, label: "Favorites", compact: compact)
     }
 
     static func hours(_ h: Double) -> String {
@@ -150,18 +197,19 @@ struct ProfileView: View {
                 Text("Favourite Genres").font(.title3.bold()).foregroundStyle(theme.primaryText)
                     .padding(.bottom, 4)
                 ForEach(top, id: \.self) { g in
-                    HStack(spacing: 20) {
-                        Text(g.name).font(.callout).foregroundStyle(theme.primaryText).frame(width: 220, alignment: .leading)
+                    HStack(spacing: Platform.isTV ? 20 : 12) {
+                        Text(g.name).font(.callout).foregroundStyle(theme.primaryText).lineLimit(1)
+                            .frame(width: Platform.isTV ? 220 : Layout.device == .phone ? 110 : 160, alignment: .leading)
                         GeometryReader { geo in
                             Capsule().fill(theme.accent.opacity(0.85))
                                 .frame(width: max(12, geo.size.width * CGFloat(g.count) / CGFloat(most)))
                         }
-                        .frame(height: 14)
-                        Text("\(g.count)").font(.callout.monospacedDigit()).foregroundStyle(theme.secondaryText).frame(width: 60, alignment: .trailing)
+                        .frame(height: Platform.isTV ? 14 : 10)
+                        Text("\(g.count)").font(.callout.monospacedDigit()).foregroundStyle(theme.secondaryText).frame(width: Platform.isTV ? 60 : 40, alignment: .trailing)
                     }
                 }
             }
-            .padding(28)
+            .padding(Platform.isTV ? 28 : 18)
             .focusTile()
         }
     }
@@ -175,13 +223,13 @@ struct ProfileView: View {
                     row("Jellyfin", model.server?.version ?? session.server.version ?? "–")
                     row("Address", session.server.url.host() ?? session.server.url.absoluteString)
                 }
-                row("Apple TV", PerfRecorder.hardwareModel)
+                row(Platform.isTV ? "Apple TV" : DownloadWords.device, PerfRecorder.hardwareModel)
                 row("App", "\(Brand.displayName) \(Brand.version) (\(Brand.build))")
             }
             .font(.callout)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(28)
+        .padding(Platform.isTV ? 28 : 18)
         .focusTile()
     }
 
@@ -197,17 +245,20 @@ struct StatTile: View {
     let symbol: String
     let value: String?
     let label: String
+    /// iPhone, iPad, Mac: a smaller number, on one line.
+    var compact = false
     @Environment(\.theme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: symbol).font(.title3).foregroundStyle(theme.accent)
-            Text(value ?? "–").font(.system(size: 54, weight: .bold).monospacedDigit()).foregroundStyle(theme.primaryText)
+        VStack(alignment: .leading, spacing: compact ? 6 : 10) {
+            Image(systemName: symbol).font(compact ? .body : .title3).foregroundStyle(theme.accent)
+            Text(value ?? "–").font(.system(size: compact ? 30 : 54, weight: .bold).monospacedDigit()).foregroundStyle(theme.primaryText)
+                .lineLimit(1).minimumScaleFactor(0.5)
                 .contentTransition(.numericText())
-            Text(label).font(.callout).foregroundStyle(theme.secondaryText)
+            Text(label).font(compact ? .footnote : .callout).foregroundStyle(theme.secondaryText).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(28)
+        .padding(compact ? 16 : 28)
         .animation(.easeOut(duration: 0.3), value: value)
         .focusTile()
     }
@@ -220,6 +271,12 @@ struct FocusTile: ViewModifier {
     @FocusState private var focused: Bool
 
     func body(content: Content) -> some View {
+        if Platform.isTV { tile(content) } else {
+            content.background(theme.surface.opacity(0.7), in: .rect(cornerRadius: 18))   // nothing to focus off the TV
+        }
+    }
+
+    private func tile(_ content: Content) -> some View {
         content
             .background(theme.surface.opacity(focused ? 1 : 0.7), in: .rect(cornerRadius: 24))
             .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(theme.accent.opacity(focused ? 0.8 : 0), lineWidth: 3))
