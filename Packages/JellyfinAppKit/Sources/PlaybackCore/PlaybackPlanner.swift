@@ -107,6 +107,18 @@ public struct PlaybackPlanner: Sendable {
 
     /// Always what VLCKit can Direct Play, so the server never transcodes a
     /// file one of our backends can play.
+    /// A downloaded file: the same player, the same engine rules — only the
+    /// URL is local, and there's no server to transcode, so whatever AVPlayer
+    /// can't open goes to VLCKit.
+    public func localPlan(item: BaseItem, source: MediaSource, file: URL, startPosition: Duration?, audioIndex: Int?, subtitleIndex: Int?) -> PlaybackPlan {
+        let subtitle = subtitleIndex ?? source.defaultSubtitleStreamIndex          // as streaming does
+        let blockers = avPlayerBlockers(source: source, audioIndex: audioIndex, subtitleIndex: subtitle)
+        let native = preference == .automatic && blockers.isEmpty
+        return PlaybackPlan(item: item, mediaSource: source, url: file, engine: native ? .native : .vlc, method: .directPlay,
+                            playSessionId: nil, startPosition: startPosition ?? .zero, audioStreamIndex: audioIndex ?? source.defaultAudioStreamIndex,
+                            subtitleStreamIndex: subtitle, reasons: ["Downloaded"] + (native ? [] : blockers))
+    }
+
     public func deviceProfile() -> DeviceProfile {
         DeviceProfileBuilder(capabilities: capabilities, maxBitrate: maxBitrate).vlcProfile()
     }

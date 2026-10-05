@@ -63,3 +63,19 @@ struct DownloadStoreTests {
         #expect(DownloadStore.pieces(size: nil, ranges: true, pieceSize: 4).map(\.range) == [nil])
     }
 }
+
+/// Progress the server didn't get is kept, and goes once it can.
+@Suite("Playstate outbox")
+struct PlaystateOutboxTests {
+    @Test func keepsTheLatestAndDelivers() async {
+        let defaults = UserDefaults(suiteName: "outbox-test-\(UUID().uuidString)")!
+        let outbox = PlaystateOutbox(defaults: defaults, account: "a")
+        outbox.keep(itemId: "e1", positionTicks: 100, played: false)
+        outbox.keep(itemId: "e1", positionTicks: 200, played: false)
+        outbox.keep(itemId: "e2", positionTicks: 0, played: true)
+        #expect(outbox.entries.count == 2)
+        #expect(outbox.entries.first { $0.itemId == "e1" }?.positionTicks == 200)
+        await outbox.deliver(with: await DownloadStoreTests.client())
+        #expect(outbox.entries.isEmpty)
+    }
+}

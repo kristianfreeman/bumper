@@ -1,3 +1,4 @@
+public import AppCore
 public import JellyfinAPI
 import Foundation
 import Instrumentation
@@ -9,13 +10,24 @@ import os
 public actor PlaybackReporter {
     private let client: JellyfinClient
     private let plan: PlaybackPlan
+    /// Where progress the server didn't get goes (offline), for later.
+    private let outbox: PlaystateOutbox?
     private var lastReported: ContinuousClock.Instant?
     private var started = false
     private static let log = Perf.logger("reporter")
 
-    public init(client: JellyfinClient, plan: PlaybackPlan) {
+    public init(client: JellyfinClient, plan: PlaybackPlan, outbox: PlaystateOutbox? = nil) {
         self.client = client
         self.plan = plan
+        self.outbox = outbox
+    }
+
+    /// Kept for later when the server can't be told now. Near the end counts
+    /// as watched (as the server judges it).
+    private func undelivered(_ position: Duration) {
+        let duration = plan.item.runTimeTicks.map { Double($0) / Double(BaseItem.ticksPerSecond) } ?? 0
+        let played = duration > 0 && position.seconds / duration >= 0.9
+        outbox?.keep(itemId: plan.item.id, positionTicks: position.ticks, played: played)
     }
 
     private func report(position: Duration, paused: Bool, audio: Int?, subtitle: Int?) -> PlaybackProgressReport {
@@ -44,12 +56,14 @@ public actor PlaybackReporter {
         guard started else { return }
         if !force, let last = lastReported, last.duration(to: .now) < .seconds(10) { return }
         lastReported = .now
-        try? await client.reportPlaybackProgress(report(position: position, paused: paused, audio: audio, subtitle: subtitle))
+        do { try await client.reportPlaybackProgress(report(position: position, paused: paused, audio: audio, subtitle: subtitle)) }
+        catch { undelivered(position) }
     }
 
     public func stop(position: Duration) async {
         guard started else { return }
         started = false
-        try? await client.reportPlaybackStopped(report(position: position, paused: true, audio: nil, subtitle: nil))
+        do { try await client.reportPlaybackStopped(report(position: position, paused: true, audio: nil, subtitle: nil)) }
+        catch { undelivered(position) }
     }
 }

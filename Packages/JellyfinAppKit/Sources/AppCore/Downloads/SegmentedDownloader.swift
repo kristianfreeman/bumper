@@ -33,6 +33,13 @@ public final class SegmentedDownloader: NSObject, URLSessionDownloadDelegate, Se
     /// The system's completion handler for background events (iOS), called
     /// once the session has delivered them.
     let backgroundCompletion = Mutex<(@Sendable () -> Void)?>(nil)
+    /// The same, handed over by the app delegate before the store exists
+    /// (the system relaunched the app for finished downloads).
+    static let systemCompletion = Mutex<(@Sendable () -> Void)?>(nil)
+
+    public static func handleSystemEvents(_ completion: @escaping @Sendable () -> Void) {
+        systemCompletion.withLock { $0 = completion }
+    }
 
     /// - Parameters:
     ///   - configuration: a background configuration in the app (iOS); a
@@ -130,6 +137,7 @@ public final class SegmentedDownloader: NSObject, URLSessionDownloadDelegate, Se
 
     public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
         let done = backgroundCompletion.withLock { h -> (@Sendable () -> Void)? in defer { h = nil }; return h }
-        DispatchQueue.main.async { done?() }
+        let system = Self.systemCompletion.withLock { h -> (@Sendable () -> Void)? in defer { h = nil }; return h }
+        DispatchQueue.main.async { done?(); system?() }
     }
 }

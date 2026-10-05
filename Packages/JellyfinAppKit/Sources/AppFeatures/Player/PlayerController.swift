@@ -85,7 +85,12 @@ final class PlayerController {
                 if matching { await DisplayModeManager.waitForSwitch() }
             } else {
                 let start = request.resume ? request.item.resumePosition : nil
-                if let prewarmed = app.takePrewarmedPlan(for: request) {
+                if let file = app.downloads?.localFile(for: request.item.id), let record = app.downloads?.record(request.item.id),
+                   let source = record.item.mediaSources?.first(where: { $0.id == (request.mediaSourceId ?? record.mediaSourceId) }) ?? record.item.mediaSources?.first {
+                    // Downloaded: the same player, from the file on this device.
+                    plan = app.planner.localPlan(item: request.item, source: source, file: file, startPosition: start,
+                                                 audioIndex: request.audioIndex, subtitleIndex: request.subtitleIndex == -1 ? nil : request.subtitleIndex)
+                } else if let prewarmed = app.takePrewarmedPlan(for: request) {
                     plan = try await prewarmed.value
                 } else {
                     plan = try await app.planner.plan(
@@ -135,7 +140,7 @@ final class PlayerController {
 
             // Background Noise tells the server nothing: no reporter at all.
             if !request.background {
-                let reporter = PlaybackReporter(client: client, plan: plan)
+                let reporter = PlaybackReporter(client: client, plan: plan, outbox: app.outbox)
                 self.reporter = reporter
                 Task { await reporter.start(position: plan.startPosition) }
             }
@@ -406,29 +411,24 @@ final class PlayerController {
             // by URL in their own format.
             let external = stream.flatMap { s -> URL? in
                 guard s.isExternal == true else { return nil }
-                return s.deliveryUrl.flatMap(client.absoluteURL(serverRelative:))
+                return app.downloads?.subtitleFile(itemId: plan.item.id, index: s.index, format: Self.fileExtension(for: s.codec))
+                    ?? s.deliveryUrl.flatMap(client.absoluteURL(serverRelative:))
                     ?? client.subtitleURL(itemId: plan.item.id, mediaSourceId: plan.mediaSource.id, streamIndex: s.index, format: Self.fileExtension(for: s.codec))
             }
             await engine.selectSubtitle(stream, external: external)
         } else if let stream {
             // AVPlayer: WebVTT overlaid by the player (styled by the user's preset).
-            let url = stream.deliveryUrl.flatMap(client.absoluteURL(serverRelative:)) ?? client.subtitleURL(itemId: plan.item.id, mediaSourceId: plan.mediaSource.id, streamIndex: stream.index, format: "vtt")
+            // A download's saved copy first (no server offline).
+            let url = app.downloads?.subtitleFile(itemId: plan.item.id, index: stream.index, format: "vtt")
+                ?? stream.deliveryUrl.flatMap(client.absoluteURL(serverRelative:))
+                ?? client.subtitleURL(itemId: plan.item.id, mediaSourceId: plan.mediaSource.id, streamIndex: stream.index, format: "vtt")
             if let (data, _) = try? await client.session.data(from: url) {
                 subtitleTrack = SubtitleParser.parse(data, format: url.pathExtension)
             }
         }
     }
 
-    static func fileExtension(for codec: String?) -> String {
-        switch (codec ?? "").lowercased() {
-        case "subrip", "srt": "srt"
-        case "ass": "ass"
-        case "ssa": "ssa"
-        case "webvtt", "vtt": "vtt"
-        case "pgssub": "sup"
-        default: "srt"
-        }
-    }
+    static func fileExtension(for codec: String?) -> String { DownloadStore.subtitleExtension(codec) }
 
     private func applyInitialSubtitles(plan: PlaybackPlan, client: JellyfinClient) async {
         let streams = plan.mediaSource.mediaStreams ?? []

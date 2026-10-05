@@ -136,7 +136,12 @@ final class AppModel {
     @ObservationIgnored lazy var companion = CompanionBridge(app: self)
     @ObservationIgnored private var defaults: UserDefaults = .standard
     let capabilities: DeviceCapabilities
-    private(set) var session: UserSession?
+    private(set) var session: UserSession? { didSet { sessionChanged() } }
+    /// Films and episodes on this device (iPhone, iPad, Mac; tvOS keeps no
+    /// files an app can count on).
+    let downloads: DownloadStore?
+    /// Watch progress the server didn't get yet (offline), per account.
+    var outbox: PlaystateOutbox? { session.map { PlaystateOutbox(defaults: defaults, account: $0.account.id) } }
     var playback: PlaybackRequest?
     /// A page (or tab) to open from outside the app (a Top Shelf link).
     var pendingRoute: Route?
@@ -159,6 +164,7 @@ final class AppModel {
             .map { $0.formatted(.iso8601) } ?? "?"
         TraceFile.write("app", "launch \(PerfRecorder.deviceModel) build \(built) args: \(ProcessInfo.processInfo.arguments.dropFirst().joined(separator: " "))")
         let defaults = options.mock ? UserDefaults(suiteName: "mock")! : .standard
+        downloads = Self.makeDownloads(mock: options.mock, reset: options.reset)
         if options.reset {
             defaults.removePersistentDomain(forName: options.mock ? "mock" : Brand.bundleIdentifier)
             Task { await ContentCache.shared.removeAll(); await ImagePipeline.shared.removeAll() }
@@ -204,6 +210,7 @@ final class AppModel {
         Self.configureAudioSession()
         InputTrace.install()
         if let session { queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults); startQueueSync(session) }
+        sessionChanged()                                          // (didSet doesn't run in init)
         self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
@@ -286,6 +293,22 @@ final class AppModel {
     }
 
     // MARK: Session
+
+    private static func makeDownloads(mock: Bool, reset: Bool) -> DownloadStore? {
+        guard !Platform.isTV else { return nil }
+        guard mock else { return DownloadStore() }
+        // Tests: their own folder, and the mock server (a background session can't use one).
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Downloads-mock", directoryHint: .isDirectory)
+        if reset { try? FileManager.default.removeItem(at: dir) }
+        let config = URLSessionConfiguration.default
+        config.protocolClasses = [MockJellyfinProtocol.self]
+        return DownloadStore(directory: dir, configuration: config)
+    }
+
+    private func sessionChanged() {
+        guard let session else { return }
+        downloads?.use(session.client, for: session.account.id)
+    }
 
     func didSignIn(_ session: UserSession) {
         self.session = session
@@ -424,6 +447,7 @@ final class AppModel {
 
     func refreshFromOtherDevices() {
         Task { await queueSync?.pull() }
+        if let outbox, let client = session?.client { Task { await outbox.deliver(with: client) } }
         Task { await refreshProfile() }
     }
 
@@ -498,7 +522,8 @@ final class AppModel {
     /// the user clicks, the server round trip is already done. Plans are reused
     /// for 60 s.
     func prewarm(_ item: BaseItem) {
-        guard let session, item.kind.isPlayable else { return }
+        // A downloaded item plays from its file: nothing to ask the server.
+        guard let session, item.kind.isPlayable, downloads?.localFile(for: item.id) == nil else { return }
         if let existing = prewarmed[item.id], existing.1.duration(to: .now) < .seconds(60) { return }
         let planner = planner
         let start = item.resumePosition
@@ -524,7 +549,7 @@ final class AppModel {
     /// press Play" signal there is. Plans that one item and, if it's a VLCKit
     /// item, opens and buffers it.
     func prepare(_ item: BaseItem) {
-        guard !options.noPrepare, item.kind.isPlayable, playback == nil,
+        guard !options.noPrepare, item.kind.isPlayable, playback == nil, downloads?.localFile(for: item.id) == nil,
               prepared?.itemId != item.id, preparing?.itemId != item.id else { return }
         releasePrepared()
         prewarm(item)

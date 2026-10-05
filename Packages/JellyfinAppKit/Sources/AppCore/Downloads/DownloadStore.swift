@@ -37,6 +37,10 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     /// The finished file, relative to the downloads folder.
     public var file: String?
     public var addedAt: Date
+    /// Subtitles saved beside it ("3.vtt" → its file): every text subtitle as
+    /// WebVTT (what AVPlayer's overlay reads, which the server extracts when
+    /// streaming), external ones also in their own format (for VLCKit).
+    public var subtitles: [String: String]?
 
     public var received: Int64 { pieces.reduce(0) { $0 + ($1.file != nil ? ($1.length ?? $1.received) : $1.received) } }
     public var progress: Double? { size.map { $0 > 0 ? min(1, Double(received) / Double($0)) : 0 } }
@@ -118,6 +122,12 @@ public final class DownloadStore {
         guard let r = records[itemId], r.isDone, let file = r.file else { return nil }
         let url = directory.appending(path: file)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// A saved subtitle for a stream, in a format ("vtt", "srt", …).
+    public func subtitleFile(itemId: String, index: Int, format: String) -> URL? {
+        guard let path = records[itemId]?.subtitles?["\(index).\(format)"] else { return nil }
+        return directory.appending(path: path)
     }
 
     /// Downloaded episodes of a series (or of one season).
@@ -213,6 +223,42 @@ public final class DownloadStore {
         }
         save()
         fill(id, url: url)
+        if records[id]?.subtitles == nil { Task { await fetchSubtitles(id, client: client) } }
+    }
+
+    /// The item's subtitles, small enough to fetch whole beside the pieces.
+    private func fetchSubtitles(_ id: String, client: JellyfinClient) async {
+        guard let r = records[id], let source = r.item.mediaSources?.first(where: { $0.id == r.mediaSourceId }) ?? r.item.mediaSources?.first else { return }
+        var saved: [String: String] = [:]
+        let folder = directory.appending(path: id, directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for stream in source.subtitleStreams where stream.isTextSubtitleStream == true || stream.isExternal == true {
+            var formats: [String] = stream.isTextSubtitleStream == true ? ["vtt"] : []
+            if stream.isExternal == true { formats.append(Self.subtitleExtension(stream.codec)) }
+            for format in Set(formats) {
+                let url = client.subtitleURL(itemId: id, mediaSourceId: source.id, streamIndex: stream.index, format: format)
+                guard let (data, response) = try? await client.session.data(from: url),
+                      (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { continue }
+                let name = "subtitle-\(stream.index).\(format)"
+                if (try? data.write(to: folder.appending(path: name), options: .atomic)) != nil { saved["\(stream.index).\(format)"] = "\(id)/\(name)" }
+            }
+        }
+        guard records[id] != nil else { return }
+        records[id]?.subtitles = saved
+        save()
+        if saved.count > 0 { TraceFile.write("downloads", "\(r.item.name ?? id): \(saved.count) subtitle file(s)") }
+    }
+
+    /// A subtitle codec's file extension (as the player asks for it).
+    public static func subtitleExtension(_ codec: String?) -> String {
+        switch (codec ?? "").lowercased() {
+        case "subrip", "srt": "srt"
+        case "ass": "ass"
+        case "ssa": "ssa"
+        case "webvtt", "vtt": "vtt"
+        case "pgssub": "sup"
+        default: "srt"
+        }
     }
 
     /// Keeps `parallelPieces` pieces of a download in flight.

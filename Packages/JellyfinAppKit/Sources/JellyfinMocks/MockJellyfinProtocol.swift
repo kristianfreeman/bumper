@@ -149,6 +149,8 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             return page(filterItems(q, catalog))
         case ("POST", let p) where p.hasPrefix("/Sessions"):
             return (204, Data(), "text/plain")
+        case ("POST", let p) where p.hasPrefix("/UserItems/") && p.hasSuffix("/UserData"):
+            return (200, Data("{}".utf8), "application/json")
         case ("POST", let p) where p.hasPrefix("/UserPlayedItems") || p.hasPrefix("/UserFavoriteItems"):
             return json(UserItemData(played: true))
         default:

@@ -1,11 +1,13 @@
 import AppFeatures
 import Companion
 import SwiftUI
+import UIKit
 
 /// Bumper on iPhone and iPad: the same app as on the TV (AppFeatures), with
 /// one more tab, the Apple TV remote (live view, the queue, asking).
 @main
 struct BumperPhoneApp: App {
+    @UIApplicationDelegateAdaptor(PhoneAppDelegate.self) private var delegate
     @State private var companion = CompanionModel()
 
     init() { AppRoot.markProcessStart() }
@@ -15,6 +17,15 @@ struct BumperPhoneApp: App {
             AppRoot(remoteTab: AnyView(RemoteTab().environment(companion)))
                 .task { companion.startBrowsing() }
         }
+    }
+}
+
+/// Downloads finished while the app wasn't running: the system relaunches
+/// it to deliver them, and waits to be told it's done.
+final class PhoneAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        guard identifier == BackgroundDownloads.identifier else { completionHandler(); return }
+        BackgroundDownloads.handleEvents(completionHandler)
     }
 }
 

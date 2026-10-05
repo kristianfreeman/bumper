@@ -330,6 +330,17 @@ extension JellyfinClient {
         try await send(Request<Void>(.post, "/Sessions/Playing/Stopped", body: encode(report)))
     }
 
+    /// Sets where an item resumes (and when it was last played), without a
+    /// playback session: progress made offline, delivered later.
+    public func updatePlaybackPosition(itemId: String, ticks: Int64, lastPlayed: Date) async throws {
+        struct Body: Encodable {
+            let PlaybackPositionTicks: Int64
+            let LastPlayedDate: String
+        }
+        let body = try JSONEncoder().encode(Body(PlaybackPositionTicks: ticks, LastPlayedDate: lastPlayed.ISO8601Format()))
+        try await send(Request<Void>(.post, "/UserItems/\(itemId)/UserData", query: [.init(name: "userId", value: userId)], body: body))
+    }
+
     /// Original file, byte-for-byte (`static=true`): supports HTTP range
     /// requests, which both AVPlayer and VLCKit rely on.
     public func directStreamURL(itemId: String, mediaSourceId: String, container: String?, playSessionId: String?) -> URL {

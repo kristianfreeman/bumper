@@ -205,3 +205,20 @@ struct SoftwareDecodeBudgetTests {
         #expect(decide("AppleTV6,2", source("vc1", 1920, 1080, fps: 29.97, interlaced: true)).method == .transcode)
     }
 }
+
+/// A downloaded file plays like a stream: AVPlayer when it can, VLCKit
+/// otherwise — never a server transcode (there's no server).
+@Suite("Downloaded playback")
+struct LocalPlanTests {
+    @Test func picksTheEngineLikeStreaming() {
+        let planner = PlaybackPlanner(capabilities: .appleTV4KReference, preference: .automatic, maxBitrate: nil)
+        let item = BaseItem(id: "f", name: "F", kind: .movie)
+        let file = URL(fileURLWithPath: "/tmp/f/media.mp4")
+        let mp4 = MediaSource(id: "s", container: "mp4", mediaStreams: [MediaStream(index: 0, type: .video, codec: "h264"), MediaStream(index: 1, type: .audio, codec: "aac")])
+        let mkv = MediaSource(id: "s", container: "mkv", mediaStreams: [MediaStream(index: 0, type: .video, codec: "h264"), MediaStream(index: 1, type: .audio, codec: "dts")])
+        let a = planner.localPlan(item: item, source: mp4, file: file, startPosition: nil, audioIndex: nil, subtitleIndex: nil)
+        #expect(a.engine == .native && a.method == .directPlay && a.url == file)
+        let b = planner.localPlan(item: item, source: mkv, file: file, startPosition: .seconds(30), audioIndex: nil, subtitleIndex: nil)
+        #expect(b.engine == .vlc && b.method == .directPlay && b.startPosition == .seconds(30))
+    }
+}
