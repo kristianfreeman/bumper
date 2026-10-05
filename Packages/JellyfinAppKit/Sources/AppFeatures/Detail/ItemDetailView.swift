@@ -118,7 +118,8 @@ struct ItemDetailView: View {
                     }
                     if !model.similar.isEmpty {
                         Shelf("More Like This", items: model.similar) { s in
-                            PosterCard(s) { navigate(.item(s)) }
+                            PosterCard(s) { app.select(s, navigate: navigate) }
+                                .contextMenu { ItemContextMenu(item: s) }
                         }
                     }
                 }

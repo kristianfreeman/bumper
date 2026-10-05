@@ -99,6 +99,30 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 12), "Quick Connect didn't sign in")
     }
 
+    /// Select on something in progress resumes it; hold, then Select on the
+    /// first item (See Details) opens its page instead.
+    func testHoldOpensDetailsForThingsThatPlay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 8))
+        Thread.sleep(forTimeInterval: 1.5)
+        let remote = XCUIRemote.shared
+        remote.press(.select, forDuration: 1.2)
+        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'See Details'")).firstMatch
+        if !details.waitForExistence(timeout: 3) {
+            XCTFail("holding didn't open the menu with See Details; menu: \(app.descendants(matching: .any).matching(NSPredicate(format: "elementType == 6 OR elementType == 9")).allElementsBoundByIndex.prefix(12).map(\.label))")
+            return
+        }
+        Thread.sleep(forTimeInterval: 0.4)
+        let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        print("MENU-DEBUG focused: \(focused.elementType.rawValue) '\(focused.label)'")
+        remote.press(.select)
+        let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Resume' OR label BEGINSWITH 'Play'")).firstMatch
+        XCTAssertTrue(resume.waitForExistence(timeout: 5), "See Details didn't open the page")
+        XCTAssertFalse(app.descendants(matching: .any)["player.time"].exists, "it played instead of opening the page")
+    }
+
     private func shot(_ app: XCUIApplication, _ name: String) {
         guard let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] else { return }
         Thread.sleep(forTimeInterval: 1.2)

@@ -94,9 +94,11 @@ struct SearchView: View {
     @ViewBuilder
     private func card(_ item: BaseItem, style: Shelf<AnyView>.Style) -> some View {
         if style == .landscape {
-            LandscapeCard(item, kind: .still) { app.play(item) }
+            LandscapeCard(item, kind: .still) { app.select(item, navigate: navigate) }
+                .contextMenu { ItemContextMenu(item: item) }
         } else {
-            PosterCard(item) { navigate(.item(item)) }
+            PosterCard(item) { app.select(item, navigate: navigate) }
+                .contextMenu { ItemContextMenu(item: item) }
         }
     }
 }
@@ -105,6 +107,7 @@ struct SearchView: View {
 private struct UnderstoodSection: View {
     let understood: SearchView.Understood
     let available: CGFloat
+    @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
 
@@ -134,7 +137,7 @@ private struct UnderstoodSection: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: 4),
                           alignment: .leading, spacing: 44) {
                     ForEach(understood.items) { item in
-                        LandscapeCard(item, width: width) { navigate(.item(item)) }
+                        LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
                             .contextMenu { ItemContextMenu(item: item) }
                             .accessibilityIdentifier("card.understood.\(item.id)")
                     }

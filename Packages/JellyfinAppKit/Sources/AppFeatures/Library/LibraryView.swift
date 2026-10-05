@@ -285,7 +285,7 @@ struct CollectionPage: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Layout.cardSpacing, alignment: .top), count: columns),
                           alignment: .leading, spacing: 44) {
                     ForEach(model.items) { item in
-                        LandscapeCard(item, width: cardWidth) { navigate(.item(item)) }
+                        LandscapeCard(item, width: cardWidth) { app.select(item, navigate: navigate) }
                             .contextMenu { ItemContextMenu(item: item) }
                             .onAppear {
                                 if model.items.count > 20, item.id == model.items[model.items.count - 21].id { loadMore() }

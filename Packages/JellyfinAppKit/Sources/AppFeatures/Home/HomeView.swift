@@ -389,11 +389,28 @@ struct MetadataLine: View {
     }
 }
 
+extension BaseItem {
+    /// Select plays it (resuming): a specific episode, or anything already
+    /// started. Everything else opens its page. Hold for the rest.
+    var playsOnSelect: Bool { kind.isPlayable && (kind == .episode || resumePosition != nil) }
+}
+
+extension AppModel {
+    /// What Select on a card does, everywhere.
+    func select(_ item: BaseItem, navigate: NavigateAction) {
+        if item.playsOnSelect { play(item) } else { navigate(.item(item)) }
+    }
+}
+
+/// Hold Select on a card. Details comes first, so hold-then-click opens the
+/// page of something whose Select plays it.
 struct ItemContextMenu: View {
     let item: BaseItem
     @Environment(AppModel.self) private var app
+    @Environment(\.navigate) private var navigate
 
     var body: some View {
+        Button(item.kind == .episode ? "Episode Details" : "See Details", systemImage: "info.circle") { navigate(.item(item)) }
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }
             if item.resumePosition != nil {

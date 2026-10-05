@@ -139,7 +139,6 @@ struct CollectionSection: View {
     @Environment(\.theme) private var theme
 
     static let rows = 2
-    static let playsOnSelect: Set<String> = ["resume", "nextup"]
 
     private var columns: Int { section.style == .poster ? 6 : 4 }
     private var width: CGFloat {
@@ -204,13 +203,10 @@ struct CollectionSection: View {
     private func card(_ item: BaseItem) -> some View {
         switch section.style {
         case .landscape:
-            LandscapeCard(item, width: width) {
-                // In progress / next up: Select plays. Everywhere else it opens the page.
-                if Self.playsOnSelect.contains(section.id), item.kind.isPlayable { app.play(item) } else { navigate(.item(item)) }
-            }
+            LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
             .contextMenu { ItemContextMenu(item: item) }
         case .poster:
-            PosterCard(item, width: width) { navigate(.item(item)) }
+            PosterCard(item, width: width) { app.select(item, navigate: navigate) }
                 .contextMenu { ItemContextMenu(item: item) }
         case .square:
             SquareCard(item, subtitle: item.albumArtist, progress: item.progress, width: width) { navigate(.audiobook(item.id)) }
