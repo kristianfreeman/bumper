@@ -26,6 +26,7 @@ final class SearchTests: XCTestCase {
         let understood = app.descendants(matching: .any).matching(identifier: "search.understood").firstMatch
         XCTAssertTrue(understood.waitForExistence(timeout: 6), "nothing understood from “\(words)”")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
+            XCUIRemote.shared.press(.right)                          // sidebar → the keyboard: the pill shows
             Thread.sleep(forTimeInterval: 1.5)
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/search-understood.png"))
         }

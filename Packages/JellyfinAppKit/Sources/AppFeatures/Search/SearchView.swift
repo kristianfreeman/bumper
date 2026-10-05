@@ -45,8 +45,16 @@ struct SearchView: View {
                         AnyView(card(item, style: style))
                     }
                 }
-                if !query.isEmpty && results.isEmpty && understood == nil && !searching {
-                    ContentUnavailableView.search(text: query)
+                if !query.isEmpty && results.isEmpty && understood == nil {
+                    Group {
+                        if searching {
+                            ProgressView().controlSize(.large)
+                                .accessibilityIdentifier("search.loading")
+                        } else {
+                            ContentUnavailableView.search(text: query)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 360)          // centred under the keyboard
                 }
             }
             .padding(.vertical, 40)
@@ -59,6 +67,8 @@ struct SearchView: View {
             if query.isEmpty, let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count { query = args[i + 1] }
         }
         .searchable(text: $query, prompt: "Titles, or what you're in the mood for")
+        // Clear of the sidebar's pill, which sits top-left over the keyboard otherwise.
+        .padding(.top, 70)
         .task(id: query) {
             // Debounce keystrokes; the task is cancelled by the next one.
             let term = term
