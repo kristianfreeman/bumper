@@ -12,7 +12,7 @@ final class ContentProvider: TVTopShelfContentProvider {
     static func content() -> (any TVTopShelfContent)? {
         guard let snapshot = TopShelfSnapshot.read() else { return nil }
         let sections = snapshot.sections.compactMap { section -> TVTopShelfItemCollection<TVTopShelfSectionedItem>? in
-            let items = section.items.prefix(16).map { item in
+            let items = section.items.prefix(12).map { item in
                 let shelf = TVTopShelfSectionedItem(identifier: item.id)
                 shelf.title = item.subtitle.map { "\(item.title) · \($0)" } ?? item.title
                 shelf.imageShape = .poster                          // tall and small: about seven across

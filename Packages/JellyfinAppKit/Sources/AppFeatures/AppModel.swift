@@ -131,8 +131,9 @@ final class AppModel {
     let capabilities: DeviceCapabilities
     private(set) var session: UserSession?
     var playback: PlaybackRequest?
-    /// A page to open from outside the app (a Top Shelf link).
+    /// A page (or tab) to open from outside the app (a Top Shelf link).
     var pendingRoute: Route?
+    var pendingTab: String?
     /// The audiobook playing (it keeps playing while you browse) and whether
     /// its Now Playing screen is up.
     var audiobook: AudiobookPlayer?
@@ -346,6 +347,12 @@ final class AppModel {
                 if let item = try? await client.item(id: id) { play(item) }
             case .item(let id):
                 if let item = try? await client.item(id: id) { pendingRoute = .item(item) }
+            case .library(let id):
+                if let library = try? await client.item(id: id) { pendingRoute = .library(library) }
+            case .tonight:
+                pendingRoute = .tonight
+            case .search:
+                pendingTab = "search"
             }
         }
     }

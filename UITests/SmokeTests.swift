@@ -136,6 +136,21 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["player.time"].waitForExistence(timeout: 8), "the link didn't start playback")
     }
 
+    /// The Top Shelf's Browse tiles: bumper://search opens Search, bumper://tonight the plan.
+    func testTopShelfLinksOpenPages() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 8))
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.PineBoard")
+        app.open(URL(string: "bumper://search")!)
+        if springboard.buttons["Open"].waitForExistence(timeout: 3) { XCUIRemote.shared.press(.select) }
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "bumper://search didn't open Search")
+        app.open(URL(string: "bumper://tonight")!)
+        if springboard.buttons["Open"].waitForExistence(timeout: 3) { XCUIRemote.shared.press(.select) }
+        XCTAssertTrue(app.staticTexts["Tonight"].waitForExistence(timeout: 5), "bumper://tonight didn't open the plan")
+    }
+
     private func shot(_ app: XCUIApplication, _ name: String) {
         guard let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] else { return }
         Thread.sleep(forTimeInterval: 1.2)

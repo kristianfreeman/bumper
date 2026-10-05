@@ -70,6 +70,16 @@ for mark in wordmark wordmark-light symbol symbol-light; do
   printf '{ "images" : [ { "filename" : "%s.svg", "idiom" : "universal" } ], "properties" : { "preserves-vector-representation" : true }, %s }\n' "$mark" "$INFO" > "$dir/Contents.json"
 done
 
+# Top Shelf link tiles (Movies, TV Shows, Tonight…), when the kit has them;
+# the app draws stand-ins for any that are missing.
+if [[ -d "$DIST/topshelf-tiles" ]]; then
+  for f in "$DIST"/topshelf-tiles/*@1x.png; do
+    [[ -e "$f" ]] || continue
+    name=$(basename "$f" @1x.png)
+    imageset "$TV/ShelfTile-$name.imageset" tv "1x=topshelf-tiles/$name@1x.png" "2x=topshelf-tiles/$name@2x.png"
+  done
+fi
+
 # iPhone: one 1024 icon.
 PHONE=iPhone/Assets.xcassets
 mkdir -p "$PHONE/AppIcon.appiconset"

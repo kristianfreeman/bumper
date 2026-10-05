@@ -183,6 +183,11 @@ struct MainTabView: View {
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
+            .onChange(of: app.pendingTab) { _, tab in
+                guard let tab else { return }
+                selection = tab
+                app.pendingTab = nil
+            }
             .modifier(SidebarBrandHeader())
             .toolbar(.hidden, for: .navigationBar)
         }

@@ -11,19 +11,22 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
         public var imageURL: URL?
         /// 0…1, for the progress bar on in-progress things.
         public var progress: Double?
+        /// A link instead of something to play (Movies, Tonight, Search…).
+        public var link: URL?
 
-        public init(id: String, title: String, subtitle: String? = nil, imageURL: URL? = nil, progress: Double? = nil) {
+        public init(id: String, title: String, subtitle: String? = nil, imageURL: URL? = nil, progress: Double? = nil, link: URL? = nil) {
             self.id = id
             self.title = title
             self.subtitle = subtitle
             self.imageURL = imageURL
             self.progress = progress
+            self.link = link
         }
 
-        /// Select on the shelf: play (resuming). Bumper opens straight into the player.
-        public var playURL: URL { URL(string: "\(TopShelfSnapshot.scheme)://play/\(id)")! }
+        /// Select on the shelf: play (resuming), or follow the link.
+        public var playURL: URL { link ?? URL(string: "\(TopShelfSnapshot.scheme)://play/\(id)")! }
         /// The page instead.
-        public var displayURL: URL { URL(string: "\(TopShelfSnapshot.scheme)://item/\(id)")! }
+        public var displayURL: URL { link ?? URL(string: "\(TopShelfSnapshot.scheme)://item/\(id)")! }
     }
 
     public struct Section: Codable, Sendable, Equatable {
@@ -45,6 +48,9 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
 
     public static let appGroup = "group.com.kristianfreeman.bumper"
     public static let scheme = "bumper"
+
+    /// Where the shelf's files live (the snapshot, and its tile artwork).
+    public static var directory: URL? { url?.deletingLastPathComponent() }
 
     static var url: URL? {
         // tvOS lets apps write only under Library/Caches, in a shared
@@ -78,15 +84,32 @@ public struct TopShelfSnapshot: Codable, Sendable, Equatable {
         }
     }
 
-    /// Links the app opens: `bumper://play/<id>` or `bumper://item/<id>`.
+    /// Links the app opens: `bumper://play/<id>`, `bumper://item/<id>`,
+    /// `bumper://library/<id>`, `bumper://tonight`, `bumper://search`.
     public enum Link: Equatable, Sendable {
-        case play(String), item(String)
+        case play(String), item(String), library(String), tonight, search
+
         public init?(_ url: URL) {
-            guard url.scheme == TopShelfSnapshot.scheme, let id = url.pathComponents.dropFirst().first, !id.isEmpty else { return nil }
-            switch url.host() {
-            case "play": self = .play(id)
-            case "item": self = .item(id)
+            guard url.scheme == TopShelfSnapshot.scheme else { return nil }
+            let id = url.pathComponents.dropFirst().first.flatMap { $0.isEmpty ? nil : $0 }
+            switch (url.host(), id) {
+            case ("play", let id?): self = .play(id)
+            case ("item", let id?): self = .item(id)
+            case ("library", let id?): self = .library(id)
+            case ("tonight", _): self = .tonight
+            case ("search", _): self = .search
             default: return nil
+            }
+        }
+
+        public var url: URL {
+            let s = TopShelfSnapshot.scheme
+            switch self {
+            case .play(let id): return URL(string: "\(s)://play/\(id)")!
+            case .item(let id): return URL(string: "\(s)://item/\(id)")!
+            case .library(let id): return URL(string: "\(s)://library/\(id)")!
+            case .tonight: return URL(string: "\(s)://tonight")!
+            case .search: return URL(string: "\(s)://search")!
             }
         }
     }
