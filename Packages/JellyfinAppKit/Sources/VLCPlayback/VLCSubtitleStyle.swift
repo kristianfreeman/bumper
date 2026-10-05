@@ -1,4 +1,4 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(macOS)
 public import AppCore
 
 /// The user's subtitle preset, expressed as VLC text-renderer options — so

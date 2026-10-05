@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -134,7 +133,7 @@ struct TransportBar: View {
                         Pill(menu.title, systemImage: menu.symbol + (openMenu == menu || badge(for: menu) ? ".fill" : ""), active: badge(for: menu)) { open(menu) }
                             .accessibilityIdentifier("control.\(menu.rawValue)")
                             .focused(focus, equals: .control(menu))
-                            .onMoveCommand { if $0 == .down { leave() } }
+                            .tvMoveCommand { if $0 == .down { leave() } }
                     }
                 }
                 .tvFocusSection()
@@ -535,4 +534,3 @@ private struct InfoContent: View {
         }
     }
 }
-#endif

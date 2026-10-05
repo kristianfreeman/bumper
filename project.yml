@@ -6,7 +6,8 @@ options:
   bundleIdPrefix: com.kristianfreeman
   deploymentTarget:
     tvOS: "26.0"     # Apple TV 4K (2017) stops at tvOS 26; tvOS 27 APIs used when available
-    iOS: "26.0"      # the companion app (Apple Intelligence's on-device model where available)
+    iOS: "26.0"      # iPhone and iPad (Apple Intelligence's on-device model where available)
+    macOS: "26.0"
   xcodeVersion: "27.0"
   createIntermediateGroups: true
   groupSortPosition: top
@@ -131,12 +132,16 @@ targets:
     sources: [iPhone]
     dependencies:
       - package: JellyfinAppKit
+        product: AppFeatures
+      - package: JellyfinAppKit
         product: Companion
     settings:
       base:
         PRODUCT_NAME: Bumper
         PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"          # iPhone and iPad
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
@@ -151,7 +156,44 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
-        NSLocalNetworkUsageDescription: Find and talk to your Apple TV.
+        NSLocalNetworkUsageDescription: Find your Jellyfin server and your Apple TV.
+        NSBonjourServices: [_bumper._tcp]
+        UIBackgroundModes: [audio]                 # audiobooks keep playing
+
+  # Bumper for Mac: the same app (AppFeatures) in a window. Same bundle ID:
+  # one listing and one themes purchase across TV, iPhone, iPad and Mac.
+  BumperMac:
+    type: application
+    platform: macOS
+    sources: [Mac]
+    dependencies:
+      - package: JellyfinAppKit
+        product: AppFeatures
+    entitlements:
+      path: Mac/BumperMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true      # the companion link (Bonjour)
+    settings:
+      base:
+        PRODUCT_NAME: Bumper
+        PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        GENERATE_INFOPLIST_FILE: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_IDENTITY: "-"
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+    info:
+      path: Mac/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Find your Jellyfin server and your Apple TV.
         NSBonjourServices: [_bumper._tcp]
 
   BumperPhoneUITests:
@@ -198,6 +240,12 @@ schemes:
         - BumperUITests
     profile:
       config: Release
+  BumperMac:
+    build:
+      targets:
+        BumperMac: all
+    run:
+      config: Debug
   BumperPhone:
     build:
       targets:

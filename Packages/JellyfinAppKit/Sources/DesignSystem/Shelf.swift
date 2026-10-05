@@ -253,11 +253,16 @@ public struct FocusBackdrop: View {
         return image
     }
 
+    /// Exactly the space offered: an aspect-filled image reports its own
+    /// size (1920 wide), which widened every page on a phone. As an overlay
+    /// on an empty view it fills the screen and can't push anything.
     private func layer(_ image: CGImage) -> some View {
-        Image(decorative: image, scale: 1)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Color.clear
+            .overlay {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            }
             .clipped()
     }
 }

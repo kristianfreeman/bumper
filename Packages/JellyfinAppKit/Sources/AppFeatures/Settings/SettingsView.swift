@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import AVKit
 import DesignSystem
@@ -103,7 +102,7 @@ struct ThemesView: View {
             }
             .padding(80)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 }
 
@@ -183,5 +182,4 @@ struct BudgetsView: View {
         .navigationTitle("Budgets (\(PerformanceBudget.Statistic.p95.rawValue))")
     }
 }
-#endif
 #endif

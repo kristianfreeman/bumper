@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -73,9 +72,11 @@ struct CollectionList<Header: View>: View {
                 .padding(.top, 40)
                 .padding(.bottom, 120)
                 .overlay(alignment: .top) { Color.clear.frame(height: 0).id(Self.top) }
-                .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
             }
             .scrollClipDisabled()
+            // The scroll view's width (the screen's), not the content's: measuring the content
+            // sized it from its own first guess, and stayed TV-wide on an iPhone.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
             .onScrollPhaseChange { _, phase in motion.scrolling = phase != .idle }
             .onGeometryChange(for: [CGFloat].self) { [$0.safeAreaInsets.top, $0.size.height] } action: { frame = ($0[0], max($0[1], 1)) }
             .task(id: sections.count) {
@@ -165,10 +166,12 @@ struct CollectionSection: View {
 
     static let rows = 2
 
-    private var columns: Int { section.style == .poster ? 6 : 4 }
-    private var width: CGFloat {
-        ((available - CGFloat(columns - 1) * Layout.cardSpacing) / CGFloat(columns)).rounded(.down)
+    /// Four across on the TV (six posters), fewer where the screen's narrower.
+    private var columns: Int {
+        section.style == .poster ? Layout.columns(available, minWidth: Layout.posterMin, max: 6)
+                                 : Layout.columns(available, minWidth: Layout.landscapeMin, max: 4)
     }
+    private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -182,7 +185,7 @@ struct CollectionSection: View {
             .accessibilityIdentifier("collection.\(section.id)")
             if section.items.isEmpty {
                 // Loading: skeleton cards at the real size, so nothing moves when they fill in.
-                Grid(horizontalSpacing: Layout.cardSpacing, verticalSpacing: 44) {
+                Grid(horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
                     ForEach(0..<Self.rows, id: \.self) { _ in
                         GridRow { ForEach(0..<columns, id: \.self) { _ in SkeletonCard(width: width, aspect: aspect) } }
                     }
@@ -191,7 +194,7 @@ struct CollectionSection: View {
                 let shown = Array(section.items.prefix(columns * Self.rows - (section.seeAll == nil ? 0 : 1)))
                 let tiles = shown.count + (section.seeAll == nil ? 0 : 1)
                 // A plain grid (two rows at most): laid out exactly, nothing estimated.
-                Grid(alignment: .topLeading, horizontalSpacing: Layout.cardSpacing, verticalSpacing: 44) {
+                Grid(alignment: .topLeading, horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
                     ForEach(0..<((tiles + columns - 1) / columns), id: \.self) { row in
                         GridRow(alignment: .top) {
                             ForEach(row * columns..<min(tiles, (row + 1) * columns), id: \.self) { i in
@@ -306,4 +309,3 @@ struct FirstFocus: ViewModifier {
         if let binding { content.focused(binding) } else { content }
     }
 }
-#endif

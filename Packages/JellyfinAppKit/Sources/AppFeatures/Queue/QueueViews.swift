@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import JellyfinAPI
@@ -31,7 +30,8 @@ struct QueueSection: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
 
-    private var width: CGFloat { ((available - 3 * Layout.cardSpacing) / 4).rounded(.down) }
+    private var columns: Int { Layout.columns(available, minWidth: Layout.landscapeMin, max: 4) }
+    private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -50,7 +50,7 @@ struct QueueSection: View {
             .background(alignment: .leading) {
                 TabBarFocusGuide().frame(width: available / 2)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: 4), alignment: .leading, spacing: 44) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: columns), alignment: .leading, spacing: Layout.shelfSpacing) {
                 ForEach(store.timeline.prefix(8), id: \.entry.id) { slot in
                     LandscapeCard(slot.entry.item, width: width) { app.play(slot.entry.item) }
                         .overlay(alignment: .topLeading) { TimeBadge(slot: slot).padding(12) }
@@ -129,7 +129,7 @@ struct QueuePage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Queue").font(.system(size: 56, weight: .bold)).foregroundStyle(theme.primaryText)
+                    Text("Queue").font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
                     Text(QueueWords.summary(store)).font(.title3).foregroundStyle(theme.secondaryText)
                     QueueControls(store: store, showsEdit: false).padding(.top, 10)
                 }
@@ -148,7 +148,7 @@ struct QueuePage: View {
             .padding(.vertical, 50)
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 }
 
@@ -181,4 +181,3 @@ private struct QueueRow: View {
         .tvFocusSection()
     }
 }
-#endif

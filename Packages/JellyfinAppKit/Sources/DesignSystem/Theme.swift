@@ -1,4 +1,7 @@
 public import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// A complete visual theme. Themes are the *only* thing the app sells:
 /// playback, decoding and every feature are free forever.
@@ -133,12 +136,52 @@ extension EnvironmentValues {
 
 /// Layout metrics in tvOS points (1920×1080 canvas). Card sizes are chosen so
 /// rows show a whole number of cards inside the 80 pt title-safe margins.
+/// Sizes per device: the TV's at ten feet, the Mac's and iPad's at a desk or
+/// on the sofa, the iPhone's in hand.
 public enum Layout {
-    public static let horizontalMargin: CGFloat = 80
-    public static let shelfSpacing: CGFloat = 36
-    public static let cardSpacing: CGFloat = 40
-    public static let posterWidth: CGFloat = 228          // 7 per row
-    public static let landscapeWidth: CGFloat = 400       // 4 per row
-    public static let castWidth: CGFloat = 160
-    public static let squareWidth: CGFloat = 300          // audiobook covers, 5 per row
+    public enum Device: Sendable { case tv, mac, pad, phone }
+
+    public static let device: Device = {
+        #if os(tvOS)
+        .tv
+        #elseif os(macOS)
+        .mac
+        #else
+        MainActor.assumeIsolated { UIDevice.current.userInterfaceIdiom == .pad ? .pad : .phone }
+        #endif
+    }()
+
+    private static func pick(tv: CGFloat, mac: CGFloat, pad: CGFloat, phone: CGFloat) -> CGFloat {
+        switch device { case .tv: tv; case .mac: mac; case .pad: pad; case .phone: phone }
+    }
+
+    public static let horizontalMargin = pick(tv: 80, mac: 40, pad: 32, phone: 16)
+    public static let shelfSpacing = pick(tv: 36, mac: 28, pad: 28, phone: 20)
+    public static let cardSpacing = pick(tv: 40, mac: 24, pad: 20, phone: 12)
+    public static let posterWidth = pick(tv: 228, mac: 160, pad: 150, phone: 110)          // TV: 7 per row
+    public static let landscapeWidth = pick(tv: 400, mac: 300, pad: 300, phone: 260)       // TV: 4 per row
+    public static let castWidth = pick(tv: 160, mac: 110, pad: 110, phone: 84)
+    public static let squareWidth = pick(tv: 300, mac: 200, pad: 200, phone: 150)          // audiobook covers
+    /// Page titles ("Good evening, Kristian.", "Settings") and smaller ones (collection pages).
+    public static let pageTitle = pick(tv: 64, mac: 40, pad: 44, phone: 34)
+    public static let pageTitleSmall = pick(tv: 56, mac: 34, pad: 38, phone: 30)
+    public static let sectionTitle = pick(tv: 44, mac: 28, pad: 30, phone: 24)
+
+    /// Pills (and other controls drawn for the TV) at this fraction of their TV size.
+    public static let pillScale = pick(tv: 1, mac: 0.55, pad: 0.6, phone: 0.55)
+
+    /// The narrowest a card may get before a grid drops a column.
+    public static let landscapeMin = pick(tv: 360, mac: 240, pad: 220, phone: 150)
+    public static let posterMin = pick(tv: 220, mac: 140, pad: 130, phone: 100)
+
+    /// Columns for cards at least `minWidth` wide in `available`, at most `max`.
+    public static func columns(_ available: CGFloat, minWidth: CGFloat, max: Int) -> Int {
+        let n = Int((available + cardSpacing) / (minWidth + cardSpacing))
+        return Swift.max(device == .phone ? 2 : 1, Swift.min(max, n))
+    }
+
+    /// The width of each of `columns` cards across `available`.
+    public static func cardWidth(_ available: CGFloat, columns: Int) -> CGFloat {
+        ((available - CGFloat(columns - 1) * cardSpacing) / CGFloat(columns)).rounded(.down)
+    }
 }

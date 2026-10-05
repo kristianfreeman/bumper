@@ -1,4 +1,3 @@
-#if os(tvOS)
 import Darwin
 import DesignSystem
 import Instrumentation
@@ -81,4 +80,3 @@ struct PerfHUD: View {
         return "\(info.phys_footprint / 1_048_576) MB"
     }
 }
-#endif

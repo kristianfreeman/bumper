@@ -1,4 +1,3 @@
-#if os(tvOS)
 import Foundation
 import Observation
 
@@ -77,4 +76,3 @@ final class SleepTimer {
         }
     }
 }
-#endif

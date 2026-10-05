@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -189,7 +188,7 @@ struct HomeView: View {
             CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsQueue: true, showsProfile: true) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(page.copy.greeting)
-                        .font(.system(size: 64, weight: .bold))
+                        .font(.system(size: Layout.pageTitle, weight: .bold))
                         .foregroundStyle(theme.primaryText)
                     Text(page.copy.lede)
                         .font(.title3)
@@ -215,7 +214,7 @@ struct HomeView: View {
         // which is what kept the sidebar from opening before).
         .defaultFocus($firstCardFocused, true)
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "home")
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 }
 
@@ -349,7 +348,7 @@ struct HeroInfo: View {
                     HeroLogo(item: item)
                 } else {
                     Text(item.kind == .episode ? item.seriesName ?? "" : item.name ?? "")
-                        .font(.system(size: 64, weight: .bold))
+                        .font(.system(size: Layout.pageTitle, weight: .bold))
                         .foregroundStyle(theme.primaryText)
                         .lineLimit(2)
                 }
@@ -486,4 +485,3 @@ struct NavigateAction {
 extension EnvironmentValues {
     @Entry var navigate = NavigateAction { _ in }
 }
-#endif

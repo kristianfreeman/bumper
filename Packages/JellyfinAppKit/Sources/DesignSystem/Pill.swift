@@ -12,12 +12,14 @@ public import SwiftUI
 /// and **focused** (white, lifted, title showing).
 public enum PillSize: Sendable {
     case small, regular, large
+    /// The TV's sizes, scaled for nearer screens.
     public var diameter: CGFloat {
-        switch self {
+        let tv: CGFloat = switch self {
         case .small: 64
         case .regular: 80
         case .large: 112
         }
+        return (tv * Layout.pillScale).rounded()
     }
 }
 

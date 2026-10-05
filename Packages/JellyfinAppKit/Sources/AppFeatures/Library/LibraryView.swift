@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -154,7 +153,7 @@ struct LibraryView: View {
                 Task { await model.loadGenre(id, client: client) }
             }) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(library.name ?? "Library").font(.system(size: 64, weight: .bold)).foregroundStyle(theme.primaryText)
+                    Text(library.name ?? "Library").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
                     if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(theme.secondaryText) }
                 }
                 .padding(.top, 20)
@@ -168,7 +167,7 @@ struct LibraryView: View {
             tracker.seed(model.sections.first?.items.first)
         }
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "library-\(library.id)")
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 }
 
@@ -184,7 +183,7 @@ struct MoreLibrariesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
                 Text("More").font(.title2.bold()).foregroundStyle(theme.primaryText)
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Layout.landscapeWidth), spacing: Layout.cardSpacing), count: 4), alignment: .leading, spacing: 50) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.landscapeMin), spacing: Layout.cardSpacing)], alignment: .leading, spacing: Layout.shelfSpacing) {
                     ForEach(libraries) { library in
                         LandscapeCard(library, kind: .poster) { navigate(.library(library)) }
                     }
@@ -196,7 +195,7 @@ struct MoreLibrariesView: View {
         }
         .scrollClipDisabled()
         .background(theme.backgroundGradient.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 }
 
@@ -271,7 +270,7 @@ struct CollectionPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 34) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(spec.title).font(.system(size: 56, weight: .bold)).foregroundStyle(theme.primaryText)
+                    Text(spec.title).font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
                     FilterSentence(filter: $filter, genres: model.genres) { asking = true }
                     if let understood {
                         Text(understood).font(.callout).foregroundStyle(theme.secondaryText).transition(.opacity)
@@ -280,10 +279,10 @@ struct CollectionPage: View {
                     }
                 }
                 .tvFocusSection()
-                let columns = 4
-                let cardWidth = ((width - CGFloat(columns - 1) * Layout.cardSpacing) / CGFloat(columns)).rounded(.down)
+                let columns = Layout.columns(width, minWidth: Layout.landscapeMin, max: 4)
+                let cardWidth = Layout.cardWidth(width, columns: columns)
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Layout.cardSpacing, alignment: .top), count: columns),
-                          alignment: .leading, spacing: 44) {
+                          alignment: .leading, spacing: Layout.shelfSpacing + 8) {
                     ForEach(model.items) { item in
                         LandscapeCard(item, width: cardWidth) { app.select(item, navigate: navigate) }
                             .contextMenu { ItemContextMenu(item: item) }
@@ -300,11 +299,13 @@ struct CollectionPage: View {
             }
             .padding(.horizontal, Layout.horizontalMargin)
             .padding(.vertical, 50)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
         }
         .scrollClipDisabled()
+        // The scroll view's width (the screen's), not the content's: measuring the content
+        // sized it from its own first guess, and stayed TV-wide on an iPhone.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
         .background(theme.backgroundGradient.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
         .task(id: filter) {
             model.reset()
             loadMore()
@@ -609,4 +610,3 @@ struct FlowLayout: SwiftUI.Layout {
         }
     }
 }
-#endif

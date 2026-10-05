@@ -6,6 +6,11 @@ public import JellyfinAPI
 public import Observation
 #if canImport(UIKit)
 public import UIKit
+/// The view a player draws into: UIKit on TV/iPhone/iPad, AppKit on the Mac.
+public typealias PlatformView = UIView
+#else
+public import AppKit
+public typealias PlatformView = NSView
 #endif
 
 public enum PlaybackStatus: Sendable, Equatable {
@@ -120,10 +125,8 @@ public protocol PlayerEngine: AnyObject, Observable {
     var stats: EngineStats { get }
     /// When the first frame at the latest seek target was ready (benchmarks).
     var lastSeekFrameAt: ContinuousClock.Instant? { get }
-    #if canImport(UIKit)
     /// The backend's video surface.
-    var videoView: UIView { get }
-    #endif
+    var videoView: PlatformView { get }
 
     /// Opens and buffers up to the first frame. With `autoplay: false` the
     /// clock is held until `play()` — so the player prepares *while* the TV

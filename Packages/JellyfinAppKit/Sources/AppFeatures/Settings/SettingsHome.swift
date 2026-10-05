@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -66,9 +65,11 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 60)
-                .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
             }
             .scrollClipDisabled()
+            // The scroll view's width (the screen's), not the content's: measuring the content
+            // sized it from its own first guess, and stayed TV-wide on an iPhone.
+            .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
             .onAppear {
                 guard let start else { return }
                 // Focus decides where a tvOS page sits: put it in the section
@@ -84,7 +85,7 @@ struct SettingsView: View {
             }
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
         .tvExitCommand(perform: editing == nil ? nil : { close() })
         .confirmationDialog("Sign out of \(app.session?.server.name ?? "this server")?", isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) { app.signOut() }
@@ -94,7 +95,7 @@ struct SettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Settings").font(.system(size: 64, weight: .bold)).foregroundStyle(theme.primaryText)
+            Text("Settings").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
             Text("Everything in one place. Switches flip where they are; choices open right here.")
                 .font(.title3).foregroundStyle(theme.secondaryText)
         }
@@ -102,7 +103,7 @@ struct SettingsView: View {
 
     // MARK: Sections
 
-    private var columns: Int { 3 }
+    private var columns: Int { Layout.device == .phone ? 1 : Layout.device == .pad && width < 900 ? 2 : 3 }
     private var tileWidth: CGFloat { ((width - CGFloat(columns - 1) * 30) / CGFloat(columns)).rounded(.down) }
 
     private func section(_ id: String, _ title: String, _ lede: String, _ tiles: [SettingTile]) -> some View {
@@ -427,7 +428,7 @@ private struct AccountCard: View {
             HStack(spacing: 40) {
                 UserAvatar(size: 150)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(session.account.userName).font(.system(size: 44, weight: .bold)).foregroundStyle(theme.primaryText)
+                    Text(session.account.userName).font(.system(size: Layout.sectionTitle, weight: .bold)).foregroundStyle(theme.primaryText)
                     Text("\(session.server.name) · \(session.server.url.host() ?? session.server.url.absoluteString)\(session.server.version.map { " · Jellyfin \($0)" } ?? "")")
                         .font(.callout).foregroundStyle(theme.secondaryText)
                     HStack(spacing: 16) {
@@ -447,4 +448,3 @@ private struct AccountCard: View {
         }
     }
 }
-#endif

@@ -104,3 +104,17 @@ public final class HitchMonitor {
     }
 }
 #endif
+
+#if os(macOS)
+/// The Mac: no CADisplayLink to watch frames with (yet); the API is here so
+/// shared code needn't care.
+@MainActor
+public final class HitchMonitor {
+    public static let shared = HitchMonitor()
+    public private(set) var isRunning = false
+    public func start() {}
+    public func stop() {}
+    public func noteActivity() {}
+    public func resetTotals() {}
+}
+#endif

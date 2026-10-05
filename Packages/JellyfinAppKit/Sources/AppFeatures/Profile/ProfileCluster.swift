@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import SwiftUI
@@ -45,4 +44,3 @@ struct ProfileCluster: View {
         }
     }
 }
-#endif

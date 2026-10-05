@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import CoreGraphics
 import JellyfinAPI
@@ -48,4 +47,3 @@ struct TrickplayProvider: Sendable {
         ImagePipeline.shared.prefetch([max(0, sheet - 1), sheet, sheet + 1].map(request(sheet:)))
     }
 }
-#endif

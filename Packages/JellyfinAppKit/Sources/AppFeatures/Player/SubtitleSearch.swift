@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import Foundation
 import Instrumentation
@@ -92,4 +91,3 @@ extension PlayerController {
         Locale.current.localizedString(forLanguageCode: code) ?? "matching"
     }
 }
-#endif

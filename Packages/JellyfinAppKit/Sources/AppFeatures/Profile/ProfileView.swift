@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Foundation
@@ -278,4 +277,3 @@ struct RemoteImage: View {
         }
     }
 }
-#endif

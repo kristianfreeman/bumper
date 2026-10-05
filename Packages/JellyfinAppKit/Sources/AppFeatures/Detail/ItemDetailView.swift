@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -157,7 +156,7 @@ struct ItemDetailView: View {
         .sheet(isPresented: $showTracks) {
             TrackPicker(item: item)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 
     @ViewBuilder
@@ -364,4 +363,3 @@ struct TrackPicker: View {
         }
     }
 }
-#endif

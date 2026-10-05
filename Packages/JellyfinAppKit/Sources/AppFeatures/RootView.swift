@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Darwin
@@ -10,11 +9,14 @@ public import SwiftUI
 /// Public entry point used by the app target.
 public struct AppRoot: View {
     @State private var app = AppModel()
+    let remoteTab: AnyView?
 
-    public init() {}
+    /// `remoteTab`: the iPhone/iPad app's Apple TV remote, as a tab of its own.
+    public init(remoteTab: AnyView? = nil) { self.remoteTab = remoteTab }
 
     public var body: some View {
         RootView()
+            .environment(\.remoteTab, remoteTab)
             .environment(app)
             .environment(app.settings)
             .environment(app.themes)
@@ -60,7 +62,7 @@ struct RootView: View {
             if let session = app.session {
                 MainTabView(session: session, initialTab: app.options.route == "search" ? "search" : nil)
                     .id(session.id)
-                    .fullScreenCover(isPresented: $app.showsAudiobook) {
+                    .fullScreen(isPresented: $app.showsAudiobook) {
                         if let player = app.audiobook {
                             AudiobookNowPlayingView(player: player)
                                 .environment(app)
@@ -81,7 +83,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { PerfRecorder.shared.writeSession() }
         }
-        .fullScreenCover(item: $app.playback) { request in
+        .fullScreen(item: $app.playback) { request in
             PlayerView(request: request)
                 .environment(app)
                 .environment(\.theme, theme)
@@ -143,9 +145,14 @@ private struct SidebarMark: View {
     }
 }
 
+extension EnvironmentValues {
+    @Entry var remoteTab: AnyView? = nil
+}
+
 struct MainTabView: View {
     let session: UserSession
     @Environment(AppModel.self) private var app
+    @Environment(\.remoteTab) private var remoteTab
     @State private var plan = SidebarPlan(views: [], hasAudiobooks: { _ in false })
     @State private var selection = "home"
 
@@ -175,6 +182,9 @@ struct MainTabView: View {
                         Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries) }
                     }
                 }
+                if let remoteTab {
+                    Tab("Remote", systemImage: "appletvremote.gen4", value: "remote") { remoteTab }
+                }
                 Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
                     SearchView()
                 }
@@ -197,7 +207,7 @@ struct MainTabView: View {
                 app.pendingTab = nil
             }
             .modifier(SidebarBrandHeader())
-            .toolbar(.hidden, for: .navigationBar)
+            .hidesNavigationBar()
         }
         .task { await loadLibraries() }
     }
@@ -285,4 +295,3 @@ struct RoutedStack<Root: View>: View {
         }
     }
 }
-#endif

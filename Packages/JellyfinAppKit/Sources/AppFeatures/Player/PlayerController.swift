@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import Companion
 import CoreGraphics
@@ -586,4 +585,3 @@ extension PlayerController: TransportTarget {
         reportState()
     }
 }
-#endif

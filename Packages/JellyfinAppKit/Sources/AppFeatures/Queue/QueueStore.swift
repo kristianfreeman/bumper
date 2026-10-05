@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import Foundation
 import Instrumentation
@@ -99,4 +98,3 @@ final class QueueStore {
         }
     }
 }
-#endif

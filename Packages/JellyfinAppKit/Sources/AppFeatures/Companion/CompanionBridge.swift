@@ -1,11 +1,14 @@
-#if os(tvOS)
 import AppCore
 import Companion
 import DesignSystem
 import Foundation
 import Instrumentation
 import JellyfinAPI
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// What's playing, for the companion app.
 struct NowPlayingInfo: Equatable {
@@ -24,9 +27,17 @@ final class CompanionBridge {
     private let host: CompanionHost
     private var ticker: Task<Void, Never>?
 
+    static var deviceName: String {
+        #if canImport(UIKit)
+        UIDevice.current.name
+        #else
+        Host.current().localizedName ?? "Mac"
+        #endif
+    }
+
     init(app: AppModel) {
         self.app = app
-        let name = UIDevice.current.name
+        let name = Self.deviceName
         host = CompanionHost(name: name.isEmpty || name == "Apple TV" ? "\(Brand.displayName) on Apple TV" : name)
     }
 
@@ -50,7 +61,7 @@ final class CompanionBridge {
         guard let session = app.session else { return }
         let client = session.client
         let state = CompanionState(
-            tvName: UIDevice.current.name,
+            tvName: Self.deviceName,
             userName: session.account.userName,
             focused: app.focusedItem.map { Self.item($0, client: client) },
             playing: app.nowPlaying.map { CompanionNowPlaying(item: Self.item($0.item, client: client), position: $0.position, duration: $0.duration, paused: $0.paused) }
@@ -117,4 +128,3 @@ final class CompanionBridge {
 extension Notification.Name {
     static let companionPlayPause = Notification.Name("companion.playPause")
 }
-#endif

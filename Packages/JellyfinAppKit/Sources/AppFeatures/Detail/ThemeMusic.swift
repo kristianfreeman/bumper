@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AVFoundation
 import Instrumentation
 import JellyfinAPI
@@ -100,4 +99,3 @@ final class ThemeMusic {
         }
     }
 }
-#endif

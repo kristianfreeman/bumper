@@ -42,7 +42,7 @@ let uiSwift = modernSwift + [.defaultIsolation(MainActor.self)]
 
 let package = Package(
     name: "JellyfinAppKit",
-    platforms: [.tvOS("26.0"), .iOS("26.0"), .macOS("27.0")],
+    platforms: [.tvOS("26.0"), .iOS("26.0"), .macOS("26.0")],
     products: [
         .library(name: "AppFeatures", targets: ["AppFeatures"]),
         // The iPhone companion's link to the TV (and the TV's to it).
@@ -62,7 +62,7 @@ let package = Package(
         .binaryTarget(name: "VLCKit", path: "../../Vendor/VLCKit.xcframework"),
         .target(
             name: "VLCPlayback",
-            dependencies: ["PlaybackCore", "JellyfinAPI", "AppCore", "Instrumentation", .target(name: "VLCKit", condition: .when(platforms: [.tvOS]))],
+            dependencies: ["PlaybackCore", "JellyfinAPI", "AppCore", "Instrumentation", .target(name: "VLCKit", condition: .when(platforms: [.tvOS, .iOS, .macOS]))],
             swiftSettings: modernSwift
         ),
         .target(name: "JellyfinMocks", dependencies: ["JellyfinAPI"], swiftSettings: safeSwift),

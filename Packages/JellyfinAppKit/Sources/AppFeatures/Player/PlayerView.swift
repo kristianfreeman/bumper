@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -6,7 +5,11 @@ import JellyfinAPI
 import os
 import PlaybackCore
 import SwiftUI
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Full-screen player — one UI for both backends. The remote's behaviour
 /// lives in `TransportModel` (see its table); this view draws it and routes
@@ -27,6 +30,12 @@ struct PlayerView: View {
     enum PlayerFocus: Hashable { case surface, skip, control(PlayerMenu), option(String) }
 
     var body: some View {
+        layers
+            .modifier(PlayerLifecycle(view: self))
+    }
+
+    @ViewBuilder
+    private var layers: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let engine = controller?.engine {
@@ -86,45 +95,58 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
             }
         }
-        .defaultFocus($focus, .surface)
-        .tvExitCommand(perform: handleExit)
-        .animation(.easeInOut(duration: 0.22), value: chromeVisible)
-        .animation(.spring(duration: 0.28), value: openMenu)
-        .task {
-            let c = PlayerController(request: request, app: app)
-            controller = c
-            c.transport.onActivity = { showChrome() }
-            await c.start()
+    }
+
+    /// The player's modifiers, apart from its layers (one long chain was
+    /// too much for the type checker on macOS).
+    fileprivate func lifecycle<V: View>(_ content: V) -> some View {
+        content
+            .defaultFocus($focus, .surface)
+            .tvExitCommand(perform: handleExit)
+            .animation(.easeInOut(duration: 0.22), value: chromeVisible)
+            .animation(.spring(duration: 0.28), value: openMenu)
+            .task {
+                let c = PlayerController(request: request, app: app)
+                controller = c
+                c.transport.onActivity = { showChrome() }
+                await c.start()
+                scheduleHide()
+            }
+            .onDisappear {
+                if let controller { Task { await controller.stop() } }
+            }
+            .onChange(of: controller?.activeSegment?.id) { _, id in
+                if id != nil { focus = .skip } else if focus == .skip { focus = .surface }
+            }
+            .onChange(of: focus) { _, now in focusChanged(now) }
+            .onChange(of: controller?.transport.head) { _, head in updateThumbnail(for: head) }
+            .onChange(of: controller?.transport.feedback) { _, feedback in
+                guard let feedback else { return }
+                show(Flash(feedback.kind))
+            }
+            .task(id: controller?.transport.scanning != nil) {
+                // A held left/right: advance the head every frame.
+                guard let transport = controller?.transport, transport.scanning != nil else { return }
+                var last = ContinuousClock.now
+                while !Task.isCancelled, transport.scanning != nil {
+                    try? await Task.sleep(for: .milliseconds(16))
+                    let now = ContinuousClock.now
+                    transport.tick(last.duration(to: now))
+                    last = now
+                }
+            }
+            .hidesSystemOverlays()
+    }
+
+    /// Any focus on the controls keeps them up; back on the video, the timer resumes.
+    private func focusChanged(_ now: PlayerFocus?) {
+        TraceFile.write("focus", now.map { "\($0)" } ?? "none")
+        if case .control = now {
+            hideTask?.cancel()
+            chromeVisible = true
+        } else if now == .surface {
             scheduleHide()
         }
-        .onDisappear {
-            if let controller { Task { await controller.stop() } }
-        }
-        .onChange(of: controller?.activeSegment?.id) { _, id in
-            if id != nil { focus = .skip } else if focus == .skip { focus = .surface }
-        }
-        .onChange(of: focus) { _, now in
-            TraceFile.write("focus", now.map { "\($0)" } ?? "none")
-            // Any focus on the controls keeps them up; back on the video, the timer resumes.
-            if case .control = now { hideTask?.cancel(); chromeVisible = true } else if now == .surface { scheduleHide() }
-        }
-        .onChange(of: controller?.transport.head) { _, head in updateThumbnail(for: head) }
-        .onChange(of: controller?.transport.feedback) { _, feedback in
-            guard let feedback else { return }
-            show(Flash(feedback.kind))
-        }
-        .task(id: controller?.transport.scanning != nil) {
-            // A held left/right: advance the head every frame.
-            guard let transport = controller?.transport, transport.scanning != nil else { return }
-            var last = ContinuousClock.now
-            while !Task.isCancelled, transport.scanning != nil {
-                try? await Task.sleep(for: .milliseconds(16))
-                let now = ContinuousClock.now
-                transport.tick(last.duration(to: now))
-                last = now
-            }
-        }
-        .persistentSystemOverlays(.hidden)
     }
 
     // MARK: Pieces
@@ -246,6 +268,12 @@ struct PlayerView: View {
 
 /// Hosts the active backend's video view (AVPlayerLayer-backed, or
 /// VLCKit's drawable). Swaps cleanly if the item moves to another backend.
+private struct PlayerLifecycle: ViewModifier {
+    let view: PlayerView
+    func body(content: Content) -> some View { view.lifecycle(content) }
+}
+
+#if canImport(UIKit)
 struct VideoSurface: UIViewRepresentable {
     let view: UIView
 
@@ -279,6 +307,42 @@ struct VideoSurface: UIViewRepresentable {
         host.hosted = view
     }
 }
+#else
+struct VideoSurface: NSViewRepresentable {
+    let view: NSView
+
+    final class HostView: NSView {
+        override func layout() {
+            super.layout()
+            hosted?.frame = bounds          // VLCKit sizes its output from the drawable's frame
+        }
+
+        var hosted: NSView? {
+            didSet {
+                guard hosted !== oldValue else { return }
+                oldValue?.removeFromSuperview()
+                if let hosted {
+                    hosted.frame = bounds
+                    hosted.autoresizingMask = [.width, .height]
+                    addSubview(hosted)
+                }
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> HostView {
+        let host = HostView()
+        host.wantsLayer = true
+        host.layer?.backgroundColor = NSColor.black.cgColor
+        host.hosted = view
+        return host
+    }
+
+    func updateNSView(_ host: HostView, context: Context) {
+        host.hosted = view
+    }
+}
+#endif
 
 /// WebVTT text over AVPlayer, in the user's subtitle preset. (VLCKit draws
 /// its own subtitles, with the preset passed to its text renderer.)
@@ -330,4 +394,3 @@ struct EngineStatsView: View {
         .frame(maxWidth: 900, alignment: .leading)
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -25,7 +24,7 @@ struct OnboardingView: View {
                 }
             }
             .animation(.easeOut(duration: 0.25), value: server)
-            .toolbar(.hidden, for: .navigationBar)
+            .hidesNavigationBar()
         }
     }
 }
@@ -51,7 +50,7 @@ private struct OnboardingHeader: View {
                     .foregroundStyle(theme.secondaryText)
             }
             Text(title)
-                .font(.system(size: 64, weight: .bold))
+                .font(.system(size: Layout.pageTitle, weight: .bold))
                 .foregroundStyle(theme.primaryText)
             Text(lede)
                 .font(.title3)
@@ -247,7 +246,7 @@ struct SignInView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 90) {
-            VStack(alignment: .leading, spacing: 44) {
+            VStack(alignment: .leading, spacing: Layout.shelfSpacing + 8) {
                 OnboardingHeader(
                     eyebrow: server.name,
                     title: "Who's watching?",
@@ -441,4 +440,3 @@ private struct QuickConnectCard: View {
         .padding(.top, 60)
     }
 }
-#endif

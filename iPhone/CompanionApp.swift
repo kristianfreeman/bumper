@@ -1,20 +1,33 @@
+import AppFeatures
 import Companion
 import SwiftUI
 
+/// Bumper on iPhone and iPad: the same app as on the TV (AppFeatures), with
+/// one more tab, the Apple TV remote (live view, the queue, asking).
 @main
-struct CompanionApp: App {
-    @State private var model = CompanionModel()
+struct BumperPhoneApp: App {
+    @State private var companion = CompanionModel()
+
+    init() { AppRoot.markProcessStart() }
 
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                Group {
-                    if model.connectedTo == nil { ConnectView() } else { TVView() }
-                }
-                .navigationTitle(model.connectedTo ?? "Your Apple TV")
+            AppRoot(remoteTab: AnyView(RemoteTab().environment(companion)))
+                .task { companion.startBrowsing() }
+        }
+    }
+}
+
+/// The TV, from the phone: find it, then see and steer what's on it.
+struct RemoteTab: View {
+    @Environment(CompanionModel.self) private var model
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if model.connectedTo == nil { ConnectView() } else { TVView() }
             }
-            .environment(model)
-            .task { model.startBrowsing() }
+            .navigationTitle(model.connectedTo ?? "Your Apple TV")
         }
     }
 }

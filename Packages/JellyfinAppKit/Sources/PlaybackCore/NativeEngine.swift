@@ -4,6 +4,8 @@ public import Observation
 public import QuartzCore
 #if canImport(UIKit)
 public import UIKit
+#else
+public import AppKit
 #endif
 import Instrumentation
 public import JellyfinAPI
@@ -34,13 +36,9 @@ public final class NativeEngine: PlayerEngine {
     public var activeSubtitleTrack: String? { nil }
 
     @ObservationIgnored public let player = AVPlayer()
-    #if canImport(UIKit)
     @ObservationIgnored private let surface = PlayerLayerView()
-    public var videoView: UIView { surface }
+    public var videoView: PlatformView { surface }
     private var playerLayer: AVPlayerLayer { surface.playerLayer }
-    #else
-    @ObservationIgnored private let playerLayer = AVPlayerLayer()
-    #endif
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var firstFrameSpan: Span?
@@ -332,6 +330,18 @@ public final class NativeEngine: PlayerEngine {
 final class PlayerLayerView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+#else
+/// The Mac's: a layer-hosting view with an AVPlayerLayer as its layer.
+final class PlayerLayerView: NSView {
+    let playerLayer = AVPlayerLayer()
+    init() {
+        super.init(frame: .zero)
+        layer = playerLayer
+        wantsLayer = true
+        playerLayer.backgroundColor = NSColor.black.cgColor
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
 }
 #endif
 

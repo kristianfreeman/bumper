@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import AVFoundation
 import DesignSystem
@@ -267,10 +266,12 @@ final class AppModel {
     /// Movie playback mode + multichannel output so
     /// 5.1/7.1/Atmos reach the receiver.
     private static func configureAudioSession() {
+        #if !os(macOS)                                   // the Mac has no audio session
         let audio = AVAudioSession.sharedInstance()
         try? audio.setCategory(.playback, mode: .moviePlayback)
         try? audio.setSupportsMultichannelContent(true)
         try? audio.setActive(true)
+        #endif
     }
 
     var planner: PlaybackPlanner {
@@ -501,4 +502,3 @@ final class AppModel {
         return entry.0
     }
 }
-#endif

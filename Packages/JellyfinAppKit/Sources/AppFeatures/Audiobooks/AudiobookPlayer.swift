@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import AVFoundation
 import DesignSystem
@@ -7,7 +6,11 @@ import JellyfinAPI
 import MediaPlayer
 import Observation
 import PlaybackCore
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Plays one audiobook: parts back to back, chapters, speed, Smart Speed,
 /// the sleep timer, progress to Jellyfin (so Resume works everywhere) and
@@ -66,8 +69,10 @@ final class AudiobookPlayer {
 
     func start(at time: Double) {
         TraceFile.write("audiobook", "start \(book.id) at \(Int(time)) s, \(rate)×, Smart Speed \(smartSpeed)")
+        #if !os(macOS)
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, policy: .longFormAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
         configureRemoteCommands()
         loadArtwork()
         open(at: time, playing: true)
@@ -260,14 +265,24 @@ final class AudiobookPlayer {
         let request = source.request(client: client, pixelWidth: 600)
         Task {
             guard let image = try? await ImagePipeline.shared.image(for: request) else { return }
+            #if canImport(UIKit)
             artwork = Self.artwork(UIImage(cgImage: image))
+            #else
+            artwork = Self.artwork(NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height)))
+            #endif
             updateNowPlaying()
         }
     }
 
     /// MediaPlayer calls the image handler on its own queue: it must not be
     /// main-actor isolated (this module's default), or it traps.
-    nonisolated private static func artwork(_ image: UIImage) -> MPMediaItemArtwork {
+    #if canImport(UIKit)
+    typealias ArtworkImage = UIImage
+    #else
+    typealias ArtworkImage = NSImage
+    #endif
+
+    nonisolated private static func artwork(_ image: ArtworkImage) -> MPMediaItemArtwork {
         MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
     }
 
@@ -298,4 +313,3 @@ final class AudiobookPlayer {
         }
     }
 }
-#endif

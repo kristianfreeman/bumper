@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -58,9 +57,11 @@ struct SearchView: View {
                 }
             }
             .padding(.vertical, 40)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
         }
         .scrollClipDisabled()
+        // The scroll view's width (the screen's), not the content's: measuring the content
+        // sized it from its own first guess, and stayed TV-wide on an iPhone.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
         .onAppear {
             // Tests: `-searchQuery <words>` types for you.
             let args = ProcessInfo.processInfo.arguments
@@ -121,7 +122,8 @@ private struct UnderstoodSection: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
 
-    private var width: CGFloat { ((available - 3 * Layout.cardSpacing) / 4).rounded(.down) }
+    private var columns: Int { Layout.columns(available, minWidth: Layout.landscapeMin, max: 4) }
+    private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -144,8 +146,8 @@ private struct UnderstoodSection: View {
                 }
             }
             if !understood.items.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: 4),
-                          alignment: .leading, spacing: 44) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: columns),
+                          alignment: .leading, spacing: Layout.shelfSpacing + 8) {
                     ForEach(understood.items) { item in
                         LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
                             .contextMenu { ItemContextMenu(item: item) }
@@ -162,4 +164,3 @@ private struct UnderstoodSection: View {
 private extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
-#endif

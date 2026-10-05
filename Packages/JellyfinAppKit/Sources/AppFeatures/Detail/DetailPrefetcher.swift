@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Foundation
@@ -46,4 +45,3 @@ final class DetailPrefetcher {
         Task { await ContentCache.shared.store(item, for: Self.cacheKey(item.id)) }
     }
 }
-#endif

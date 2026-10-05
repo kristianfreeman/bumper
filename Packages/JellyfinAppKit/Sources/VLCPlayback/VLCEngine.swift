@@ -1,9 +1,13 @@
-#if os(tvOS)
+#if os(tvOS) || os(iOS) || os(macOS)
 public import AppCore
 public import JellyfinAPI
 public import Observation
 public import PlaybackCore
+#if canImport(UIKit)
 public import UIKit
+#else
+public import AppKit
+#endif
 import CoreGraphics
 import Foundation
 import Instrumentation
@@ -33,10 +37,10 @@ public final class VLCEngine: PlayerEngine {
     @ObservationIgnored public private(set) var lastSeekFrameAt: ContinuousClock.Instant?
 
     public var playheadNow: Duration { Self.duration(player.time) ?? currentTime }
-    public var videoView: UIView { surface }
+    public var videoView: PlatformView { surface }
 
     @ObservationIgnored private let player: VLCMediaPlayer
-    @ObservationIgnored private let surface = UIView()
+    @ObservationIgnored private let surface = PlatformView()
     @ObservationIgnored private let events = Events()
     @ObservationIgnored private var plan: PlaybackPlan?
     @ObservationIgnored private var firstFrameSpan: Span?
@@ -68,7 +72,12 @@ public final class VLCEngine: PlayerEngine {
                 player.libraryInstance.loggers = [logger]
             }
         }
+        #if canImport(UIKit)
         surface.backgroundColor = .black
+        #else
+        surface.wantsLayer = true
+        surface.layer?.backgroundColor = NSColor.black.cgColor
+        #endif
         player.drawable = surface
         player.timeChangeUpdateInterval = 0.1     // default 1 s: the on-screen clock would lag
         events.engine = self

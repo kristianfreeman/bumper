@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import DesignSystem
 import Instrumentation
@@ -64,7 +63,7 @@ struct AudiobookLibraryView: View {
             TrackedBackdrop(tracker: tracker)
             CollectionList(sections: model.sections, firstCardFocus: $firstCardFocused) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Audiobooks").font(.system(size: 64, weight: .bold)).foregroundStyle(.white)
+                    Text("Audiobooks").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(.white)
                     if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(.white.opacity(0.75)) }
                 }
                 .padding(.top, 20)
@@ -83,7 +82,7 @@ struct AudiobookLibraryView: View {
             tracker.seed(model.sections.first?.items.first)
         }
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "books")
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 }
 
@@ -157,7 +156,7 @@ struct AudiobookDetailView: View {
             book = await app.audiobook(id: bookId)
             playFocused = true
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .hidesNavigationBar()
     }
 
     private func primaryTitle(_ book: Audiobook) -> String {
@@ -291,8 +290,8 @@ struct AudiobookNowPlayingView: View {
             status
         }
         .defaultFocus($focus, .playPause)
-        .onPlayPauseCommand { player.togglePlayPause() }
-        .onExitCommand {
+        .tvPlayPauseCommand { player.togglePlayPause() }
+        .tvExitCommand {
             if showsChapters { showsChapters = false; focus = .chapters } else { app.showsAudiobook = false }
         }
         .animation(.spring(duration: 0.3), value: showsChapters)
@@ -446,4 +445,3 @@ func speedLabel(_ rate: Double) -> String {
     rate.formatted(.number.precision(.fractionLength(rate * 10 == (rate * 10).rounded() ? 1 : 2))) + "×"
 }
 
-#endif
