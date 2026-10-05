@@ -45,9 +45,9 @@ enum BumperBrand {
     enum Boil {
         static let framesPerSecond: Double = 8
         static let frames = 4
-        static let noiseCyclesPerMarkHeight: Double = 7.951
+        static let noiseCyclesPerMarkHeight: Double = 8.293
         static let octaves = 2
-        static let edgeTravel: Double = 0.00424
-        static let plateOffset = CGSize(width: 0.05093, height: 0.03565)
+        static let edgeTravel: Double = 0.00407
+        static let plateOffset = CGSize(width: 0.04883, height: 0.03418)
     }
 }
