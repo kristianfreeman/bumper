@@ -120,12 +120,55 @@ public final class DownloadStore {
         if shows != showsWithDownloads { showsWithDownloads = shows }
     }
 
-    /// How many pieces download at once, and how big each is.
-    /// How many pieces download at once (`-downloadParallel N` to try others).
-    @ObservationIgnored public var parallelPieces: Int = {
+    /// How many pieces a download starts with at once; it then finds its own
+    /// best (see `Tuning`). `-downloadParallel N` fixes it at N instead.
+    @ObservationIgnored public var parallelPieces = 4
+    private var fixedParallel: Int? { Self.fixedParallelFromArguments }
+    static let fixedParallelFromArguments: Int? = {
         let a = ProcessInfo.processInfo.arguments
-        return a.firstIndex(of: "-downloadParallel").flatMap { a.indices.contains($0 + 1) ? Int(a[$0 + 1]) : nil } ?? 4
+        return a.firstIndex(of: "-downloadParallel").flatMap { a.indices.contains($0 + 1) ? Int(a[$0 + 1]) : nil }
     }()
+    static let maxParallel = 12
+
+    /// Finding how many connections a download goes fastest with: every few
+    /// seconds, if the last step up made it faster, two more; if not, back
+    /// to the best seen, and stay. (One connection rarely fills a link; how
+    /// many do depends on the server, the network and the disk.)
+    struct Tuning {
+        var width: Int
+        var best: Int
+        var bestRate: Double = 0
+        var settled = false
+        var lastBytes: Int64 = 0
+        var lastAt = ContinuousClock.now
+    }
+    @ObservationIgnored private var tuning: [String: Tuning] = [:]
+
+    private func width(for id: String) -> Int { fixedParallel ?? tuning[id]?.width ?? parallelPieces }
+
+    /// Called as progress is published: every 3 s, one step of the search.
+    private func tune(_ id: String, received: Int64) {
+        guard fixedParallel == nil else { return }
+        var t = tuning[id] ?? Tuning(width: parallelPieces, best: parallelPieces, lastBytes: received)
+        let elapsed = (ContinuousClock.now - t.lastAt) / .seconds(1)
+        guard elapsed >= 3 else { tuning[id] = t; return }
+        let rate = Double(received - t.lastBytes) / elapsed
+        if !t.settled {
+            if rate > t.bestRate * 1.1 {
+                t.best = t.width
+                t.bestRate = rate
+                if t.width < Self.maxParallel { t.width = min(Self.maxParallel, t.width + 2) } else { t.settled = true }
+            } else {
+                t.width = t.best                                  // the last step didn't help
+                t.settled = true
+                TraceFile.write("downloads", "\(id): \(t.best) connections (\(String(format: "%.1f", t.bestRate / 1_048_576)) MB/s)")
+            }
+        }
+        t.lastBytes = received
+        t.lastAt = .now
+        tuning[id] = t
+        if let r = records[id], let client = clients[r.accountId] { fill(id, url: Self.url(for: r, client: client)) }
+    }
     @ObservationIgnored public let pieceSize: Int64
 
     @ObservationIgnored public let directory: URL
@@ -340,7 +383,7 @@ public final class DownloadStore {
             current.file = "\(id)/\(Self.fileName(for: current.item, response: response))"
             r = current
             records[id] = r
-            TraceFile.write("downloads", "\(r.item.name ?? id): \(r.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "size unknown"), \(r.pieces.count) piece(s)")
+            TraceFile.write("downloads", "\(r.item.name ?? id): \(r.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "size unknown"), \(r.pieces.count) piece(s), \(fixedParallel.map { "\($0) connections (fixed)" } ?? "connections tuned from \(parallelPieces)")")
         }
         save()
         fill(id, url: url)
@@ -387,7 +430,7 @@ public final class DownloadStore {
         guard let r = records[id], r.state == .downloading else { return }
         let inFlight = inFlightPieces[id] ?? []
         let waiting = r.pieces.indices.filter { r.pieces[$0].file == nil && !inFlight.contains($0) }
-        for i in waiting.prefix(max(0, parallelPieces - inFlight.count)) {
+        for i in waiting.prefix(max(0, width(for: id) - inFlight.count)) {
             inFlightPieces[id, default: []].insert(i)
             let resume = r.pieces[i].resumeData
             records[id]?.pieces[i].resumeData = nil
@@ -412,6 +455,7 @@ public final class DownloadStore {
                 guard var r = records[id] else { return }
                 for (p, bytes) in liveReceived[id] ?? [:] where r.pieces.indices.contains(p) && r.pieces[p].file == nil { r.pieces[p].received = bytes }
                 records[id] = r
+                if r.pieces.count > 1 { tune(id, received: r.received) }
             }
             if ContinuousClock.now - lastProgressSave > .seconds(5) { lastProgressSave = .now; save() }
         case .finished(let id, let piece, let file):
