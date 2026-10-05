@@ -13,9 +13,8 @@ struct CollectionList<Header: View>: View {
     var firstCardFocus: FocusState<Bool>.Binding? = nil
     /// A collection is about to scroll into view: load it if it loads lazily.
     var onNear: ((String) -> Void)? = nil
-    /// Home: The queue leads the page, and the profile pills sit top right.
+    /// Home: The queue leads the page.
     var showsQueue = false
-    var showsProfile = false
     @ViewBuilder var header: () -> Header
     @Environment(AppModel.self) private var app
     @Environment(\.navigate) private var navigate
@@ -34,13 +33,11 @@ struct CollectionList<Header: View>: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 70) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        TopBand {
-                            if showsProfile { ProfileCluster() }
-                        }
-                        header()
-                    }
-                    .padding(.horizontal, Layout.horizontalMargin)
+                    // The profile corner is pinned above the page (RootView),
+                    // beside the header; a phone's header starts below it.
+                    header()
+                        .padding(.top, Layout.device == .phone ? PillSize.regular.diameter + 8 : 0)
+                        .padding(.horizontal, Layout.horizontalMargin)
                     // Not lazy: a lazy stack estimates the height of collections it
                     // hasn't built, and corrects it as they appear — the page jumped.
                     VStack(alignment: .leading, spacing: 80 - Self.snapInset) {   // the markers make up the gap

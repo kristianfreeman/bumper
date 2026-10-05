@@ -185,7 +185,7 @@ struct HomeView: View {
         let page = EditorialHome(sections: model.sections, userName: app.session?.account.userName)
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
-            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsQueue: true, showsProfile: true) {
+            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsQueue: true) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(page.copy.greeting)
                         .font(.system(size: Layout.pageTitle, weight: .bold))

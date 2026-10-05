@@ -37,6 +37,8 @@ final class ProfileTests: XCTestCase {
         add(shot)
         remote.press(.right)                         // back to the avatar
         remote.press(.select)
-        XCTAssertTrue(app.staticTexts["Movies watched"].waitForExistence(timeout: 3), "Profile didn't open")
+        // Not the first tile's label: focus lands on that tile as the page
+        // opens, and while it's focused it drops out of the accessibility tree.
+        XCTAssertTrue(app.staticTexts["Episodes watched"].waitForExistence(timeout: 3), "Profile didn't open")
     }
 }

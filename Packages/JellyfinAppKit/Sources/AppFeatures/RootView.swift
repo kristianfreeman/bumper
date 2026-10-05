@@ -297,6 +297,18 @@ struct MainTabView: View {
                 app.pendingTab = nil
             }
             .modifier(SidebarBrandHeader())
+            // The profile corner, pinned: there on every tab, and pages scroll
+            // beneath it. Not on the TV's Search, whose keyboard fills the top.
+            .overlay(alignment: .top) {
+                if !(Platform.isTV && selection == "search") {
+                    TopBand { ProfileCluster() }
+                        .fixedSize(horizontal: false, vertical: true)   // the TV's focus guide would take the whole height
+                        .padding(.horizontal, Layout.horizontalMargin)
+                        .padding(.top, Platform.isTV ? 0 : 4)
+                        // The TV's pages run under its sideways safe area: line up with them.
+                        .ignoresSafeArea(.container, edges: Platform.isTV ? .horizontal : [])
+                }
+            }
             .hidesNavigationBar()
         }
         .task { await loadLibraries() }
@@ -356,8 +368,9 @@ struct RoutedStack<Root: View>: View {
         NavigationStack(path: $path) {
             root()
                 .readsPageWidth()
+                .profileToolbar(app)
                 .navigationDestination(for: Route.self) { route in
-                    destination(route).readsPageWidth()
+                    destination(route).readsPageWidth().profileToolbar(app)
                 }
         }
         .environment(\.navigate, NavigateAction { path.append($0) })
