@@ -13,6 +13,10 @@ enum InputTrace {
         guard !installed else { return }
         installed = true
         NotificationCenter.default.addObserver(forName: UIFocusSystem.didUpdateNotification, object: nil, queue: .main) { note in
+            // Any focus move is interaction: frames count toward frameTime on
+            // every page (only Home's cards reported it, so a collection page
+            // measured nothing).
+            HitchMonitor.shared.noteActivity()
             let context = note.userInfo?[UIFocusSystem.focusUpdateContextUserInfoKey] as? UIFocusUpdateContext
             let item = context?.nextFocusedItem
             let label = (item as? NSObject)?.accessibilityLabel ?? ""

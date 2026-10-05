@@ -25,32 +25,25 @@ d = json.load(open(sys.argv[1]))
 for k in ["ui.frameTime", "ui.hitchRatio", "image.decode", "image.blurhash"]:
     if k in d: v = d[k]; print("%-15s n=%5d  p50=%6.1f  p95=%6.1f  max=%6.1f" % (k, v["count"], v["p50"], v["p95"], v["max"]))
 PY
+  # Pull-backs from the focus positions alone: the test presses Down, then
+  # Up, so focus should only move down until its lowest point and only up
+  # after it. (UI-test presses don't reach the app's press log on device.)
   python3 - "$OUT/$t-trace.log" <<'PY'
 import re, sys
-lines = open(sys.argv[1]).read().splitlines()
-events = []
-for l in lines:
-    m = re.match(r'\s*([\d.]+) \[(press|focus\*)\] (.*)', l)
-    if not m: continue
-    t, kind, rest = float(m[1]), m[2], m[3]
-    if kind == 'press': events.append((t, 'press', rest.strip()))
-    else:
-        f = re.search(r"'(.*)' (-?\d+),(-?\d+) (\d+)x(\d+)", rest)
-        if f: events.append((t, 'focus', (f[1][:40], int(f[2]), int(f[3]))))
-presses = [e for e in events if e[1] == 'press']
-downs = sum(1 for e in presses if e[2] == 'down'); ups = sum(1 for e in presses if e[2] == 'up')
-direction, pullbacks, focus_moves, last_y = None, [], 0, None
-for t, kind, v in events:
-    if kind == 'press': direction = v; continue
-    label, x, y = v
-    if last_y is not None and direction in ('down', 'up'):
-        if (direction == 'down' and y < last_y - 40) or (direction == 'up' and y > last_y + 40):
-            pullbacks.append(f"{t:.2f}s pressing {direction}: y {last_y} -> {y} ({label})")
-    focus_moves += 1
-    last_y = y
-print(f"presses: {downs} down, {ups} up; focus moves: {focus_moves}")
-print(f"pull-backs: {len(pullbacks)}")
-for p in pullbacks[:12]: print("  " + p)
+pts = []
+for l in open(sys.argv[1]):
+    m = re.match(r"\s*([\d.]+) \[focus\*\] (\S+) '(.*)' (-?\d+),(-?\d+) (\d+)x(\d+)", l)
+    if m and m[2] != 'none' and int(m[7]) > 150:            # cards, not the sidebar's tab button
+        pts.append((float(m[1]), m[3][:40], int(m[5])))
+if len(pts) < 2: print("too few focus moves to judge"); sys.exit()
+ys = [p[2] for p in pts]
+turn = ys.index(max(ys))
+backs = [(a, b) for a, b in zip(pts[:turn + 1], pts[1:turn + 1]) if b[2] < a[2] - 40] + \
+        [(a, b) for a, b in zip(pts[turn:], pts[turn + 1:]) if b[2] > a[2] + 40]
+gaps = sorted(b[0] - a[0] for a, b in zip(pts, pts[1:]))
+print(f"focus moves: {turn} down, {len(pts) - 1 - turn} up; median {gaps[len(gaps) // 2] * 1000:.0f} ms apart")
+print(f"pull-backs: {len(backs)}")
+for a, b in backs[:12]: print(f"  {a[0]:.2f}s y {a[2]} -> {b[0]:.2f}s y {b[2]} ({b[1]})")
 PY
 done
 echo "trace: $OUT"
