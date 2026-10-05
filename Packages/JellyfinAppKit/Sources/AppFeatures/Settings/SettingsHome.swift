@@ -25,44 +25,28 @@ struct SettingsView: View {
     @FocusState private var focus: SettingsFocus?
 
     var body: some View {
+        #if os(tvOS)
+        tvBody
+        #else
+        formBody
+        #endif
+    }
+
+    /// The TV: tiles, a choice opening a row of options under its section.
+    private var tvBody: some View {
         @Bindable var settings = app.settings
-        ScrollViewReader { proxy in
+        return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 64) {
                     header
                     AccountCard(confirmSignOut: $confirmSignOut)
                         .id("account")
-                    section("watching", "Watching", "Around what you watch.", [
-                        .toggle("autoplay", "Play Next Episode", "forward.end", "Starts the next episode when the credits begin.", $settings.autoplayNextEpisode),
-                        .toggle("intros", "Skip Intros", "forward", "Skips intros and recaps without asking.", $settings.skipIntrosAutomatically),
-                        .toggle("spoilers", "Hide Spoilers", "eye.slash", "Unwatched episodes show the show's art, not a still, and no description.", $settings.hideSpoilers),
-                        .choice("music", "Theme Music", "music.note", "Plays a show's theme song on its page.",
-                                options: [("off", "Off"), ("shows", "Shows"), ("all", "Shows and Movies")],
-                                current: !settings.playThemeMusic ? "off" : settings.themeMusicForMovies ? "all" : "shows") { v in
-                                    settings.playThemeMusic = v != "off"
-                                    settings.themeMusicForMovies = v == "all"
-                                },
-                        .toggle("themesOnline", "Find Missing Theme Songs", "globe", "For shows your server has no theme song for.", $settings.onlineThemeFallback),
-                    ])
+                    section("watching", "Watching", "Around what you watch.", watchingTiles(settings))
                     subtitles(settings)
-                    section("picture", "Picture and Sound", "How things play.", [
-                        .choice("engine", "Player", "play.rectangle", engineHelp(settings.enginePreference),
-                                options: [(EnginePreference.automatic.rawValue, "Automatic"), (EnginePreference.vlc.rawValue, "Always VLCKit")],
-                                current: settings.enginePreference.rawValue) { settings.enginePreference = EnginePreference(rawValue: $0) ?? .automatic },
-                        .choice("bitrate", "Maximum Bitrate", "speedometer", "Above this, the server lowers the quality to fit.",
-                                options: bitrateOptions.map { (bitrateKey($0), bitrateTitle($0)) },
-                                current: bitrateKey(settings.maxBitrate)) { settings.maxBitrate = Int($0) },
-                        .toggle("match", "Match Frame Rate and Range", "tv", "Switches the TV to each video's frame rate and HDR format.", $settings.matchContent),
-                        .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio to your receiver as is.", $settings.preferPassthrough),
-                    ])
+                    section("picture", "Picture and Sound", "How things play.", pictureTiles(settings))
                     look
                     if let store = app.downloads { storage(store, settings) }
-                    section("audiobooks", "Audiobooks", "Listening.", [
-                        .choice("rate", "Speed", "gauge.with.dots.needle.50percent", "Voices keep their pitch at any speed.",
-                                options: audiobookRates.map { (String($0), rateTitle($0)) },
-                                current: String(settings.audiobookRate)) { settings.audiobookRate = Double($0) ?? 1 },
-                        .toggle("smart", "Smart Speed", "waveform", "Shortens silences, so books finish sooner without sounding faster.", $settings.smartSpeed),
-                    ])
+                    section("audiobooks", "Audiobooks", "Listening.", audiobookTiles(settings))
                     section("about", "About", "\(Brand.displayName) \(Brand.version) (\(Brand.build)). Open source; themes are the only purchase.", aboutTiles(settings))
                 }
                 .padding(.horizontal, Layout.horizontalMargin)
@@ -151,9 +135,51 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: The settings (one list; tiles on the TV, a form elsewhere)
+
+    private func watchingTiles(_ settings: AppSettings) -> [SettingTile] {
+        @Bindable var settings = settings
+        return [
+            .toggle("autoplay", "Play Next Episode", "forward.end", "Starts the next episode when the credits begin.", $settings.autoplayNextEpisode),
+            .toggle("intros", "Skip Intros", "forward", "Skips intros and recaps without asking.", $settings.skipIntrosAutomatically),
+            .toggle("spoilers", "Hide Spoilers", "eye.slash", "Unwatched episodes show the show's art, not a still, and no description.", $settings.hideSpoilers),
+            .choice("music", "Theme Music", "music.note", "Plays a show's theme song on its page.",
+                    options: [("off", "Off"), ("shows", "Shows"), ("all", "Shows and Movies")],
+                    current: !settings.playThemeMusic ? "off" : settings.themeMusicForMovies ? "all" : "shows") { v in
+                        settings.playThemeMusic = v != "off"
+                        settings.themeMusicForMovies = v == "all"
+                    },
+            .toggle("themesOnline", "Find Missing Theme Songs", "globe", "For shows your server has no theme song for.", $settings.onlineThemeFallback),
+        ]
+    }
+
+    private func pictureTiles(_ settings: AppSettings) -> [SettingTile] {
+        @Bindable var settings = settings
+        return [
+            .choice("engine", "Player", "play.rectangle", engineHelp(settings.enginePreference),
+                    options: [(EnginePreference.automatic.rawValue, "Automatic"), (EnginePreference.vlc.rawValue, "Always VLCKit")],
+                    current: settings.enginePreference.rawValue) { settings.enginePreference = EnginePreference(rawValue: $0) ?? .automatic },
+            .choice("bitrate", "Maximum Bitrate", "speedometer", "Above this, the server lowers the quality to fit.",
+                    options: bitrateOptions.map { (bitrateKey($0), bitrateTitle($0)) },
+                    current: bitrateKey(settings.maxBitrate)) { settings.maxBitrate = Int($0) },
+            .toggle("match", "Match Frame Rate and Range", "tv", "Switches the TV to each video's frame rate and HDR format.", $settings.matchContent),
+            .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio to your receiver as is.", $settings.preferPassthrough),
+        ]
+    }
+
+    private func audiobookTiles(_ settings: AppSettings) -> [SettingTile] {
+        @Bindable var settings = settings
+        return [
+            .choice("rate", "Speed", "gauge.with.dots.needle.50percent", "Voices keep their pitch at any speed.",
+                    options: audiobookRates.map { (String($0), rateTitle($0)) },
+                    current: String(settings.audiobookRate)) { settings.audiobookRate = Double($0) ?? 1 },
+            .toggle("smart", "Smart Speed", "waveform", "Shortens silences, so books finish sooner without sounding faster.", $settings.smartSpeed),
+        ]
+    }
+
     // MARK: Storage (downloads; not on the TV)
 
-    private func storage(_ store: DownloadStore, _ settings: AppSettings) -> some View {
+    private func storageTiles(_ store: DownloadStore, _ settings: AppSettings) -> [SettingTile] {
         let count = store.records.values.filter(\.isDone).count
         var tiles: [SettingTile] = [
             .link("downloads", "Downloads", "arrow.down.circle",
@@ -169,6 +195,11 @@ struct SettingsView: View {
         if !store.records.isEmpty {
             tiles.append(.action("removeDownloads", "Remove All Downloads", "trash", "Frees \(DownloadWords.bytes(store.bytesUsed)).", value: nil) { confirmRemoveDownloads = true })
         }
+        return tiles
+    }
+
+    private func storage(_ store: DownloadStore, _ settings: AppSettings) -> some View {
+        let tiles = storageTiles(store, settings)
         return section("storage", "Storage", "What's downloaded to this \(DownloadWords.device).", tiles)
             .confirmationDialog("Remove every download?", isPresented: $confirmRemoveDownloads, titleVisibility: .visible) {
                 Button("Remove All", role: .destructive) { store.remove(Array(store.records.keys)) }
@@ -180,8 +211,8 @@ struct SettingsView: View {
 
     // MARK: Subtitles: a live preview beside the tiles
 
-    private func subtitles(_ settings: AppSettings) -> some View {
-        let tiles: [SettingTile] = [
+    private func subtitleTiles(_ settings: AppSettings) -> [SettingTile] {
+        [
             .choice("subMode", "Show Subtitles", "captions.bubble", "In your preferred language, when there are some.",
                     options: [SubtitleMode.always, .serverDefault, .forcedOnly, .off].map { ($0.rawValue, $0.title) },
                     current: settings.subtitleMode.rawValue) { settings.subtitleMode = SubtitleMode(rawValue: $0) ?? .always },
@@ -197,6 +228,10 @@ struct SettingsView: View {
                         settings.subtitleScale = Double($0) ?? 1
                     },
         ]
+    }
+
+    private func subtitles(_ settings: AppSettings) -> some View {
+        let tiles = subtitleTiles(settings)
         // While choosing, the focused option shows in the preview.
         let previewing = editing != nil ? preview : nil
         let style = previewing?.setting == "subStyle" ? SubtitleStyle(rawValue: previewing!.option) ?? settings.subtitleStyle : settings.subtitleStyle
@@ -252,7 +287,7 @@ struct SettingsView: View {
     private func aboutTiles(_ settings: AppSettings) -> [SettingTile] {
         @Bindable var settings = settings
         var tiles: [SettingTile] = [
-            .link("capabilities", "This Apple TV", "cpu", "What it can decode and send to your TV.", value: app.capabilities.hdrEligible ? "HDR" : "SDR") { navigate(.settings("capabilities")) },
+            .link("capabilities", Platform.isTV ? "This Apple TV" : "This \(DownloadWords.device)", "cpu", Platform.isTV ? "What it can decode and send to your TV." : "What it can decode.", value: app.capabilities.hdrEligible ? "HDR" : "SDR") { navigate(.settings("capabilities")) },
             .toggle("hud", "Performance Overlay", "gauge.with.dots.needle.67percent", "Frame timing, memory and playback stats on screen.", $settings.showPerformanceHUD),
             .action("caches", "Clear Caches", "trash", "Removes saved artwork and pages. They load again from the server.", value: cleared ? "Cleared" : nil) {
                 Task { await ImagePipeline.shared.removeAll(); await ContentCache.shared.removeAll(); cleared = true }
@@ -449,8 +484,6 @@ private struct AccountCard: View {
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
     @State private var approving = false
-    @State private var code = ""
-    @State private var result: String?
 
     var body: some View {
         if let session = app.session {
@@ -465,7 +498,6 @@ private struct AccountCard: View {
                             Pill("Switch to \(other.userName)", systemImage: "person.2", size: .small, alwaysShowsTitle: true) { app.switchAccount(other.id) }
                         }
                         Pill("Approve a Device", systemImage: "iphone.and.arrow.forward", size: .small, alwaysShowsTitle: true) {
-                            code = ""
                             approving = true
                         }
                         .accessibilityIdentifier("settings.approve")
@@ -479,9 +511,27 @@ private struct AccountCard: View {
             .padding(Platform.isTV ? 36 : 20)
             .background(theme.surface.opacity(0.55), in: .rect(cornerRadius: Platform.isTV ? 36 : 22))
             .tvFocusSection()
-            // Quick Connect, the other way round: another device (a new TV,
-            // phone, Mac) shows a code; entering it here signs that one in as you.
-            .alert("Approve a device", isPresented: $approving) {
+            .approvesDevices(isPresented: $approving)
+        }
+    }
+
+
+}
+
+
+// MARK: - Approve a device (Quick Connect, the other way round)
+
+/// Another device (a new TV, phone, Mac) shows a code; entering it here
+/// signs that one in as you.
+private struct ApproveDevice: ViewModifier {
+    @Binding var isPresented: Bool
+    @Environment(AppModel.self) private var app
+    @State private var code = ""
+    @State private var result: String?
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Approve a device", isPresented: $isPresented) {
                 TextField("Code", text: $code)
                     #if os(iOS)
                     .keyboardType(.numberPad)
@@ -489,12 +539,12 @@ private struct AccountCard: View {
                 Button("Approve") { approve() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Enter the code the other device shows to sign it in as \(session.account.userName).")
+                Text("Enter the code the other device shows to sign it in as \(app.session?.account.userName ?? "you").")
             }
             .alert(result ?? "", isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil } })) {
                 Button("OK") { result = nil }
             }
-        }
+            .onChange(of: isPresented) { _, open in if open { code = "" } }
     }
 
     private func approve() {
@@ -510,3 +560,169 @@ private struct AccountCard: View {
         }
     }
 }
+
+extension View {
+    fileprivate func approvesDevices(isPresented: Binding<Bool>) -> some View { modifier(ApproveDevice(isPresented: isPresented)) }
+}
+
+
+// MARK: - iPhone, iPad and Mac: a native form
+
+#if !os(tvOS)
+extension SettingsView {
+    /// The same settings as the TV's tiles, as the platform's own grouped
+    /// form: real switches and menus, the help under each.
+    var formBody: some View {
+        @Bindable var settings = app.settings
+        return Form {
+            Section {
+                FormAccount(confirmSignOut: $confirmSignOut)
+            } header: {
+                Text("Settings").font(.largeTitle.bold()).foregroundStyle(theme.primaryText).textCase(nil)
+                    .padding(.bottom, 8)
+            }
+            formSection("Watching", watchingTiles(settings))
+            Section {
+                SubtitlePreview(style: settings.subtitleStyle, scale: settings.subtitleScale, font: settings.subtitleFont, width: min(560, max(240, width - 40)))
+                    .frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+                ForEach(subtitleTiles(settings)) { row($0) }
+            } header: { Text("Subtitles") }
+            // Frame-rate matching and passthrough are the TV's.
+            formSection("Picture and Sound", pictureTiles(settings).filter { $0.id != "match" && $0.id != "atmos" })
+            Section {
+                ForEach(Theme.signature) { t in
+                    Button { themes.select(t) } label: {
+                        HStack(spacing: 14) {
+                            Circle().fill(t.accent).frame(width: 22, height: 22)
+                                .overlay { Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1) }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t.name).foregroundStyle(theme.primaryText)
+                                Text(t.tagline).font(.footnote).foregroundStyle(theme.secondaryText)
+                            }
+                            Spacer()
+                            if t.isPremium && !themes.isUnlocked { Image(systemName: "lock.fill").foregroundStyle(theme.secondaryText) }
+                            if t.id == theme.id { Image(systemName: "checkmark").foregroundStyle(theme.accent) }
+                        }
+                    }
+                    .accessibilityIdentifier("setting.theme.\(t.id)")
+                }
+                linkRow("All Themes", "square.grid.3x3", value: "\(Theme.all.count)") { navigate(.settings("themes")) }
+            } header: { Text("Look") }
+            if let store = app.downloads {
+                formSection("Storage", storageTiles(store, settings))
+                    .confirmationDialog("Remove every download?", isPresented: $confirmRemoveDownloads, titleVisibility: .visible) {
+                        Button("Remove All", role: .destructive) { store.remove(Array(store.records.keys)) }
+                        Button("Cancel", role: .cancel) {}
+                    }
+            }
+            formSection("Audiobooks", audiobookTiles(settings))
+            Section {
+                ForEach(aboutTiles(settings)) { row($0) }
+            } header: { Text("About") } footer: {
+                Text("\(Brand.displayName) \(Brand.version) (\(Brand.build)). Open source; themes are the only purchase.")
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(theme.backgroundGradient.ignoresSafeArea())
+        .tint(theme.accent)
+        .hidesNavigationBar()
+        .confirmationDialog("Sign out of \(app.session?.server.name ?? "this server")?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            Button("Sign Out", role: .destructive) { app.signOut() }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func formSection(_ title: String, _ tiles: [SettingTile]) -> some View {
+        Section {
+            ForEach(tiles) { row($0) }
+        } header: { Text(title) }
+    }
+
+    /// One setting as a row: a switch, a menu, or a button.
+    @ViewBuilder private func row(_ tile: SettingTile) -> some View {
+        switch tile.kind {
+        case .toggle(let binding):
+            Toggle(isOn: binding) { label(tile) }
+                .accessibilityIdentifier("setting.\(tile.id)")
+        case .choice(let options, let current, let set):
+            Picker(selection: Binding(get: { current }, set: set)) {
+                ForEach(options, id: \.key) { Text($0.title).tag($0.key) }
+            } label: { label(tile) }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("setting.\(tile.id)")
+        case .action(let value, let run):
+            Button(role: tile.id.hasPrefix("remove") ? .destructive : nil, action: run) {
+                HStack {
+                    label(tile)
+                    Spacer()
+                    if let value { Text(value).foregroundStyle(theme.secondaryText) }
+                }
+            }
+            .accessibilityIdentifier("setting.\(tile.id)")
+        case .link(let value, let run):
+            linkRow(tile.title, tile.symbol, detail: tile.detail, value: value, run: run)
+                .accessibilityIdentifier("setting.\(tile.id)")
+        }
+    }
+
+    private func label(_ tile: SettingTile) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tile.title).foregroundStyle(tile.id.hasPrefix("remove") ? .red : theme.primaryText)
+                Text(tile.detail).font(.footnote).foregroundStyle(theme.secondaryText)
+            }
+        } icon: {
+            Image(systemName: tile.symbol).foregroundStyle(theme.accent)
+        }
+    }
+
+    private func linkRow(_ title: String, _ symbol: String, detail: String? = nil, value: String?, run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).foregroundStyle(theme.primaryText)
+                        if let detail { Text(detail).font(.footnote).foregroundStyle(theme.secondaryText) }
+                    }
+                } icon: { Image(systemName: symbol).foregroundStyle(theme.accent) }
+                Spacer()
+                if let value { Text(value).foregroundStyle(theme.secondaryText) }
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(theme.secondaryText.opacity(0.6))
+            }
+        }
+    }
+}
+
+/// Who's signed in, as form rows: the account, then what you can do with it.
+private struct FormAccount: View {
+    @Binding var confirmSignOut: Bool
+    @Environment(AppModel.self) private var app
+    @Environment(\.theme) private var theme
+    @State private var approving = false
+
+    var body: some View {
+        if let session = app.session {
+            HStack(spacing: 16) {
+                UserAvatar(size: 60)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.account.userName).font(.title3.weight(.semibold)).foregroundStyle(theme.primaryText)
+                    Text(session.server.name).font(.subheadline).foregroundStyle(theme.secondaryText)
+                    Text("\(session.server.url.host() ?? session.server.url.absoluteString)\(session.server.version.map { " · Jellyfin \($0)" } ?? "")")
+                        .font(.footnote).foregroundStyle(theme.secondaryText)
+                }
+            }
+            .padding(.vertical, 6)
+            ForEach(app.accounts.accounts.filter { $0.id != session.id }) { other in
+                Button("Switch to \(other.userName)", systemImage: "person.2") { app.switchAccount(other.id) }
+            }
+            Button("Approve a Device", systemImage: "iphone.and.arrow.forward") { approving = true }
+                .accessibilityIdentifier("settings.approve")
+                .approvesDevices(isPresented: $approving)
+            Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { confirmSignOut = true }
+                .accessibilityIdentifier("settings.signOut")
+        }
+    }
+}
+#endif
