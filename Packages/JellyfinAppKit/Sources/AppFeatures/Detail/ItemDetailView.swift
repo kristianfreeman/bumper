@@ -85,6 +85,7 @@ final class DetailModel {
 
 struct ItemDetailView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.castLink) private var castLink
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
     @State private var model: DetailModel
@@ -233,6 +234,10 @@ struct ItemDetailView: View {
                 Pill(playLabel(target), systemImage: "play.fill", prominent: true) { app.play(target) }
                     .focused($playFocused)
                     .onChange(of: playFocused) { _, focused in if focused { app.prepare(target) } }
+                if let cast = castLink, let tv = cast.connectedTo {
+                    Pill("Play on \(tv)", systemImage: "tv") { cast.play(target.id) }
+                        .accessibilityIdentifier("detail.playOnTV")
+                }
                 if target.resumePosition != nil {
                     Pill("Play from Beginning", systemImage: "gobackward") { app.play(target, resume: false) }
                 }

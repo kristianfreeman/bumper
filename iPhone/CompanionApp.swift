@@ -9,13 +9,21 @@ import UIKit
 struct BumperPhoneApp: App {
     @UIApplicationDelegateAdaptor(PhoneAppDelegate.self) private var delegate
     @State private var companion = CompanionModel()
+    @State private var cast = CastLink()
 
     init() { AppRoot.markProcessStart() }
 
     var body: some Scene {
         WindowGroup {
-            AppRoot(remoteTab: AnyView(RemoteTab().environment(companion)))
-                .task { companion.startBrowsing() }
+            // The Apple TV sits behind the TV button in the corner (like a
+            // cast button), not a tab of its own.
+            AppRoot(cast: cast, castPanel: AnyView(RemoteTab().environment(companion)))
+                .task {
+                    cast.play = { [companion] id in companion.send(.play(itemId: id)) }
+                    companion.startBrowsing()
+                }
+                .onChange(of: companion.connectedTo, initial: true) { _, name in cast.connectedTo = name }
+                .onChange(of: companion.tvs.isEmpty, initial: true) { _, none in cast.available = !none }
         }
     }
 }
@@ -32,6 +40,7 @@ final class PhoneAppDelegate: NSObject, UIApplicationDelegate {
 /// The TV, from the phone: find it, then see and steer what's on it.
 struct RemoteTab: View {
     @Environment(CompanionModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -39,6 +48,10 @@ struct RemoteTab: View {
                 if model.connectedTo == nil { ConnectView() } else { TVView() }
             }
             .navigationTitle(model.connectedTo ?? "Your Apple TV")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
         }
     }
 }

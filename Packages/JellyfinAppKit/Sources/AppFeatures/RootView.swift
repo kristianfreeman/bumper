@@ -9,14 +9,20 @@ public import SwiftUI
 /// Public entry point used by the app target.
 public struct AppRoot: View {
     @State private var app = AppModel()
-    let remoteTab: AnyView?
+    let cast: CastLink?
+    let castPanel: AnyView?
 
-    /// `remoteTab`: the iPhone/iPad app's Apple TV remote, as a tab of its own.
-    public init(remoteTab: AnyView? = nil) { self.remoteTab = remoteTab }
+    /// `cast`, `castPanel`: the iPhone/iPad's link to an Apple TV, behind the
+    /// TV button in the corner (finding it, then steering it).
+    public init(cast: CastLink? = nil, castPanel: AnyView? = nil) {
+        self.cast = cast
+        self.castPanel = castPanel
+    }
 
     public var body: some View {
         RootView()
-            .environment(\.remoteTab, remoteTab)
+            .environment(\.castLink, cast)
+            .environment(\.castPanel, castPanel)
             .environment(app)
             .environment(app.settings)
             .environment(app.themes)
@@ -166,13 +172,13 @@ private struct SidebarTitle: ViewModifier {
 }
 
 extension EnvironmentValues {
-    @Entry var remoteTab: AnyView? = nil
+
 }
 
 struct MainTabView: View {
     let session: UserSession
     @Environment(AppModel.self) private var app
-    @Environment(\.remoteTab) private var remoteTab
+
     @State private var plan = SidebarPlan(views: [], hasAudiobooks: { _ in false })
     @State private var selection = "home"
     #if os(macOS)
@@ -217,7 +223,6 @@ struct MainTabView: View {
         case "search": SearchView()
         case "downloads": DownloadsView()
         case "settings": SettingsView()
-        case "remote": remoteTab
         default:
             ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
                 if case .library(let view) = entry, view.id == id { LibraryView(library: view) }
@@ -302,9 +307,7 @@ struct MainTabView: View {
                 if app.downloads != nil {
                     Tab("Downloads", systemImage: "arrow.down.circle", value: "downloads") { DownloadsView().tabPage() }
                 }
-                if let remoteTab {
-                    Tab("Remote", systemImage: "appletvremote.gen4", value: "remote") { remoteTab.tabPage() }
-                }
+
                 Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
                     SearchView().tabPage(corner: !Platform.isTV)   // the TV's search keyboard fills the top
                 }

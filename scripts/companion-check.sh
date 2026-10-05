@@ -18,9 +18,10 @@ xcrun simctl terminate "$TV" "$BID" 2>/dev/null
 xcrun simctl launch "$TV" "$BID" -mock -mockHTTP -reset -route item:movie-0001   # -mockHTTP: artwork the phone can load >/dev/null
 sleep 4
 TEST_RUNNER_EXPECT_TITLE="Endless Voyage" TEST_RUNNER_SHOTS_DIR="$PWD/$OUT" scripts/with-timeout.sh 180 xcodebuild test-without-building -project Bumper.xcodeproj -scheme BumperPhone \
-  -destination "id=$PHONE" -derivedDataPath build/test/companion -collect-test-diagnostics never >"$OUT/phone-test.log" 2>&1
+  -destination "id=$PHONE" -derivedDataPath build/test/companion -collect-test-diagnostics never \
+  -only-testing:BumperPhoneUITests/CompanionTests >"$OUT/phone-test.log" 2>&1
 grep -E "Test Case.*(passed|failed)|error:" "$OUT/phone-test.log" | cut -c1-220
 C=$(xcrun simctl get_app_container "$TV" "$BID" data 2>/dev/null)
 grep -E "companion|queue" "$C/Library/Caches/perf/trace.log" 2>/dev/null | tail -6
 echo "results: $OUT"
-grep -q "Test Case.*passed" "$OUT/phone-test.log"
+grep -q "Test Case.*passed" "$OUT/phone-test.log" && ! grep -q "Test Case.*failed" "$OUT/phone-test.log"

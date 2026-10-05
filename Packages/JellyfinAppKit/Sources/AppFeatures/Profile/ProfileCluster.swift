@@ -16,6 +16,7 @@ struct ProfileCluster: View {
     var body: some View {
         let timer = app.sleepTimer
         HStack(spacing: 20) {
+            CastButton()                                          // iPhone/iPad: the Apple TV
             if app.accounts.accounts.count > 1 {
                 Pill("Switch User", systemImage: "person.2", size: .small) { app.switchToNextAccount() }
                     .focused($focus, equals: "switch")

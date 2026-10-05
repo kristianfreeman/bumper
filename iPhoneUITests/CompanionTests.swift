@@ -8,7 +8,12 @@ final class CompanionTests: XCTestCase {
     /// which comes back from the TV as a Queue entry.
     func testMirrorsTheTVAndPlansQueue() {
         let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset"]                       // signed in (the corner's on the main screen)
         app.launch()
+        // The TV is behind the corner's TV button now (it was a tab).
+        let castButton = app.buttons["cast.button"]
+        XCTAssertTrue(castButton.waitForExistence(timeout: 20), "no TV button in the corner")
+        castButton.tap()
         let expected = ProcessInfo.processInfo.environment["EXPECT_TITLE"] ?? "Endless Voyage"
         let shown = app.staticTexts.matching(NSPredicate(format: "label == %@", expected))
         XCTAssertTrue(shown.firstMatch.waitForExistence(timeout: 20), "the TV's focused title (\(expected)) never appeared — not connected?")
