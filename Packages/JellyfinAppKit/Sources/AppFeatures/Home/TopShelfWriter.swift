@@ -13,6 +13,7 @@ enum TopShelfWriter {
     /// A little of each, not everything: what to pick up, what's new, and
     /// ways into the app.
     static let rowLength = 6
+    private static var reloadedThisLaunch = false
 
     static func update(_ sections: [BrowseSection], client: JellyfinClient, usage: [String: Double] = [:]) {
         // Mock runs (tests, device benchmarks) leave the real shelf alone.
@@ -48,7 +49,11 @@ enum TopShelfWriter {
         if !browse.isEmpty { shelf.append(.init(title: "Browse", items: browse)) }
 
         let result = TopShelfSnapshot(sections: shelf).write()
-        if result == .written { TVTopShelfContentProvider.topShelfContentDidChange() }
+        // Also once per launch: a new build may lay the same content out differently.
+        if result == .written || !reloadedThisLaunch {
+            reloadedThisLaunch = true
+            TVTopShelfContentProvider.topShelfContentDidChange()
+        }
         TraceFile.write("topshelf", "\(result): " + shelf.map { "\($0.title) (\($0.items.count))" }.joined(separator: ", "))
     }
 
