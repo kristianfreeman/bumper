@@ -23,6 +23,8 @@ public enum MockMedia {
     public static let viewId = "view-testmedia"
     /// Item id → the remote subtitles the "server" has downloaded for it.
     static let downloadedSubtitles = Mutex<[String: [String]]>([:])
+    /// The user's display preferences (one record is enough for the mock).
+    static let preferences = Mutex<Data>(Data())
 
     /// What the server's subtitle providers "find" (the OpenSubtitles plugin's shape).
     static func remoteSubtitles(itemId: String) -> [RemoteSubtitle] {

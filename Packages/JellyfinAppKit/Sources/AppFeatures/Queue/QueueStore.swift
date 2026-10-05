@@ -22,6 +22,10 @@ final class QueueStore {
     @ObservationIgnored var candidates: [BaseItem] = [] { didSet { refreshSuggestions() } }
     /// Changes go out to the companion app.
     @ObservationIgnored var onChange: (() -> Void)?
+    /// Changes made here (not ones that came from another device): to sync up.
+    @ObservationIgnored var onLocalChange: (() -> Void)?
+    /// When the plan last changed, here or on another device (seconds since 1970).
+    @ObservationIgnored private(set) var updatedAt: Double = 0
 
     func attach(account: String, sleepTimer: SleepTimer, defaults: UserDefaults) {
         key = "tonight-\(account)"
@@ -32,6 +36,7 @@ final class QueueStore {
             plan = saved
             if let doneBy = plan.doneBy, doneBy < .now { plan.doneBy = nil }    // yesterday's
         }
+        updatedAt = defaults.double(forKey: key + "-updated")
         clock?.cancel()
         clock = Task { [weak self] in
             while !Task.isCancelled {
@@ -67,16 +72,37 @@ final class QueueStore {
 
     func replace(with plan: QueuePlan) {
         self.plan = plan
+        touch()
         save()
         armSleepTimer()
         onChange?()
+        onLocalChange?()
+    }
+
+    /// The plan as another device left it (newer than ours).
+    func applyRemote(_ plan: QueuePlan, updatedAt: Double) {
+        self.plan = plan
+        if let doneBy = self.plan.doneBy, doneBy < .now { self.plan.doneBy = nil }
+        self.updatedAt = updatedAt
+        defaults.set(updatedAt, forKey: key + "-updated")
+        save()
+        armSleepTimer()
+        onChange?()
+        TraceFile.write("queue", "from another device: \(plan.entries.count) things")
+    }
+
+    private func touch() {
+        updatedAt = Date.now.timeIntervalSince1970
+        defaults.set(updatedAt, forKey: key + "-updated")
     }
 
     private func change(_ edit: (inout QueuePlan) -> Void) {
         edit(&plan)
         plan.suggest(candidates.filter { !plan.contains($0.id) }, now: now)
+        touch()
         save()
         onChange?()
+        onLocalChange?()
     }
 
     private func refreshSuggestions() {

@@ -203,7 +203,7 @@ final class AppModel {
         }
         Self.configureAudioSession()
         InputTrace.install()
-        if let session { queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults) }
+        if let session { queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults); startQueueSync(session) }
         self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
@@ -287,6 +287,7 @@ final class AppModel {
     func didSignIn(_ session: UserSession) {
         self.session = session
         queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults)
+        startQueueSync(session)
         reportCapabilities(session)
     }
 
@@ -365,6 +366,23 @@ final class AppModel {
                 pendingTab = "search"
             }
         }
+    }
+
+    /// The queue on every device of the account (Jellyfin keeps it). Not in
+    /// mock runs: tests shouldn't depend on each other's plans.
+    @ObservationIgnored private var queueSync: QueueSync?
+
+    private func startQueueSync(_ session: UserSession) {
+        queueSync?.stop()
+        guard !options.mock || ProcessInfo.processInfo.arguments.contains("-syncQueue") else { queueSync = nil; return }
+        let sync = QueueSync(store: queue, client: session.client)
+        sync.start()
+        queueSync = sync
+    }
+
+    /// Back to the front: catch up with changes made on other devices.
+    func refreshFromOtherDevices() {
+        Task { await queueSync?.pull() }
     }
 
     // MARK: Playback

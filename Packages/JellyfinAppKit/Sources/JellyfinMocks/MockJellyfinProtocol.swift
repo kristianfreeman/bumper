@@ -150,6 +150,16 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         }
 
         // Parameterised routes
+        // Display preferences (Bumper syncs its queue there), kept in memory.
+        if parts.count == 2, parts[0] == "DisplayPreferences" {
+            if request.httpMethod == "POST" {
+                let body = request.httpBody ?? request.httpBodyStream.map { s in s.open(); defer { s.close() }; var d = Data(); var buf = [UInt8](repeating: 0, count: 4096); while s.hasBytesAvailable { let n = s.read(&buf, maxLength: buf.count); if n <= 0 { break }; d.append(buf, count: n) }; return d } ?? Data()
+                MockMedia.preferences.withLock { $0 = body }
+                return (204, Data(), "text/plain")
+            }
+            let stored = MockMedia.preferences.withLock { $0 }
+            return (200, stored.isEmpty ? Data(#"{"Id":"bumper","CustomPrefs":{}}"#.utf8) : stored, "application/json")
+        }
         // The server's subtitle search (RemoteSearch) and the files it saves.
         if parts.count == 5, parts[0] == "Items", parts[2] == "RemoteSearch", parts[3] == "Subtitles" {
             if request.httpMethod == "POST" {

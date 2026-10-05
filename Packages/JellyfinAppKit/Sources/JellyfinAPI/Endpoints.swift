@@ -453,3 +453,37 @@ extension JellyfinClient {
         try await send(Request<Void>(.post, "/Items/\(itemId)/RemoteSearch/Subtitles/\(id)"))
     }
 }
+
+// MARK: - Display preferences (Bumper's own synced state)
+
+extension JellyfinClient {
+    /// The user's custom display preferences for a client: a string map the
+    /// server keeps per user, so every device signed in to the account sees
+    /// the same values (Bumper keeps its queue there).
+    public func customPreferences(id: String = "bumper", client: String = "bumper") async throws -> [String: String] {
+        let raw = try await rawPreferences(id: id, client: client)
+        let prefs = raw["CustomPrefs"] as? [String: Any] ?? [:]
+        return prefs.compactMapValues { $0 as? String }
+    }
+
+    /// Sets some of them (others are kept), writing the whole record back.
+    public func setCustomPreferences(_ values: [String: String], id: String = "bumper", client: String = "bumper") async throws {
+        var raw = (try? await rawPreferences(id: id, client: client)) ?? [:]
+        var prefs = raw["CustomPrefs"] as? [String: Any] ?? [:]
+        for (k, v) in values { prefs[k] = v }
+        raw["CustomPrefs"] = prefs
+        raw["Id"] = raw["Id"] ?? id
+        raw["Client"] = client
+        // Fields the server requires on write.
+        for (k, v) in ["SortBy": "SortName", "SortOrder": "Ascending", "ScrollDirection": "Horizontal"] where raw[k] == nil { raw[k] = v }
+        for k in ["RememberIndexing", "RememberSorting", "ShowBackdrop", "ShowSidebar"] where raw[k] == nil { raw[k] = false }
+        for k in ["PrimaryImageHeight", "PrimaryImageWidth"] where raw[k] == nil { raw[k] = 0 }
+        let body = try JSONSerialization.data(withJSONObject: raw)
+        try await send(Request<Void>(.post, "/DisplayPreferences/\(id)", query: [.init(name: "userId", value: userId), .init(name: "client", value: client)], body: body))
+    }
+
+    private func rawPreferences(id: String, client: String) async throws -> [String: Any] {
+        let data = try await send(Request<Data>(.get, "/DisplayPreferences/\(id)", query: [.init(name: "userId", value: userId), .init(name: "client", value: client)]) { data, _ in data })
+        return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+}

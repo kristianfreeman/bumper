@@ -5,7 +5,7 @@ import XCTest
 final class QueueTests: XCTestCase {
     func testAddToQueueThenItLeadsHome() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0001"]
+        app.launchArguments = ["-mock", "-reset", "-syncQueue", "-route", "item:movie-0001"]
         app.launch()
         let add = app.buttons["detail.queue"]
         XCTAssertTrue(add.waitForExistence(timeout: 5), "no Add to Queue on the detail page")

@@ -81,6 +81,7 @@ struct RootView: View {
         }
         .onAppear { PerfRecorder.shared.start() }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { app.refreshFromOtherDevices() }
             if phase != .active { PerfRecorder.shared.writeSession() }
         }
         .fullScreen(item: $app.playback) { request in
