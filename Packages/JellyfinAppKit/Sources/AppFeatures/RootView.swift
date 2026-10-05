@@ -254,27 +254,27 @@ struct MainTabView: View {
         RoutedStack(initial: app.launchRoute) {
             TabView(selection: $selection) {
                 Tab("Home", systemImage: "house", value: "home") {
-                    HomeView().readsPageWidth()          // each tab its own area (the iPad's sidebar takes some)
+                    HomeView().tabPage()          // each tab its own area (the iPad's sidebar takes some)
                 }
                 // At most four library tabs: past seven entries the sidebar
                 // stops opening (see SidebarPlan).
                 ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
                     if case .library(let view) = entry {
-                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { LibraryView(library: view).readsPageWidth() }
+                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { LibraryView(library: view).tabPage() }
                     } else if case .audiobooks(let libraries) = entry {
-                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { AudiobookLibraryView(libraries: libraries).readsPageWidth() }
+                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { AudiobookLibraryView(libraries: libraries).tabPage() }
                     } else if case .more(let libraries) = entry {
-                        Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries).readsPageWidth() }
+                        Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries).tabPage() }
                     }
                 }
                 if let remoteTab {
-                    Tab("Remote", systemImage: "appletvremote.gen4", value: "remote") { remoteTab }
+                    Tab("Remote", systemImage: "appletvremote.gen4", value: "remote") { remoteTab.tabPage() }
                 }
                 Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
-                    SearchView().readsPageWidth()
+                    SearchView().tabPage(corner: !Platform.isTV)   // the TV's search keyboard fills the top
                 }
                 Tab("Settings", systemImage: "gearshape", value: "settings") {
-                    SettingsView().readsPageWidth()
+                    SettingsView().tabPage()
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
@@ -285,18 +285,6 @@ struct MainTabView: View {
                 app.pendingTab = nil
             }
             .modifier(SidebarTitle())
-            // The profile corner, pinned: there on every tab, and pages scroll
-            // beneath it. Not on the TV's Search, whose keyboard fills the top.
-            .overlay(alignment: .top) {
-                if !(Platform.isTV && selection == "search") {
-                    TopBand { ProfileCluster() }
-                        .fixedSize(horizontal: false, vertical: true)   // the TV's focus guide would take the whole height
-                        .padding(.horizontal, Layout.horizontalMargin)
-                        .padding(.top, Platform.isTV ? 0 : 4)
-                        // The TV's pages run under its sideways safe area: line up with them.
-                        .ignoresSafeArea(.container, edges: Platform.isTV ? .horizontal : [])
-                }
-            }
             .hidesNavigationBar()
         }
         .task { await loadLibraries() }
@@ -305,7 +293,14 @@ struct MainTabView: View {
     private func loadLibraries() async {
         let key = "views-\(session.id)"
         if let cached = await ContentCache.shared.value([BaseItem].self, for: key) { apply(cached) { _ in true } }
-        guard let fresh = try? await session.client.userViews().items else { return }
+        // Retried: launch can be before the network's ready (the Mac's first
+        // run asks for local-network access), and the sidebar stayed bare.
+        var fresh: [BaseItem]?
+        for attempt in 0..<6 where fresh == nil && !Task.isCancelled {
+            if attempt > 0 { try? await Task.sleep(for: .seconds(1 << min(attempt, 4))) }
+            fresh = try? await session.client.userViews().items
+        }
+        guard let fresh else { return }
         TraceFile.write("app", "libraries: " + fresh.map { "\($0.name ?? "?") [\($0.collectionType ?? "nil")]" }.joined(separator: " | "))
         // Books libraries without audiobooks (e-books) get no tab.
         var withAudiobooks: Set<String> = []
@@ -336,6 +331,25 @@ struct MainTabView: View {
         case "books": "books.vertical"
         default: "folder"
         }
+    }
+}
+
+extension View {
+    /// A tab's page: its width, and (off the Mac, whose toolbar has them) the
+    /// profile corner pinned at its top — part of the page, so focus coming
+    /// back from the TV's sidebar lands in the page, not on the corner first.
+    func tabPage(corner: Bool = true) -> some View {
+        readsPageWidth()
+            .overlay(alignment: .top) {
+                if corner && !Platform.isMac {
+                    TopBand { ProfileCluster() }
+                        .fixedSize(horizontal: false, vertical: true)   // the TV's focus guide would take the whole height
+                        .padding(.horizontal, Layout.horizontalMargin)
+                        .padding(.top, Platform.isTV ? 0 : 4)
+                        // The TV's pages run under its sideways safe area: line up with them.
+                        .ignoresSafeArea(.container, edges: Platform.isTV ? .horizontal : [])
+                }
+            }
     }
 }
 

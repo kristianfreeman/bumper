@@ -383,6 +383,16 @@ final class AppModel {
     /// Back to the front: catch up with changes made on other devices.
     func refreshFromOtherDevices() {
         Task { await queueSync?.pull() }
+        Task { await refreshProfile() }
+    }
+
+    /// The account's name and picture as the server has them now (it was
+    /// only read at sign-in, so a new picture never showed).
+    private func refreshProfile() async {
+        guard let session, !options.mock, let user = try? await session.client.currentUser() else { return }
+        guard accounts.updateProfile(session.account.id, name: user.name, imageTag: user.primaryImageTag),
+              self.session?.id == session.id else { return }
+        self.session = accounts.restoreActiveSession()
     }
 
     // MARK: Playback

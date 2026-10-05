@@ -20,14 +20,6 @@ struct CollectionList<Header: View>: View {
     @Environment(\.navigate) private var navigate
     /// The page's usable width (inside the safe area and margins): cards are sized from it.
     @Environment(\.pageWidth) private var width
-    /// The collection the page last settled on (focus moving into another one moves the page).
-    @State private var settled: String?
-    @State private var settling: Task<Void, Never>?
-    /// Whether the page is moving (not observed: no redraw per phase change).
-    @State private var motion = Motion()
-    final class Motion { var scrolling = false }
-    /// The scroll view's top safe-area inset and height: where the page's top sits at launch.
-    @State private var frame: (inset: CGFloat, height: CGFloat) = (60, 1080)
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -40,25 +32,18 @@ struct CollectionList<Header: View>: View {
                         .padding(.horizontal, Layout.horizontalMargin)
                     // Not lazy: a lazy stack estimates the height of collections it
                     // hasn't built, and corrects it as they appear — the page jumped.
-                    VStack(alignment: .leading, spacing: 80 - Self.snapInset) {   // the markers make up the gap
+                    // The focus engine does the scrolling: the page used to snap
+                    // each collection into place after it, which read as a jump.
+                    VStack(alignment: .leading, spacing: 80) {
                         // Launch focus goes to the first card on the page: Queue's when it leads.
                         let queueLeads = showsQueue && !app.queue.isEmpty
                         if queueLeads {
-                            SnapPoint(id: "queue", inset: 0) {
-                                QueueSection(store: app.queue, available: width, firstCardFocus: firstCardFocus)
-                            }
-                            .id("queue")
-                            .onFocused { settle("queue", first: true, proxy) }
+                            QueueSection(store: app.queue, available: width, firstCardFocus: firstCardFocus)
+                                .id("queue")
                         }
                         ForEach(sections) { section in
-                            // The first collection snaps to the page's top: no marker
-                            // above it (one pushed the first row down, and the page
-                            // started scrolled).
-                            SnapPoint(id: section.id, inset: !queueLeads && section.id == sections.first?.id ? 0 : Self.snapInset) {
-                                CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
-                            }
-                            .id(section.id)
-                            .onFocused { settle(section.id, first: !queueLeads && section.id == sections.first?.id, proxy) }
+                            CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
+                                .id(section.id)
                                 .onAppear {
                                     if section.items.isEmpty { onNear?(section.id) }
                                     prepare(after: section)
@@ -68,11 +53,8 @@ struct CollectionList<Header: View>: View {
                 }
                 .padding(.top, 40)
                 .padding(.bottom, 120)
-                .overlay(alignment: .top) { Color.clear.frame(height: 0).id(Self.top) }
             }
             .tvScrollClipDisabled()
-            .onScrollPhaseChange { _, phase in motion.scrolling = phase != .idle }
-            .onGeometryChange(for: [CGFloat].self) { [$0.safeAreaInsets.top, $0.size.height] } action: { frame = ($0[0], max($0[1], 1)) }
             .task(id: sections.count) {
                 guard app.options.benchmark, sections.count > 1 else { return }
                 await Benchmark.scroll(through: sections.map(\.id)) { id in
@@ -82,68 +64,10 @@ struct CollectionList<Header: View>: View {
         }
     }
 
-    static var top: String { "page.top" }
-    /// `-perfNoSnap` (device measurements).
-    static var snapOff: Bool { ProcessInfo.processInfo.arguments.contains("-perfNoSnap") }
-    /// Where a collection's top settles: this far below the top of the screen.
-    static var snapInset: CGFloat { 140 }
-
-    /// Focus moved into another collection: bring the whole collection into
-    /// place — centred on screen (two rows and its title fit), or, for the
-    /// first one, the page back at its top — instead of leaving it wherever
-    /// the focus engine's minimal scroll put it.
-    private func settle(_ id: String, first: Bool, _ proxy: ScrollViewProxy) {
-        guard id != settled else { return }
-        let launching = settled == nil
-        settled = id
-        settling?.cancel()
-        guard !launching, !app.options.benchmark, !Self.snapOff else { return }        // launch: the page starts at its top
-        // Only once focus rests: while someone is moving fast, the focus
-        // engine's own scrolling leads, and a snap per collection would
-        // fight the next press.
-        settling = Task {
-            // Once the focus engine's own scroll has finished (snapping while
-            // it's still moving loses to it), and focus has rested a moment.
-            // (Short: any wait after the scroll stops reads as lag.)
-            try? await Task.sleep(for: .milliseconds(60))
-            for _ in 0..<40 where motion.scrolling {
-                try? await Task.sleep(for: .milliseconds(40))
-            }
-            guard !Task.isCancelled, settled == id else { return }
-            withAnimation(.smooth(duration: 0.25)) {
-                if first {
-                    // The marker at the content's very top, put back where it starts: below the inset.
-                    proxy.scrollTo(Self.top, anchor: UnitPoint(x: 0, y: frame.inset / frame.height))
-                } else {
-                    proxy.scrollTo(SnapPoint<EmptyView>.marker(id), anchor: .top)
-                }
-            }
-        }
-    }
-
     /// Lazily loaded collections a little further down start loading now.
     private func prepare(after section: BrowseSection) {
         guard let i = sections.firstIndex(where: { $0.id == section.id }) else { return }
         for next in sections.dropFirst(i + 1).prefix(2) where next.items.isEmpty { onNear?(next.id) }
-    }
-}
-
-/// A collection with an invisible marker `snapInset` above it: scrolling the
-/// marker to the top puts every collection in the same place, whatever its
-/// height (like scroll-snap-align: start with a scroll padding).
-private struct SnapPoint<Content: View>: View {
-    let id: String
-    var inset: CGFloat = CollectionList<EmptyView>.snapInset
-    @ViewBuilder var content: () -> Content
-
-    static func marker(_ id: String) -> String { "snap.\(id)" }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: inset).id(Self.marker(id))
-                .accessibilityHidden(true)
-            content()
-        }
     }
 }
 

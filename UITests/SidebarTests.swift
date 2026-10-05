@@ -39,6 +39,25 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(afterMenu.hasPrefix("SIDEBAR"), "Menu: focus on \(afterMenu), not the sidebar")
     }
 
+    /// Right out of the sidebar goes back to the page's cards — not to the
+    /// profile corner at the top of the page on the way.
+    func testLeavingTheSidebarReturnsToTheCards() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1)
+        let remote = XCUIRemote.shared
+        remote.press(.left)
+        Thread.sleep(forTimeInterval: 0.8)
+        XCTAssertTrue(focusedDescription(app).hasPrefix("SIDEBAR"), "Left didn't open the sidebar: \(focusedDescription(app))")
+        remote.press(.right)
+        Thread.sleep(forTimeInterval: 1)
+        let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        print("SIDEBAR-DEBUG afterRight=\(focused.identifier) \(focusedDescription(app))")
+        XCTAssertTrue(focused.identifier.hasPrefix("card."), "Right out of the sidebar: focus on \(focusedDescription(app)), not a card")
+    }
+
     /// After watching something and leaving the player, the sidebar still
     /// opens (the player's remote handling must not outlive it).
     func testSidebarOpensAfterLeavingThePlayer() {

@@ -1,4 +1,5 @@
 import AppCore
+import Instrumentation
 import DesignSystem
 import SwiftUI
 
@@ -10,24 +11,32 @@ import SwiftUI
 struct ProfileCluster: View {
     @Environment(AppModel.self) private var app
     @State private var showSleepOptions = false
+    @FocusState private var focus: String?
 
     var body: some View {
         let timer = app.sleepTimer
         HStack(spacing: 20) {
             if app.accounts.accounts.count > 1 {
                 Pill("Switch User", systemImage: "person.2", size: .small) { app.switchToNextAccount() }
+                    .focused($focus, equals: "switch")
             }
             Pill("Sleep Timer", systemImage: timer.isActive ? "moon.zzz.fill" : "moon.zzz", detail: timer.shortLabel, size: .small, active: timer.isActive) {
                 showSleepOptions = true
             }
             .accessibilityIdentifier("profile.sleep")
+            .focused($focus, equals: "sleep")
             Pill(app.session?.account.userName ?? "Profile", detail: "Profile", size: .regular, fillsIcon: true) {
                 UserAvatar(size: PillSize.regular.diameter)
             } action: {
                 app.pendingRoute = .profile                       // pinned outside any page's stack
             }
             .accessibilityIdentifier("profile.avatar")
+            .focused($focus, equals: "avatar")
         }
+        // The row moves as one: a pill opening to show its name pushed its
+        // neighbours over in a single frame (each pill only animates itself).
+        .animation(.spring(duration: 0.3, bounce: 0.2), value: focus)
+        .onChange(of: focus) { _, f in TraceFile.write("focus", "corner \(f ?? "none")") }
         .tvFocusSection()
         // On the cluster (always present), not the button — so the sheet
         // survives the menu collapsing while it's up.

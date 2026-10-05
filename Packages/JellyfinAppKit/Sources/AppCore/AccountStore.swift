@@ -154,6 +154,19 @@ public final class AccountStore {
         return session(for: account, token: result.accessToken, server: server)
     }
 
+    /// The server's current name and picture for an account (they change
+    /// there: a new profile picture has a new tag). Returns whether it changed.
+    @discardableResult
+    public func updateProfile(_ accountId: String, name: String?, imageTag: String?) -> Bool {
+        guard let i = accounts.firstIndex(where: { $0.id == accountId }) else { return false }
+        let name = name ?? accounts[i].userName
+        guard accounts[i].userName != name || accounts[i].imageTag != imageTag else { return false }
+        accounts[i].userName = name
+        accounts[i].imageTag = imageTag
+        persist()
+        return true
+    }
+
     public func signOut(_ accountId: String) {
         accounts.removeAll { $0.id == accountId }
         keychain.remove(tokenKey(accountId))
