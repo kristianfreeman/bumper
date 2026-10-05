@@ -30,11 +30,13 @@ struct CollectionList<Header: View>: View {
                     header()
                         .padding(.top, Layout.device == .phone ? PillSize.regular.diameter + 8 : 0)
                         .padding(.horizontal, Layout.horizontalMargin)
-                    // Not lazy: a lazy stack estimates the height of collections it
-                    // hasn't built, and corrects it as they appear — the page jumped.
-                    // The focus engine does the scrolling: the page used to snap
-                    // each collection into place after it, which read as a jump.
-                    VStack(alignment: .leading, spacing: 80) {
+                    // Not lazy on the TV: a lazy stack estimates the height of
+                    // collections it hasn't built, and corrects it as they appear —
+                    // focus scrolling made the page jump. Lazy elsewhere: a window
+                    // resize re-laid out every card on the page each frame (the
+                    // Mac's sidebar animation dropped frames), now only those on
+                    // screen. The focus engine does the TV's scrolling.
+                    PageStack(spacing: 80) {
                         // Launch focus goes to the first card on the page: Queue's when it leads.
                         let queueLeads = showsQueue && !app.queue.isEmpty
                         if queueLeads {
@@ -227,5 +229,20 @@ struct FirstFocus: ViewModifier {
     let binding: FocusState<Bool>.Binding?
     func body(content: Content) -> some View {
         if let binding { content.focused(binding) } else { content }
+    }
+}
+
+/// The collections' stack: built in full on the TV, lazily elsewhere (see
+/// CollectionList).
+private struct PageStack<Content: View>: View {
+    let spacing: CGFloat
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if Platform.isTV {
+            VStack(alignment: .leading, spacing: spacing, content: content)
+        } else {
+            LazyVStack(alignment: .leading, spacing: spacing, content: content)
+        }
     }
 }

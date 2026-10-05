@@ -129,10 +129,12 @@ build_for_testing() {
 ui_run() {
   mkdir -p "$OUT"
   stop_sim_apps                                       # clean slate on the simulator
-  # Raw log kept for diagnosis; per-test timeouts so a stall fails fast.
+  # Raw log kept for diagnosis. Each test is cut off at a minute (a stall
+  # fails fast); the whole run at 15 (tiers have grown past 2).
   TEST_RUNNER_PERF_ITERATIONS="${PERF_ITERATIONS:-1}" \
-  capped 120 xcodebuild test-without-building -project Bumper.xcodeproj -scheme Bumper -configuration "$CONFIG" -destination "$DEST" \
+  capped 900 xcodebuild test-without-building -project Bumper.xcodeproj -scheme Bumper -configuration "$CONFIG" -destination "$DEST" \
     -derivedDataPath "$DD/app" -resultBundlePath "$OUT/ui.xcresult" \
+    -test-timeouts-enabled YES -default-test-execution-time-allowance 60 -maximum-test-execution-time-allowance 120 \
     -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" \
     "$@" 2>&1 | tee "$OUT/ui.log" | summarize
   echo "log: $OUT/ui.log   results: $OUT/ui.xcresult"

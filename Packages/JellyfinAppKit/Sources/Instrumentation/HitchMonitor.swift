@@ -1,9 +1,13 @@
-#if canImport(UIKit)
 import os
 import QuartzCore
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
-/// Measures render hitches with a CADisplayLink. A frame that arrives later
+/// Measures render hitches with a CADisplayLink (the Mac's comes from its
+/// screen, macOS 14+). A frame that arrives later
 /// than its target timestamp contributes its lateness to "hitch time"; the
 /// hitch ratio (ms of hitch per second) is Apple's own smoothness metric and is
 /// what we budget against.
@@ -26,7 +30,11 @@ public final class HitchMonitor {
 
     public func start() {
         guard link == nil else { return }
+        #if canImport(UIKit)
         let link = CADisplayLink(target: Proxy(self), selector: #selector(Proxy.tick(_:)))
+        #else
+        guard let link = NSScreen.main?.displayLink(target: Proxy(self), selector: #selector(Proxy.tick(_:))) else { return }
+        #endif
         link.add(to: .main, forMode: .common)
         self.link = link
         isRunning = true
@@ -103,18 +111,3 @@ public final class HitchMonitor {
         }
     }
 }
-#endif
-
-#if os(macOS)
-/// The Mac: no CADisplayLink to watch frames with (yet); the API is here so
-/// shared code needn't care.
-@MainActor
-public final class HitchMonitor {
-    public static let shared = HitchMonitor()
-    public private(set) var isRunning = false
-    public func start() {}
-    public func stop() {}
-    public func noteActivity() {}
-    public func resetTotals() {}
-}
-#endif

@@ -239,9 +239,15 @@ struct MainTabView: View {
             // Tests: `-sidebarToggleTest` closes the sidebar and opens it again.
             guard ProcessInfo.processInfo.arguments.contains("-sidebarToggleTest") else { return }
             try? await Task.sleep(for: .seconds(2))
-            withAnimation { columns = .detailOnly }
-            try? await Task.sleep(for: .seconds(2))
-            withAnimation { columns = .all }
+            // Frames while the sidebar closes and opens (the page reflows with it).
+            Metrics.shared.reset()
+            HitchMonitor.shared.start()
+            HitchMonitor.shared.resetTotals()
+            for visibility in [NavigationSplitViewVisibility.detailOnly, .all, .detailOnly, .all] {
+                withAnimation { columns = visibility }
+                for _ in 0..<10 { HitchMonitor.shared.noteActivity(); try? await Task.sleep(for: .milliseconds(100)) }
+            }
+            Benchmark.traceFrames("sidebar")
         }
     }
     #endif
@@ -294,6 +300,14 @@ struct MainTabView: View {
                 app.pendingTab = nil
             }
             .modifier(SidebarTitle())
+            .overlay(alignment: .top) {
+                if !Platform.isTV && !Platform.isMac {
+                    TopBand { ProfileCluster() }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, Layout.horizontalMargin)
+                        .padding(.top, 4)
+                }
+            }
             .hidesNavigationBar()
         }
         .task { await loadLibraries() }
@@ -344,13 +358,15 @@ struct MainTabView: View {
 }
 
 extension View {
-    /// A tab's page: its width, and (off the Mac, whose toolbar has them) the
-    /// profile corner pinned at its top — part of the page, so focus coming
-    /// back from the TV's sidebar lands in the page, not on the corner first.
+    /// A tab's page: its width, and on the TV the profile corner pinned at
+    /// its top — part of the page, so focus coming back from the sidebar
+    /// lands in the page, not on the corner first. (The iPhone and iPad pin
+    /// it over the tab view, in line with the iPad's floating tab bar; the
+    /// Mac puts it in its toolbar.)
     func tabPage(corner: Bool = true) -> some View {
         readsPageWidth()
             .overlay(alignment: .top) {
-                if corner && !Platform.isMac {
+                if corner && Platform.isTV {
                     TopBand { ProfileCluster() }
                         .fixedSize(horizontal: false, vertical: true)   // the TV's focus guide would take the whole height
                         .padding(.horizontal, Layout.horizontalMargin)

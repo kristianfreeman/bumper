@@ -465,6 +465,14 @@ struct ItemContextMenu: View {
 /// the HUD) so `scripts/benchmark.sh` can collect them.
 @MainActor
 enum Benchmark {
+    /// The frame summary to the trace (the Mac's container can't be read
+    /// from outside; `-traceStderr` carries this out).
+    static func traceFrames(_ what: String) {
+        guard let f = Metrics.shared.summary(.frameTime) else { TraceFile.write("benchmark", "\(what): no frames scored"); return }
+        func ms(_ v: Double) -> String { v.formatted(.number.precision(.fractionLength(1))) }
+        TraceFile.write("benchmark", "\(what): \(f.count) frames, p50 \(ms(f.p50)) ms, p95 \(ms(f.p95)) ms, max \(ms(f.max)) ms")
+    }
+
     static func scroll(through ids: [String], select: (String) -> Void) async {
         try? await Task.sleep(for: .milliseconds(500))  // let launch settle
         Metrics.shared.reset()
@@ -483,6 +491,7 @@ enum Benchmark {
             }
         }
         Perf.logger("benchmark").info("benchmark end: \(Metrics.shared.summary(.frameTime)?.count ?? 0, privacy: .public) frames scored")
+        Self.traceFrames("scroll")
         let json = Metrics.shared.snapshotJSON()
         // To a file: os_log truncates messages past ~1 KB, and the snapshot
         // is bigger than that. scripts/benchmark.sh reads it from the container.

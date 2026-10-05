@@ -86,9 +86,19 @@ nonisolated public struct ArtworkSource: Sendable, Hashable {
         return nil
     }
 
+    static let ladder = [128, 256, 384, 512, 768, 1024, 1536, 2048, 3072]
+
     public func request(client: JellyfinClient, pixelWidth: Int) -> ImageRequest {
-        // Bucket sizes so nearby widths share one server-side resize + cache entry.
+        // Bucket sizes so nearby widths share one server-side resize + cache
+        // entry. The TV's cards never change size: fine steps. Elsewhere a
+        // window resize (the Mac's sidebar opening) changes every card's size
+        // every frame, and fine steps meant every card fetching and decoding
+        // anew mid-animation: a few coarse sizes instead.
+        #if os(tvOS)
         let bucket = max(64, Int((Double(pixelWidth) / 64).rounded(.up)) * 64)
+        #else
+        let bucket = Self.ladder.first { $0 >= pixelWidth } ?? Self.ladder.last!
+        #endif
         return RequestCache.shared.request(for: self, bucket: bucket, client: client)
     }
 }
