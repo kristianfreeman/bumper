@@ -118,31 +118,26 @@ nonisolated struct GridSpec: Hashable, Sendable {
     }
 }
 
-/// BUMPER at the top of the sidebar, not selectable (tvOS 27: there's no
-/// sidebar header before it, and a fake tab would count toward the seven).
-private struct SidebarBrandHeader: ViewModifier {
+/// "Bumper" at the top of the sidebar in plain sidebar-title type, not
+/// selectable (tvOS 27; there's no sidebar header before it, and a fake tab
+/// would count toward the seven). The sidebar's focus leans on there being
+/// a header: without one, Menu and Up from the page stopped reaching it.
+private struct SidebarTitle: ViewModifier {
     func body(content: Content) -> some View {
         if #available(tvOS 27.0, *) {
-            content.tabViewSidebarHeader { SidebarMark() }
+            content.tabViewSidebarHeader {
+                Text(Brand.displayName)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .focusable(false)
+                    .accessibilityIdentifier("sidebar.title")
+            }
         } else {
             content
         }
-    }
-}
-
-/// The word where it fits, the sticker where it doesn't (the collapsed
-/// icon column): still, 38 pt tall, on the sidebar's leading inset.
-private struct SidebarMark: View {
-    @State private var width: CGFloat = 300
-
-    var body: some View {
-        BrandMark(width < 120 ? .symbol : .wordmark, height: 38, still: true)
-            .frame(maxWidth: .infinity, alignment: width < 120 ? .center : .leading)
-            .padding(.horizontal, width < 120 ? 0 : 20)
-            .padding(.vertical, 12)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            .focusable(false)
-            .accessibilityIdentifier("sidebar.brand")
     }
 }
 
@@ -213,13 +208,6 @@ struct MainTabView: View {
     private var macShell: some View {
         NavigationSplitView(columnVisibility: $columns) {
             List(selection: Binding<String?>(get: { selection }, set: { if let s = $0 { selection = s } })) {
-                // Sized to the rows, its left edge on their icons'.
-                BrandMark(.wordmark, height: 15, still: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 2)
-                    .padding(.top, 6)
-                    .padding(.bottom, 8)
-                    .selectionDisabled()
                 ForEach(places) { place in
                     Label(place.title, systemImage: place.icon).tag(place.id)
                 }
@@ -296,7 +284,7 @@ struct MainTabView: View {
                 selection = tab
                 app.pendingTab = nil
             }
-            .modifier(SidebarBrandHeader())
+            .modifier(SidebarTitle())
             // The profile corner, pinned: there on every tab, and pages scroll
             // beneath it. Not on the TV's Search, whose keyboard fills the top.
             .overlay(alignment: .top) {

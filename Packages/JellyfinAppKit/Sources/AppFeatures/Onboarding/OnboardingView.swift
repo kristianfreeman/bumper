@@ -38,17 +38,12 @@ private var thisDevice: String {
 /// same voice as Home and the collection pages.
 private struct OnboardingHeader: View {
     var eyebrow: String? = nil
-    /// The boiling wordmark in place of the eyebrow (the welcome page).
-    var showsMark = false
     let title: String
     let lede: String
     @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if showsMark {
-                BrandMark(.wordmark, height: 84).padding(.bottom, 14)
-            }
             if let eyebrow {
                 Text(eyebrow.uppercased())
                     .font(.caption.weight(.bold)).tracking(2)
@@ -140,8 +135,7 @@ struct ServerConnectView: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 40) {
                 OnboardingHeader(
-                    showsMark: true,
-                    title: "Let's find your library.",
+                    title: "Welcome to \(Brand.displayName)",
                     lede: "\(Brand.displayName) plays straight from your Jellyfin server. It's usually right here on your network — pick it below."
                 )
                 VStack(alignment: .leading, spacing: 18) {
