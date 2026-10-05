@@ -397,29 +397,59 @@ extension JellyfinClient {
     }
 }
 
-// MARK: - Subtitles
+// MARK: - Subtitle search (the server's subtitle providers, e.g. the OpenSubtitles plugin)
 
-extension JellyfinClient {
-    /// Saves a subtitle file on the server, beside the video, so every app
-    /// sees it. Needs the user to be allowed to manage subtitles (403 if not).
-    public func uploadSubtitle(itemId: String, language: String, format: String, data: Data, hearingImpaired: Bool = false) async throws {
-        struct Body: Encodable {
-            let Language: String, Format: String, IsForced: Bool, IsHearingImpaired: Bool, Data: String
-        }
-        let body = Body(Language: language, Format: format, IsForced: false, IsHearingImpaired: hearingImpaired, Data: data.base64EncodedString())
-        try await send(Request<Void>(.post, "/Videos/\(itemId)/Subtitles", body: try JSONEncoder().encode(body)))
+/// A subtitle the server's providers found (`RemoteSubtitleInfo`).
+public struct RemoteSubtitle: Codable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var providerName: String?
+    public var name: String?
+    public var format: String?
+    public var author: String?
+    public var comment: String?
+    public var communityRating: Double?
+    public var frameRate: Double?
+    public var downloadCount: Int?
+    public var isHashMatch: Bool?
+    public var aiTranslated: Bool?
+    public var machineTranslated: Bool?
+    public var forced: Bool?
+    public var hearingImpaired: Bool?
+    public var threeLetterISOLanguageName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id", providerName = "ProviderName", name = "Name", format = "Format", author = "Author", comment = "Comment"
+        case communityRating = "CommunityRating", frameRate = "FrameRate", downloadCount = "DownloadCount", isHashMatch = "IsHashMatch"
+        case aiTranslated = "AiTranslated", machineTranslated = "MachineTranslated", forced = "Forced", hearingImpaired = "HearingImpaired"
+        case threeLetterISOLanguageName = "ThreeLetterISOLanguageName"
     }
 
-    /// Bytes of the original file (a range request on the static stream).
-    public func fileBytes(itemId: String, mediaSourceId: String, container: String?, from start: Int64, count: Int) async throws -> Data {
-        var request = URLRequest(url: directStreamURL(itemId: itemId, mediaSourceId: mediaSourceId, container: container, playSessionId: nil))
-        request.setValue("bytes=\(start)-\(start + Int64(count) - 1)", forHTTPHeaderField: "Range")
-        request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 8
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 206 || (http.statusCode == 200 && start == 0) else {
-            throw JellyfinError.transport("No range support")
-        }
-        return data.prefix(count)
+    public init(id: String, providerName: String? = nil, name: String? = nil, format: String? = nil, frameRate: Double? = nil,
+                downloadCount: Int? = nil, isHashMatch: Bool? = nil, hearingImpaired: Bool? = nil, threeLetterISOLanguageName: String? = nil) {
+        self.id = id
+        self.providerName = providerName
+        self.name = name
+        self.format = format
+        self.frameRate = frameRate
+        self.downloadCount = downloadCount
+        self.isHashMatch = isHashMatch
+        self.hearingImpaired = hearingImpaired
+        self.threeLetterISOLanguageName = threeLetterISOLanguageName
+    }
+}
+
+extension JellyfinClient {
+    /// Searches the server's subtitle providers (needs one installed, e.g.
+    /// the OpenSubtitles plugin, and the user allowed to manage subtitles).
+    /// `language`: ISO 639-2 ("eng").
+    public func remoteSubtitles(itemId: String, language: String) async throws -> [RemoteSubtitle] {
+        try await send(Request(.get, "/Items/\(itemId)/RemoteSearch/Subtitles/\(language)", timeout: 30))
+    }
+
+    /// Has the server download one, beside the video; it appears as a new
+    /// external subtitle stream on the item.
+    public func downloadRemoteSubtitle(itemId: String, subtitleId: String) async throws {
+        let id = subtitleId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? subtitleId
+        try await send(Request<Void>(.post, "/Items/\(itemId)/RemoteSearch/Subtitles/\(id)"))
     }
 }

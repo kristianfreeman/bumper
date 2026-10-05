@@ -10,51 +10,44 @@ function memoryKV(): KVNamespace {
   } as unknown as KVNamespace;
 }
 
-const c = (fileId: number, over: Partial<Candidate> = {}): Candidate =>
-  ({ fileId, language: "en", release: "Movie.2012.1080p.BluRay.x264-SPARKS", fps: 23.976, downloads: 100, hearingImpaired: false, machineTranslated: false, trusted: false, hashMatch: false, ...over });
+const file = { title: "Movie", year: 2012, fileName: "Movie.2012.1080p.BluRay.x264-SPARKS.mkv", fps: 23.976 };
+const c = (id: string, over: Partial<Candidate> = {}): Candidate => ({ id, name: "Movie.2012.1080p.BluRay.x264-SPARKS", fps: 23.976, downloads: 100, ...over });
 
 describe("ranking", () => {
-  const req = { title: "Movie", year: 2012, languages: ["en"], fileName: "Movie.2012.1080p.BluRay.x264-SPARKS.mkv", fps: 23.976 };
-
   it("trusts a hash match, and marks down the wrong frame rate and machine translation", () => {
-    const ranked = rank(req, [c(1, { release: "Movie.2012.WEB-OTHER", fps: 25, downloads: 9000 }), c(2, { hashMatch: true, downloads: 5 }), c(3, { machineTranslated: true })], null);
-    expect(ranked[0]!.fileId).toBe(2);
-    expect(ranked[0]!.confidence).toBeGreaterThanOrEqual(0.97);
-    expect(ranked[0]!.reasons[0]).toBe("Made for this exact file");
-    const wrongFps = ranked.find((r) => r.fileId === 1)!;
-    expect(wrongFps.reasons).toContain("Made for 25 fps");
+    const ranked = rank(file, [c("a", { name: "Movie.2012.WEB-OTHER", fps: 25, downloads: 9000 }), c("b", { hashMatch: true, downloads: 5 }), c("c", { machineTranslated: true })], null);
+    expect(ranked[0]).toMatchObject({ id: "b", reasons: ["Made for this exact file", "Same release group (SPARKS)", "Frame rate matches"] });
+    expect(ranked.find((r) => r.id === "a")!.reasons).toContain("Made for 25 fps");
   });
 
   it("uses Jev's probabilities when it answered", () => {
-    const ranked = rank(req, [c(1), c(2, { release: "Movie.2012.720p-OTHER" })], { "1": 0.2, "2": 0.8 });
-    expect(ranked.map((r) => r.fileId)).toEqual([2, 1]);
+    const ranked = rank(file, [c("a"), c("b", { name: "Movie.2012.720p-OTHER" })], { a: 0.2, b: 0.8 });
+    expect(ranked.map((r) => r.id)).toEqual(["b", "a"]);
     expect(ranked[0]!.confidence).toBe(0.8);
   });
 });
 
-describe("worker /v1/subtitles", () => {
-  const env = (): Env => ({ INTENTS: memoryKV(), SEARCH_ENABLED: "true", SUBTITLES_MODE: "stub", JEV_MODE: "stub" });
-  const post = (path: string, body: unknown) => new Request(`https://search.local${path}`, { method: "POST", body: JSON.stringify(body) });
+describe("worker /v1/subtitles/rank", () => {
+  const post = (body: unknown) => new Request("https://search.local/v1/subtitles/rank", { method: "POST", body: JSON.stringify(body) });
 
-  it("searches, ranks, caches; downloads once then from KV", async () => {
-    const e = env();
-    const search = { title: "Movie", year: 2012, languages: ["en"], fileName: "Movie.2012.1080p.BluRay.x264-SPARKS.mkv", fps: 23.976 };
-    const first = await (await worker.fetch(post("/v1/subtitles/search", search), e)).json() as { results: Array<{ fileId: number; confidence: number; reasons: string[] }>; source: string };
-    expect(first.source).toMatch(/^stub/);
-    expect(first.results[0]!.reasons).toContain("Same release group (SPARKS)");
-    const again = await (await worker.fetch(post("/v1/subtitles/search", search), e)).json() as { source: string };
-    expect(again.source).toMatch(/^cache/);
-
-    const file = await worker.fetch(post("/v1/subtitles/download", { fileId: first.results[0]!.fileId }), e);
-    expect(file.headers.get("X-Source")).toBe("stub");
-    expect(await file.text()).toContain("00:00:01,000 --> 00:00:04,000");
-    const cached = await worker.fetch(post("/v1/subtitles/download", { fileId: first.results[0]!.fileId }), e);
-    expect(cached.headers.get("X-Source")).toBe("cache");
+  it("asks Jev once per file and candidate set, then answers from KV", async () => {
+    const env: Env = { INTENTS: memoryKV(), SEARCH_ENABLED: "true", TYPESAFE_API_KEY: "k" };
+    const jev = vi.fn(async () => new Response(JSON.stringify({ answers: { fit: { type: "choice", choice: "c1", confidence: 0.9, probabilities: { c0: 0.1, c1: 0.9 } } } })));
+    vi.stubGlobal("fetch", jev);
+    const body = { file, candidates: [c("x"), c("y", { name: "Movie.2012.1080p.BluRay.x264-SPARKS.EXTENDED" })] };
+    const first = await (await worker.fetch(post(body), env)).json() as { results: Array<{ id: string; confidence: number }>; source: string };
+    expect(first.source).toBe("jev");
+    expect(first.results[0]).toMatchObject({ id: "y", confidence: 0.9 });
+    const again = await (await worker.fetch(post(body), env)).json() as { source: string };
+    expect(again.source).toBe("cache");
+    expect(jev).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
-  it("says it's off without an OpenSubtitles key", async () => {
-    const head = new Request("https://search.local/v1/subtitles/search", { method: "HEAD" });
+  it("health: 204 with Jev, 503 without; rejects junk", async () => {
+    const head = new Request("https://search.local/v1/subtitles/rank", { method: "HEAD" });
+    expect((await worker.fetch(head, { INTENTS: memoryKV(), SEARCH_ENABLED: "true", TYPESAFE_API_KEY: "k" })).status).toBe(204);
     expect((await worker.fetch(head, { INTENTS: memoryKV(), SEARCH_ENABLED: "true" })).status).toBe(503);
-    expect((await worker.fetch(head, env())).status).toBe(204);
+    expect((await worker.fetch(post({ file }), { INTENTS: memoryKV(), SEARCH_ENABLED: "true", JEV_MODE: "stub" })).status).toBe(400);
   });
 });

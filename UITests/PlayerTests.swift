@@ -44,18 +44,11 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 2), "Subtitle didn't come back")
     }
 
-    /// Subtitles → Find Subtitles → the best match, in use at once. Against
-    /// the search service running locally in stub mode (scripts/test.sh
-    /// search); skipped when it isn't.
+    /// Subtitles → Find Subtitles: the server's subtitle search, best fit
+    /// first (the hash match), and picking it puts it on at once.
     func testFindSubtitlesUsesTheBestMatch() throws {
-        let service = URL(string: "http://localhost:8787/v1/subtitles/search")!
-        var head = URLRequest(url: service); head.httpMethod = "HEAD"; head.timeoutInterval = 2
-        let up = XCTestExpectation(); var reachable = false
-        URLSession.shared.dataTask(with: head) { _, r, _ in reachable = (r as? HTTPURLResponse)?.statusCode == 204; up.fulfill() }.resume()
-        wait(for: [up], timeout: 3)
-        guard reachable else { throw XCTSkip("the search service isn't running (scripts/test.sh search starts it)") }
-
-        let app = launchPlaying(1, extra: ["-searchEndpoint", "http://localhost:8787/v1/interpret"])
+        // The mock server's subtitle search; no ranking service (the device judges).
+        let app = launchPlaying(1, extra: ["-searchEndpoint", "http://localhost:9/v1/interpret"])
         let status = app.staticTexts["player.subtitles"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         let remote = XCUIRemote.shared
@@ -76,7 +69,7 @@ final class PlayerTests: XCTestCase {
         for _ in 0..<8 where !find.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.25) }
         XCTAssertTrue(find.hasFocus, "couldn't reach Find Subtitles")
         remote.press(.select)
-        let best = app.buttons["option.found-1001"]
+        let best = app.buttons["option.found-os-1001"]
         XCTAssertTrue(best.waitForExistence(timeout: 8), "no results")
         XCTAssertTrue(waitForFocus(best, timeout: 2), "focus didn't land on the best match")
         XCTAssertTrue(best.label.contains("Best match"), "first result isn't marked: \(best.label)")

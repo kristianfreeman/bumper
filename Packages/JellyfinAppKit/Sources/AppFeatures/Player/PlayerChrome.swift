@@ -318,9 +318,9 @@ private struct FoundSubtitles: View {
             ScrollView {
                 VStack(spacing: 4) {
                     ForEach(Array(found.enumerated()), id: \.element.id) { i, sub in
-                        OptionRow(title: sub.release.isEmpty ? "Subtitle \(sub.fileId)" : sub.release,
-                                  detail: Self.detail(sub, best: i == 0), selected: controller.foundSubtitle?.fileId == sub.fileId,
-                                  id: "found-\(sub.fileId)", focus: focus) {
+                        OptionRow(title: sub.name,
+                                  detail: Self.detail(sub, best: i == 0), selected: controller.foundSubtitle?.id == sub.id,
+                                  id: "found-\(sub.id)", focus: focus) {
                             Task { await controller.use(sub) }
                             close()
                         }
@@ -336,7 +336,7 @@ private struct FoundSubtitles: View {
 
     /// "Best match · 94% · Same release group (SPARKS)"
     static func detail(_ sub: FoundSubtitle, best: Bool) -> String {
-        ([best ? "Best match" : nil, sub.confidenceText, sub.reasons.first, sub.hearingImpaired ? "SDH" : nil] as [String?])
+        ([best ? "Best match" : nil, sub.confidenceText, sub.reasons.first, sub.remote.hearingImpaired == true ? "SDH" : nil] as [String?])
             .compactMap { $0 }.joined(separator: " · ")
     }
 }
@@ -406,9 +406,9 @@ struct MenuCard: View {
                             }
                         }
                         if let found = controller.foundSubtitle {
-                            OptionRow(title: found.release, detail: "Found · \(found.confidenceText)", selected: true, id: "sub-found", focus: focus) { close() }
+                            OptionRow(title: found.name, detail: "Found · \(found.confidenceText)", selected: true, id: "sub-found", focus: focus) { close() }
                         }
-                        OptionRow(title: "Find Subtitles…", detail: "Search for ones that fit this file", selected: false, id: "sub-find", focus: focus) {
+                        OptionRow(title: "Find Subtitles…", detail: "Your server searches; the best fit comes first", selected: false, id: "sub-find", focus: focus) {
                             Task { await controller.findSubtitles() }
                         }
                     }
@@ -444,7 +444,7 @@ struct MenuCard: View {
         switch menu {
         case .subtitles:
             switch controller.subtitleSearch {
-            case .results(let found): .option(found.first.map { "found-\($0.fileId)" } ?? "sub-back")
+            case .results(let found): .option(found.first.map { "found-\($0.id)" } ?? "sub-back")
             case .searching: .option("sub-searching")
             case .failed: .option("sub-back")
             case .idle: .option(controller.foundSubtitle != nil ? "sub-found" : controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")

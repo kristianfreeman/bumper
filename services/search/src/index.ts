@@ -1,7 +1,7 @@
 import { normalize } from "./normalize";
 import { ask, stubAnswers, toIntent } from "./jev";
 import type { Intent, Response } from "./intent";
-import { download, search, type SearchRequest, type SubtitleEnv } from "./subtitles";
+import { LIMITS, rankRequest, type Candidate, type FileInfo, type SubtitleEnv } from "./subtitles";
 
 export interface Env extends SubtitleEnv {
   INTENTS: KVNamespace;
@@ -59,31 +59,25 @@ export default {
   },
 };
 
-/// POST /v1/subtitles/search (SearchRequest → ranked candidates),
-/// POST /v1/subtitles/download {"fileId": n} → the SRT. HEAD on either: 204
-/// when OpenSubtitles is configured (or stubbed).
+/// POST /v1/subtitles/rank {"file": FileInfo, "candidates": [Candidate]} →
+/// {"results": [{id, confidence, reasons}], "source"}. HEAD: 204 when Jev
+/// can answer (or in stub mode). Only this one fixed question, with capped
+/// sizes: the Jev key isn't useful for anything else through here.
 async function subtitles(path: string, request: Request, env: Env): Promise<globalThis.Response> {
-  const ready = env.SUBTITLES_MODE === "stub" || !!env.OPENSUBTITLES_API_KEY;
+  if (path !== "/v1/subtitles/rank") return new globalThis.Response("Not found", { status: 404 });
+  const ready = env.JEV_MODE === "stub" || !!env.TYPESAFE_API_KEY;
   if (request.method === "HEAD") return new globalThis.Response(null, { status: ready ? 204 : 503 });
-  if (!ready) return new globalThis.Response(null, { status: 503 });
   if (request.method !== "POST") return new globalThis.Response(null, { status: 405 });
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const body = (await request.json().catch(() => ({}))) as { file?: FileInfo; candidates?: Candidate[] };
+  if (!body.file || typeof body.file.title !== "string" || !Array.isArray(body.candidates) || body.candidates.length === 0) {
+    return json({ error: "file and candidates" }, 400);
+  }
+  if (body.candidates.length > LIMITS.candidates * 2) return json({ error: "too many candidates" }, 413);
   try {
-    if (path === "/v1/subtitles/search") {
-      const req = body as unknown as SearchRequest;
-      if (typeof req.title !== "string" || !Array.isArray(req.languages) || req.languages.length === 0) return json({ error: "title and languages" }, 400);
-      return json(await search(req, env));
-    }
-    if (path === "/v1/subtitles/download") {
-      const fileId = Number(body.fileId);
-      if (!Number.isFinite(fileId)) return json({ error: "fileId" }, 400);
-      const { text, source } = await download(fileId, env);
-      return new globalThis.Response(text, { headers: { "Content-Type": "application/x-subrip; charset=utf-8", "X-Source": source } });
-    }
+    return json(await rankRequest({ ...body.file, title: body.file.title.slice(0, LIMITS.text), fileName: body.file.fileName?.slice(0, LIMITS.text) }, body.candidates, env));
   } catch (error) {
     return json({ error: String(error) }, 502);
   }
-  return new globalThis.Response("Not found", { status: 404 });
 }
 
 function json(value: unknown, status = 200): globalThis.Response {

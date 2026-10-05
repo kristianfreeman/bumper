@@ -21,6 +21,23 @@ public struct MockMediaFixture: Codable, Sendable {
 
 public enum MockMedia {
     public static let viewId = "view-testmedia"
+    /// Item id → the remote subtitles the "server" has downloaded for it.
+    static let downloadedSubtitles = Mutex<[String: [String]]>([:])
+
+    /// What the server's subtitle providers "find" (the OpenSubtitles plugin's shape).
+    static func remoteSubtitles(itemId: String) -> [RemoteSubtitle] {
+        guard itemId.hasPrefix("media-") else { return [] }
+        return [
+            RemoteSubtitle(id: "os-1001", providerName: "Open Subtitles", name: "Clip.2024.1080p.WEB-DL.H264-BUMPER", format: "srt", frameRate: 23.976, downloadCount: 4200, isHashMatch: true, threeLetterISOLanguageName: "eng"),
+            RemoteSubtitle(id: "os-1002", providerName: "Open Subtitles", name: "Clip.2024.720p.HDTV.x264-OTHER", format: "srt", frameRate: 25, downloadCount: 9100, threeLetterISOLanguageName: "eng"),
+            RemoteSubtitle(id: "os-1003", providerName: "Open Subtitles", name: "Clip (SDH)", format: "srt", downloadCount: 1300, hearingImpaired: true, threeLetterISOLanguageName: "eng"),
+        ]
+    }
+
+    /// A downloaded subtitle's file.
+    static func subtitleFile() -> Data {
+        Data("1\n00:00:00,500 --> 00:00:04,500\nA subtitle the server found.\n\n2\n00:00:05,000 --> 00:00:09,000\nStill in sync.\n".utf8)
+    }
     private static let state = Mutex<(URL?, [MockMediaFixture])>((nil, []))
 
     /// Media served by another machine (`mock-media-server` on the Mac):
@@ -133,6 +150,17 @@ public enum MockMedia {
             s.displayTitle = sub.title
             s.language = sub.language
             s.isTextSubtitleStream = !["pgssub", "dvdsub"].contains(sub.codec)
+            streams.append(s)
+            index += 1
+        }
+        // Subtitles "downloaded" through the server's subtitle search.
+        for remote in downloadedSubtitles.withLock({ $0["media-\(i)"] ?? [] }) {
+            var s = MediaStream(index: index, type: .subtitle, codec: "subrip")
+            s.displayTitle = "English (\(remote))"
+            s.language = "eng"
+            s.isExternal = true
+            s.isTextSubtitleStream = true
+            s.deliveryUrl = "/Videos/media-\(i)/media-\(i)/Subtitles/\(index)/0/Stream.srt"
             streams.append(s)
             index += 1
         }

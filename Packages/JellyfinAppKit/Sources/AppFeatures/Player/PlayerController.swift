@@ -21,7 +21,7 @@ final class PlayerController {
 
     private(set) var phase: Phase = .preparing
     private(set) var engine: (any PlayerEngine)?
-    private(set) var plan: PlaybackPlan?
+    var plan: PlaybackPlan?
     private(set) var segments: [MediaSegment] = []
     private(set) var activeSegment: MediaSegment?
     private(set) var nextEpisode: BaseItem?
