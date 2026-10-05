@@ -18,7 +18,13 @@ struct DownloadPill: View {
             Group {
                 switch record?.state {
                 case nil:
-                    Pill("Download", systemImage: "arrow.down.circle") { store.download([item], client: session.client, accountId: session.account.id) }
+                    Pill("Download", systemImage: "arrow.down.circle") { start(store, session, app.defaultDownloadPreset) }
+                        // Any other size: long-press (iPhone, iPad) or right-click (Mac).
+                        .contextMenu {
+                            ForEach(DownloadPreset.allCases) { preset in
+                                Button("\(preset.title) · \(preset.perHour)") { start(store, session, preset) }
+                            }
+                        }
                 case .queued?:
                     Pill("Waiting to Download", systemImage: "clock", active: true) { store.pause(item.id) }
                 case .downloading?, .finishing?:
@@ -42,6 +48,12 @@ struct DownloadPill: View {
     }
 }
 
+extension DownloadPill {
+    private func start(_ store: DownloadStore, _ session: UserSession, _ preset: DownloadPreset) {
+        store.download([item], client: session.client, accountId: session.account.id, quality: preset.quality)
+    }
+}
+
 /// A season's: Download Season → 3 of 10 → Season Downloaded (offers removal).
 struct SeasonDownloadPill: View {
     let seriesId: String
@@ -61,7 +73,14 @@ struct SeasonDownloadPill: View {
                     Pill("Downloading \(summary.done) of \(summary.total)", systemImage: "arrow.down.circle", active: true) {}
                 } else {
                     Pill("Download \(seasonName)", systemImage: "arrow.down.circle") {
-                        store.download(episodes, client: session.client, accountId: session.account.id)
+                        store.download(episodes, client: session.client, accountId: session.account.id, quality: app.defaultDownloadPreset.quality)
+                    }
+                    .contextMenu {
+                        ForEach(DownloadPreset.allCases) { preset in
+                            Button("\(preset.title) · \(preset.perHour)") {
+                                store.download(episodes, client: session.client, accountId: session.account.id, quality: preset.quality)
+                            }
+                        }
                     }
                 }
             }

@@ -10,7 +10,10 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
         case failed(String)
     }
     public enum Quality: Codable, Sendable, Hashable {
+        /// The file as stored on the server.
         case original
+        /// Converted by the server first: smaller, and always AVPlayer's.
+        case transcoded(maxHeight: Int, bitrate: Int)
     }
     /// A piece of the file: its byte range (nil: the whole file, when the
     /// server can't do ranges), and how far it's got.
@@ -43,9 +46,50 @@ public struct DownloadRecord: Codable, Sendable, Identifiable, Hashable {
     public var subtitles: [String: String]?
 
     public var received: Int64 { pieces.reduce(0) { $0 + ($1.file != nil ? ($1.length ?? $1.received) : $1.received) } }
-    public var progress: Double? { size.map { $0 > 0 ? min(1, Double(received) / Double($0)) : 0 } }
+    /// A transcode's size isn't known until it's done: bitrate × length.
+    public var estimatedSize: Int64? {
+        guard case .transcoded(_, let bitrate) = quality, let ticks = item.runTimeTicks else { return nil }
+        return Int64(Double(bitrate) / 8 * Double(ticks) / Double(BaseItem.ticksPerSecond))
+    }
+    public var progress: Double? {
+        (size ?? estimatedSize).map { $0 > 0 ? min(isDone ? 1 : 0.99, Double(received) / Double($0)) : 0 }
+    }
     public var isDone: Bool { state == .done }
     public var isActive: Bool { state == .queued || state == .downloading || state == .finishing }
+}
+
+/// The choices a download offers, Original first.
+public enum DownloadPreset: String, CaseIterable, Sendable, Identifiable {
+    case original, high, medium, small
+    public var id: String { rawValue }
+
+    public var quality: DownloadRecord.Quality {
+        switch self {
+        case .original: .original
+        case .high: .transcoded(maxHeight: 1080, bitrate: 10_000_000)
+        case .medium: .transcoded(maxHeight: 720, bitrate: 4_000_000)
+        case .small: .transcoded(maxHeight: 480, bitrate: 1_500_000)
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .original: "Original"
+        case .high: "High (1080p)"
+        case .medium: "Medium (720p)"
+        case .small: "Small (480p)"
+        }
+    }
+
+    /// Roughly how much an hour takes.
+    public var perHour: String {
+        switch self {
+        case .original: "as stored"
+        case .high: "about 4.5 GB an hour"
+        case .medium: "about 1.8 GB an hour"
+        case .small: "about 700 MB an hour"
+        }
+    }
 }
 
 /// Every download on this device: films and episodes, kept with the item
@@ -172,11 +216,11 @@ public final class DownloadStore {
     // MARK: Downloading
 
     /// Downloads films and episodes (a series or season: pass its episodes).
-    public func download(_ items: [BaseItem], client: JellyfinClient, accountId: String) {
+    public func download(_ items: [BaseItem], client: JellyfinClient, accountId: String, quality: DownloadRecord.Quality = .original) {
         clients[accountId] = client
         for item in items where records[item.id] == nil && item.kind.isPlayable {
             records[item.id] = DownloadRecord(id: item.id, item: item, mediaSourceId: item.mediaSources?.first?.id, accountId: accountId,
-                                              quality: .original, state: .queued, size: nil, pieces: [], file: nil, addedAt: .now)
+                                              quality: quality, state: .queued, size: nil, pieces: [], file: nil, addedAt: .now)
         }
         save()
         for item in items { if let r = records[item.id] { writeItemManifest(r) } }
@@ -235,13 +279,20 @@ public final class DownloadStore {
         guard var r = records[id], let client = clients[r.accountId] else { return }
         r.state = .downloading
         records[id] = r
-        let url = client.downloadURL(itemId: id)
         if r.item.mediaSources?.isEmpty ?? true, let full = try? await client.item(id: id) {
             // A card's item has no media sources: the snapshot needs them to play offline.
             r.item = full
             r.mediaSourceId = full.mediaSources?.first?.id
             records[id]?.item = full
             records[id]?.mediaSourceId = r.mediaSourceId
+        }
+        let url = Self.url(for: r, client: client)
+        if r.pieces.isEmpty, case .transcoded = r.quality {
+            // Made as it's fetched: no size, no ranges — one piece, start to end.
+            r.pieces = [DownloadRecord.Piece(range: nil)]
+            r.file = "\(id)/media.mp4"
+            records[id] = r
+            TraceFile.write("downloads", "\(r.item.name ?? id): transcoding, about \(r.estimatedSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?")")
         }
         if r.pieces.isEmpty {
             // How big, and can it come in pieces?
@@ -341,7 +392,7 @@ public final class DownloadStore {
             if r.pieces.allSatisfy({ $0.file != nil }) {
                 Task { await finish(id) }
             } else if let client = clients[r.accountId] {
-                fill(id, url: client.downloadURL(itemId: id))
+                fill(id, url: Self.url(for: r, client: client))
             }
             save()
         case .failed(let id, let piece, let resumeData, let message):
@@ -383,6 +434,7 @@ public final class DownloadStore {
         }.value
         guard var done = records[id] else { return }
         if joined {
+            if case .transcoded(let height, _) = done.quality { done.item = Self.describingTranscode(done.item, mediaSourceId: done.mediaSourceId, maxHeight: height) }
             done.state = .done
             done.size = (try? base.appending(path: file).resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? done.size
             done.pieces = done.pieces.map { var p = $0; p.file = nil; p.resumeData = nil; p.received = p.length ?? p.received; return p }
@@ -403,9 +455,49 @@ public final class DownloadStore {
         for (id, r) in records where r.state == .downloading || r.state == .finishing {
             if r.pieces.allSatisfy({ $0.file != nil }) { await finish(id); continue }
             inFlightPieces[id] = Set(r.pieces.indices.filter { running.contains("\(id)|\($0)") })
-            if let client = clients[r.accountId] { fill(id, url: client.downloadURL(itemId: id)) }
+            if let client = clients[r.accountId] { fill(id, url: Self.url(for: r, client: client)) }
         }
         await advance()
+    }
+
+    /// Where a download's bytes come from.
+    static func url(for r: DownloadRecord, client: JellyfinClient) -> URL {
+        switch r.quality {
+        case .original: client.downloadURL(itemId: r.id)
+        case .transcoded(let height, let bitrate):
+            client.transcodedDownloadURL(itemId: r.id, mediaSourceId: r.mediaSourceId, maxHeight: height, bitrate: bitrate,
+                                         audioStreamIndex: r.item.mediaSources?.first { $0.id == r.mediaSourceId }?.defaultAudioStreamIndex)
+        }
+    }
+
+    /// The item as its transcode is: MP4, H.264, one stereo AAC track, text
+    /// subtitles only (saved beside it) — so the player picks AVPlayer and
+    /// offers what's there.
+    static func describingTranscode(_ item: BaseItem, mediaSourceId: String?, maxHeight: Int) -> BaseItem {
+        var item = item
+        guard var source = item.mediaSources?.first(where: { $0.id == mediaSourceId }) ?? item.mediaSources?.first else { return item }
+        let streams = source.mediaStreams ?? []
+        var out: [MediaStream] = []
+        if var video = streams.first(where: { $0.type == .video }) {
+            video.codec = "h264"
+            if let h = video.height, h > maxHeight, let w = video.width { video.width = w * maxHeight / h; video.height = maxHeight }
+            video.bitDepth = 8
+            video.videoRange = "SDR"
+            out.append(video)
+        }
+        if var audio = streams.first(where: { $0.type == .audio && $0.index == source.defaultAudioStreamIndex }) ?? streams.first(where: { $0.type == .audio }) {
+            audio.codec = "aac"
+            audio.channels = 2
+            out.append(audio)
+            source.defaultAudioStreamIndex = audio.index
+        }
+        // Saved beside it as WebVTT (what AVPlayer's overlay reads).
+        out += streams.filter { $0.type == .subtitle && $0.isTextSubtitleStream == true }.map { var s = $0; s.isExternal = true; s.codec = "webvtt"; return s }
+        source.mediaStreams = out
+        source.container = "mp4"
+        source.supportsDirectPlay = true
+        item.mediaSources = [source]
+        return item
     }
 
     // MARK: Pieces

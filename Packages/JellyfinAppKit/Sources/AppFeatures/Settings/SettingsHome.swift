@@ -160,6 +160,8 @@ struct SettingsView: View {
                   "\(DownloadWords.bytes(store.bytesUsed)) on this \(DownloadWords.device)\(store.freeBytes.map { ", \(DownloadWords.bytes($0)) free" } ?? ""). Remove a show, a season or an episode there.",
                   value: count == 0 ? "None" : String(count)) { navigate(.downloads) },
         ]
+        tiles.append(.choice("downloadQuality", "Download Quality", "dial.medium", "What Download does. Long-press (or right-click) Download for another size.",
+                             options: DownloadPreset.allCases.map { ($0.rawValue, $0.title) }, current: settings.downloadQuality) { settings.downloadQuality = $0 })
         if Layout.device == .phone || Layout.device == .pad {
             tiles.append(.toggle("cellular", "Download on Cellular", "antenna.radiowaves.left.and.right", "Off: downloads wait for Wi-Fi.",
                                  Binding(get: { settings.downloadsOverCellular }, set: { settings.downloadsOverCellular = $0; store.allowsCellular = $0 })))

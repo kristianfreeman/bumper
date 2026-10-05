@@ -58,6 +58,15 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
            let media = MockMedia.stream(itemId: String(parts[1]), range: request.value(forHTTPHeaderField: "Range")) {
             return media
         }
+        // A transcode of a catalog item (static=false): stand-in bytes, sent
+        // as the real server sends a transcode — no length, no ranges.
+        if parts.count >= 3, parts[0] == "Videos", parts[2].hasPrefix("stream"),
+           request.url?.query?.lowercased().contains("static=false") == true {
+            var r = MockMedia.download(itemId: String(parts[1]), range: nil)
+            r.2["Content-Length"] = nil
+            r.2["Accept-Ranges"] = nil
+            return r
+        }
         // Downloads: a test clip's own file, or (any other item) stand-in
         // bytes, both with byte ranges like the real server.
         if parts.count == 3, parts[0] == "Items", parts[2] == "Download" {

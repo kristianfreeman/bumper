@@ -118,12 +118,15 @@ public final class AppSettings {
     public var hideSpoilers: Bool { didSet { save(hideSpoilers, "browse.hideSpoilers") } }
     /// iPhone/iPad: downloads may use cellular data (off: Wi-Fi only).
     public var downloadsOverCellular: Bool { didSet { save(downloadsOverCellular, "downloads.cellular") } }
+    /// What Download does without asking ("original", "high", "medium", "small").
+    public var downloadQuality: String { didSet { save(downloadQuality, "downloads.quality") } }
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         enginePreference = EnginePreference(rawValue: defaults.string(forKey: "playback.engine") ?? "") ?? .automatic
         maxBitrate = defaults.object(forKey: "playback.maxBitrate") as? Int
         downloadsOverCellular = defaults.object(forKey: "downloads.cellular") as? Bool ?? false
+        downloadQuality = defaults.string(forKey: "downloads.quality") ?? "original"
         matchContent = defaults.object(forKey: "playback.matchContent") as? Bool ?? true
         preferPassthrough = defaults.object(forKey: "playback.passthrough") as? Bool ?? true
         subtitleMode = SubtitleMode(rawValue: defaults.string(forKey: "subtitles.mode") ?? "") ?? .always

@@ -355,6 +355,27 @@ extension JellyfinClient {
     }
 
     /// Server-relative URLs returned in PlaybackInfo (TranscodingUrl, DeliveryUrl).
+    /// The item converted by the server as it's fetched: H.264 and stereo AAC
+    /// in MP4, at most `maxHeight` lines and `bitrate` bits a second
+    /// (subtitles are fetched separately; the rest are dropped).
+    public func transcodedDownloadURL(itemId: String, mediaSourceId: String?, maxHeight: Int, bitrate: Int, audioStreamIndex: Int?) -> URL {
+        url("/Videos/\(itemId)/stream.mp4", query: [
+            .init(name: "static", value: "false"),
+            .init(name: "mediaSourceId", value: mediaSourceId),
+            .init(name: "deviceId", value: clientInfo.deviceId),
+            .init(name: "container", value: "mp4"),
+            .init(name: "videoCodec", value: "h264"),
+            .init(name: "audioCodec", value: "aac"),
+            .init(name: "maxHeight", value: String(maxHeight)),
+            .init(name: "videoBitRate", value: String(max(200_000, bitrate - 192_000))),
+            .init(name: "audioBitRate", value: "192000"),
+            .init(name: "audioChannels", value: "2"),
+            .init(name: "audioStreamIndex", value: audioStreamIndex.map(String.init)),
+            .init(name: "subtitleMethod", value: "Drop"),
+            .init(name: "api_key", value: accessToken),
+        ])
+    }
+
     /// The item's original file, as stored on the server (byte ranges work).
     public func downloadURL(itemId: String) -> URL {
         url("/Items/\(itemId)/Download", query: [.init(name: "api_key", value: accessToken)])

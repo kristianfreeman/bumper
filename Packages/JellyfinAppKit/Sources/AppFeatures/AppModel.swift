@@ -140,6 +140,8 @@ final class AppModel {
     /// Films and episodes on this device (iPhone, iPad, Mac; tvOS keeps no
     /// files an app can count on).
     let downloads: DownloadStore?
+    /// What Download does without asking (Settings → Storage).
+    var defaultDownloadPreset: DownloadPreset { DownloadPreset(rawValue: settings.downloadQuality) ?? .original }
     /// Watch progress the server didn't get yet (offline), per account.
     var outbox: PlaystateOutbox? { session.map { PlaystateOutbox(defaults: defaults, account: $0.account.id) } }
     var playback: PlaybackRequest?
