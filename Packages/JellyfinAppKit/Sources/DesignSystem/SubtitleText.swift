@@ -12,12 +12,15 @@ public struct SubtitleText: View {
     let style: SubtitleStyle
     let scale: Double
     let font: SubtitleFont
+    /// The size at scale 1: the TV's 46 pt, or (elsewhere) from the picture's height.
+    let baseSize: CGFloat
 
-    public init(_ text: String, style: SubtitleStyle, scale: Double, font: SubtitleFont = .system) {
+    public init(_ text: String, style: SubtitleStyle, scale: Double, font: SubtitleFont = .system, baseSize: CGFloat = 46) {
         self.text = text
         self.style = style
         self.scale = scale
         self.font = font
+        self.baseSize = baseSize
     }
 
     private func face(_ weight: Font.Weight) -> Font {
@@ -25,13 +28,13 @@ public struct SubtitleText: View {
         return .custom(family, size: size).weight(weight)
     }
 
-    private var size: CGFloat { 46 * scale }
+    private var size: CGFloat { baseSize * scale }
 
     public var body: some View {
         styled
             .multilineTextAlignment(.center)
-            .padding(.horizontal, style == .boxed ? 20 : 24)
-            .padding(.vertical, style == .boxed ? 10 : 8)
+            .padding(.horizontal, (style == .boxed ? 20 : 24) * baseSize / 46)
+            .padding(.vertical, (style == .boxed ? 10 : 8) * baseSize / 46)
             .background {
                 if style == .boxed { RoundedRectangle(cornerRadius: 10).fill(.black.opacity(0.72)) }
             }

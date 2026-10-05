@@ -106,15 +106,16 @@ struct TransportBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
-            // Beside each other on the TV, Mac and iPad; stacked on a phone.
-            let layout = Layout.device == .phone ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18)) : AnyLayout(HStackLayout(alignment: .bottom, spacing: 40))
-            layout {
-                VStack(alignment: .leading, spacing: 8) {
+            // Beside each other on the TV, Mac and iPad. A phone: the title
+            // alone, small (its menus sit at the top, by Close).
+            let phone = Layout.device == .phone
+            HStack(alignment: .bottom, spacing: 40) {
+                VStack(alignment: .leading, spacing: phone ? 4 : 8) {
                     if let kicker {
-                        Text(kicker).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                        Text(kicker).font(phone ? .caption.weight(.semibold) : .callout.weight(.semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                     }
                     Text(controller.item.name ?? "")
-                        .font(.system(size: Platform.isTV ? 52 : Layout.pageTitleSmall, weight: .bold))
+                        .font(.system(size: Platform.isTV ? 52 : phone ? 19 : Layout.pageTitleSmall, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -125,13 +126,14 @@ struct TransportBar: View {
                                 if fact.boxed { Badge(fact.text) } else { Text(fact.text) }
                             }
                         }
-                        .font(.callout.weight(.medium))
+                        .font(phone ? .caption.weight(.medium) : .callout.weight(.medium))
                         .foregroundStyle(.white.opacity(0.75))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     }
                 }
-                if Layout.device != .phone { Spacer(minLength: 0) }
+                Spacer(minLength: 0)
+                if !phone {
                 HStack(spacing: 22) {
                     ForEach(PlayerMenu.allCases, id: \.self) { menu in
                         Pill(menu.title, systemImage: menu.symbol + (openMenu == menu || badge(for: menu) ? ".fill" : ""), active: badge(for: menu)) { open(menu) }
@@ -141,8 +143,9 @@ struct TransportBar: View {
                     }
                 }
                 .tvFocusSection()
+                }
             }
-            .padding(.bottom, 50)
+            .padding(.bottom, phone ? 14 : 50)
             .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
             .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
             Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
@@ -151,7 +154,7 @@ struct TransportBar: View {
         }
         .padding(.horizontal, Platform.isTV ? 90 : Layout.horizontalMargin + 8)
         .padding(.top, Platform.isTV ? 60 : 24)
-        .padding(.bottom, Platform.isTV ? 64 : 28)
+        .padding(.bottom, Platform.isTV ? 64 : Layout.device == .phone ? 8 : 28)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
     }

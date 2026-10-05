@@ -11,25 +11,37 @@ struct TouchControls: View {
     let engine: any PlayerEngine
     let close: () -> Void
     let poke: () -> Void
+    /// A phone's menus (subtitles, audio, info) sit up here, by Close.
+    var open: ((PlayerMenu) -> Void)? = nil
+    @Environment(\.verticalSizeClass) private var vertical
 
     private var playing: Bool { engine.status != .paused }
+    /// A phone on its side: less height, so smaller buttons.
+    private var short: Bool { vertical == .compact }
 
     var body: some View {
         ZStack {
             VStack {
-                HStack {
-                    Pill("Close", systemImage: "xmark", size: .regular) { close() }
+                HStack(spacing: 14) {
+                    Pill("Close", systemImage: "xmark", size: Layout.device == .phone ? .small : .regular) { close() }
                         .accessibilityIdentifier("player.close")
                     Spacer()
+                    if let open, Layout.device == .phone {
+                        ForEach(PlayerMenu.allCases, id: \.self) { menu in
+                            Pill(menu.title, systemImage: menu.symbol, size: .small) { open(menu) }
+                                .accessibilityIdentifier("control.\(menu.rawValue)")
+                        }
+                    }
                 }
                 Spacer()
             }
-            .padding(Layout.horizontalMargin)
-            HStack(spacing: Layout.device == .phone ? 44 : 72) {
-                button("gobackward.10", "Back 10 seconds", size: 30) { Task { await controller.skip(by: .seconds(-10)) } }
-                button(playing ? "pause.fill" : "play.fill", playing ? "Pause" : "Play", size: 44) { controller.togglePlayPause() }
+            .padding(.horizontal, Layout.horizontalMargin)
+            .padding(.top, 8)
+            HStack(spacing: Layout.device == .phone ? (short ? 64 : 44) : 72) {
+                button("gobackward.10", "Back 10 seconds", size: short ? 24 : 30) { Task { await controller.skip(by: .seconds(-10)) } }
+                button(playing ? "pause.fill" : "play.fill", playing ? "Pause" : "Play", size: short ? 34 : 44) { controller.togglePlayPause() }
                     .accessibilityIdentifier("player.playPause")
-                button("goforward.30", "Forward 30 seconds", size: 30) { Task { await controller.skip(by: .seconds(30)) } }
+                button("goforward.30", "Forward 30 seconds", size: short ? 24 : 30) { Task { await controller.skip(by: .seconds(30)) } }
             }
         }
     }

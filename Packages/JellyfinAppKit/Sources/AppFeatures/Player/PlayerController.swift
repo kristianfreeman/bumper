@@ -485,6 +485,13 @@ final class PlayerController {
     /// Text cue the player overlays (AVPlayer path); VLCKit draws its own.
     var currentCue: String? { subtitleText }
 
+    /// The picture's width ÷ height: what's decoding, else what the server says.
+    var videoAspect: CGFloat? {
+        if let f = engine?.videoFormat, f.width > 0, f.height > 0 { return CGFloat(f.width) / CGFloat(f.height) }
+        if let v = plan?.mediaSource.videoStream, let w = v.width, let h = v.height, w > 0, h > 0 { return CGFloat(w) / CGFloat(h) }
+        return nil
+    }
+
     /// What's showing, as the backend reports it: the VLCKit track name, or
     /// "WebVTT" for the overlay. (Read by UI tests.)
     var subtitleStatus: String {

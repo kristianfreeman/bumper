@@ -151,6 +151,8 @@ public protocol PlayerEngine: AnyObject, Observable {
     /// nil = off. `external` is the server URL for a sidecar subtitle file.
     /// Backends that don't render subtitles ignore it.
     func selectSubtitle(_ stream: MediaStream?, external: URL?) async
+    /// Fill the screen (cropping the picture's edges) or show all of it.
+    func setFillsScreen(_ fill: Bool)
 }
 
 extension PlayerEngine {

@@ -259,6 +259,10 @@ public final class NativeEngine: PlayerEngine {
     /// WebVTT is overlaid by the player; nothing to do here.
     public func selectSubtitle(_ stream: MediaStream?, external: URL?) async {}
 
+    public func setFillsScreen(_ fill: Bool) {
+        playerLayer.videoGravity = fill ? .resizeAspectFill : .resizeAspect
+    }
+
     public func setVolume(_ volume: Float) { player.volume = volume }
 
     public func stop() {

@@ -385,6 +385,10 @@ public final class VLCEngine: PlayerEngine {
             bitDepth: stream.bitDepth ?? 8, hardwareDecoded: ["h264", "hevc"].contains(codec), dolbyVisionProfile: stream.dvProfile
         )
     }
+
+    public func setFillsScreen(_ fill: Bool) {
+        player.videoFitMode = fill ? .larger : .smaller
+    }
 }
 
 public enum VLCEngineError: Error, LocalizedError {

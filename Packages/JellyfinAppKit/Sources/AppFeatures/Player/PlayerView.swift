@@ -25,6 +25,8 @@ struct PlayerView: View {
     @State private var flash: Flash?
     @State private var hideTask: Task<Void, Never>?
     @State private var thumbTask: Task<Void, Never>?
+    /// Pinched out: the picture fills the screen (iPhone, iPad).
+    @State private var fills = false
     @FocusState private var focus: PlayerFocus?
 
     enum PlayerFocus: Hashable { case surface, skip, control(PlayerMenu), option(String) }
@@ -44,7 +46,8 @@ struct PlayerView: View {
                 VideoSurface(view: engine.videoView).ignoresSafeArea()
             }
             if let controller {
-                SubtitleOverlay(cue: controller.currentCue, scale: app.settings.subtitleScale, style: app.settings.subtitleStyle, font: app.settings.subtitleFont, raised: chromeVisible)
+                SubtitleOverlay(cue: controller.currentCue, scale: app.settings.subtitleScale, style: app.settings.subtitleStyle, font: app.settings.subtitleFont,
+                                raised: chromeVisible, videoAspect: controller.videoAspect)
                 Text(controller.subtitleStatus)                 // invisible; UI tests read it
                     .foregroundStyle(.clear)
                     .accessibilityIdentifier("player.subtitles")
@@ -75,6 +78,10 @@ struct PlayerView: View {
                 .onTapGesture {
                     if openMenu != nil { closeMenu() } else if chromeVisible { chromeVisible = false } else { showChrome() }
                 }
+                // Pinch out to fill the screen, in to see the whole picture.
+                .simultaneousGesture(MagnifyGesture().onEnded { value in
+                    if value.magnification > 1.08 { fills = true } else if value.magnification < 0.92 { fills = false }
+                })
                 #endif
             if let controller {
                 RemoteGestures(transport: controller.transport, active: focus == .surface && openMenu == nil) {
@@ -91,7 +98,7 @@ struct PlayerView: View {
             }
             #if !os(tvOS)
             if chromeVisible, openMenu == nil, let controller, let engine = controller.engine {
-                TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() })
+                TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() }, open: { open($0) })
                     .transition(.opacity)
             }
             #endif
@@ -137,6 +144,9 @@ struct PlayerView: View {
             .onDisappear {
                 if let controller { Task { await controller.stop() } }
             }
+            .onChange(of: fills) { _, fill in controller?.engine?.setFillsScreen(fill) }
+            // A new engine (AVPlayer handing over to VLCKit) keeps the choice.
+            .onChange(of: controller?.engine.map { ObjectIdentifier($0) }) { _, _ in controller?.engine?.setFillsScreen(fills) }
             .onChange(of: controller?.activeSegment?.id) { _, id in
                 if id != nil { focus = .skip } else if focus == .skip { focus = .surface }
             }
@@ -373,19 +383,50 @@ struct SubtitleOverlay: View {
     var style: SubtitleStyle = .classic
     var font: SubtitleFont = .system
     let raised: Bool
+    /// Width ÷ height of the picture (nil: not known yet — the whole screen).
+    var videoAspect: CGFloat? = nil
 
     var body: some View {
         GeometryReader { geo in
             if let cue {
-                SubtitleText(cue, style: style, scale: scale, font: font)
-                    .frame(maxWidth: geo.size.width * 0.8)
-                    .position(x: geo.size.width / 2, y: geo.size.height - (raised ? 300 : 110))
-                    .accessibilityIdentifier("subtitle.text")
+                if Platform.isTV {
+                    SubtitleText(cue, style: style, scale: scale, font: font)
+                        .frame(maxWidth: geo.size.width * 0.8)
+                        .position(x: geo.size.width / 2, y: geo.size.height - (raised ? 300 : 110))
+                        .accessibilityIdentifier("subtitle.text")
+                } else {
+                    // On the picture, not the screen: in portrait the picture is
+                    // a band across the middle, and the words sat far below it.
+                    // Sized from the picture too (the TV's 46 pt was enormous on
+                    // a phone), and clear of the controls when they're up.
+                    let rect = Self.picture(in: geo.size, aspect: videoAspect)
+                    let base = max(15, min(40, rect.height * 0.05))
+                    let bottom = min(rect.maxY - rect.height * 0.06, geo.size.height - (raised ? Self.controlsHeight : 20))
+                    SubtitleText(cue, style: style, scale: scale, font: font, baseSize: base)
+                        .frame(maxWidth: rect.width * 0.88)
+                        .frame(width: geo.size.width, height: max(0, bottom), alignment: .bottom)
+                        .position(x: rect.midX, y: max(0, bottom) / 2)
+                        .accessibilityIdentifier("subtitle.text")
+                }
             }
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(nil, value: cue)
+    }
+}
+
+extension SubtitleOverlay {
+    /// The title and timeline at the bottom when the controls are up (off the TV).
+    static var controlsHeight: CGFloat { Layout.device == .phone ? 150 : 190 }
+
+    /// Where an aspect-fitted picture sits in a space.
+    static func picture(in size: CGSize, aspect: CGFloat?) -> CGRect {
+        guard let aspect, aspect > 0, size.width > 0, size.height > 0 else { return CGRect(origin: .zero, size: size) }
+        let fitted = size.width / size.height > aspect
+            ? CGSize(width: size.height * aspect, height: size.height)
+            : CGSize(width: size.width, height: size.width / aspect)
+        return CGRect(x: (size.width - fitted.width) / 2, y: (size.height - fitted.height) / 2, width: fitted.width, height: fitted.height)
     }
 }
 
