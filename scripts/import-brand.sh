@@ -77,6 +77,19 @@ printf '{ %s }\n' "$INFO" > "$PHONE/Contents.json"
 cp "$DIST/icon/ios-1024x1024.png" "$PHONE/AppIcon.appiconset/icon-1024.png"
 printf '{ "images" : [ { "filename" : "icon-1024.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" } ], %s }\n' "$INFO" > "$PHONE/AppIcon.appiconset/Contents.json"
 
+# Mac: the same artwork at the Mac's icon sizes (macOS 26 rounds it).
+MAC=Mac/Assets.xcassets
+mkdir -p "$MAC/AppIcon.appiconset"
+printf '{ %s }\n' "$INFO" > "$MAC/Contents.json"
+entries=()
+for spec in 16:1 16:2 32:1 32:2 128:1 128:2 256:1 256:2 512:1 512:2; do
+  pt=${spec%%:*}; scale=${spec#*:}; px=$((pt * scale))
+  name="icon-${pt}@${scale}x.png"
+  sips -z $px $px "$DIST/icon/ios-1024x1024.png" --out "$MAC/AppIcon.appiconset/$name" >/dev/null
+  entries+=("{ \"filename\" : \"$name\", \"idiom\" : \"mac\", \"scale\" : \"${scale}x\", \"size\" : \"${pt}x${pt}\" }")
+done
+( IFS=,; printf '{ "images" : [ %s ], %s }\n' "${entries[*]}" "$INFO" > "$MAC/AppIcon.appiconset/Contents.json" )
+
 # The palette.
 cp "$DIST/BrandTheme.swift" Packages/JellyfinAppKit/Sources/DesignSystem/BrandTheme.swift
 

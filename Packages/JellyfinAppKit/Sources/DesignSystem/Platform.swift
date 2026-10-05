@@ -57,12 +57,20 @@ private struct MacHoverLift: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scaleEffect(hovering ? 1.03 : 1)
-            .shadow(color: .black.opacity(hovering ? 0.3 : 0), radius: 14, y: 8)
+            .shadowWhen(hovering, color: .black.opacity(0.3), radius: 14, y: 8)
             .animation(.spring(duration: 0.25), value: hovering)
             .onHover { hovering = $0 }
     }
 }
 #endif
+
+extension View {
+    /// A shadow only while `on`: an invisible one (opacity 0) is still drawn,
+    /// an offscreen pass per view — dozens of cards made scrolling janky.
+    @ViewBuilder public func shadowWhen(_ on: Bool, color: Color, radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) -> some View {
+        if on { shadow(color: color, radius: radius, x: x, y: y) } else { self }
+    }
+}
 
 extension Color {
     /// For CoreGraphics drawing (fixed RGB theme colours).

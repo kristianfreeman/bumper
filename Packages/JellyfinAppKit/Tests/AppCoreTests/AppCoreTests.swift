@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import Instrumentation
-import JellyfinAPI
+@testable import JellyfinAPI
 @testable import JellyfinMocks
 import Testing
 
@@ -135,5 +135,25 @@ struct PerfRecorderTests {
         usage.recordPlay(BaseItem(id: "x", name: "A book", kind: .audioBook), libraries: [books, shows, movies])
         usage.record("s", weight: LibraryUsage.openWeight)
         #expect(usage.ordered([books, shows, movies]).map(\.id) == ["b", "s", "m"])   // played beats opened
+    }
+}
+
+@Suite struct AuthorizationHeaderTests {
+    @Test func deviceNamesBecomePlainASCII() {
+        let info = ClientInfo(client: "Bumper", device: "Kristian’s MacBook Pro · Café", deviceId: "abc", version: "0.1.0")
+        let header = info.authorizationHeader(token: nil)
+        #expect(header.contains(#"Device="Kristian's MacBook Pro  Cafe""#))
+        #expect(header.unicodeScalars.allSatisfy { $0.isASCII })
+    }
+}
+
+/// Real network, opt-in: RUN_LAN_SCAN=1 swift test --filter LANScanTests
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["RUN_LAN_SCAN"] == "1"))
+struct LANScanTests {
+    @Test func findsAServerOnThisSubnet() async {
+        let start = ContinuousClock.now
+        let found = await ServerDiscovery.scanSubnet()
+        print("LAN-SCAN found \(found.map { "\($0.name) at \($0.address)" }) in \(ContinuousClock.now - start)")
+        #expect(!found.isEmpty)
     }
 }

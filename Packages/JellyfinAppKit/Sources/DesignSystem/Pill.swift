@@ -32,11 +32,13 @@ public struct Pill<Icon: View>: View {
     let active: Bool
     let prominent: Bool
     let alwaysShowsTitle: Bool
+    let fillsIcon: Bool
     let icon: Icon
     let action: () -> Void
 
     public init(_ title: String, detail: String? = nil, size: Size = .regular, active: Bool = false, prominent: Bool = false,
-                alwaysShowsTitle: Bool = false, @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) {
+                alwaysShowsTitle: Bool = false, fillsIcon: Bool = false, @ViewBuilder icon: () -> Icon, action: @escaping () -> Void) {
+        self.fillsIcon = fillsIcon
         self.title = title
         self.detail = detail
         self.size = size
@@ -49,7 +51,7 @@ public struct Pill<Icon: View>: View {
 
     public var body: some View {
         Button(action: action) {
-            PillFace(title, detail: detail, size: size, active: active, prominent: prominent, alwaysShowsTitle: alwaysShowsTitle) { icon }
+            PillFace(title, detail: detail, size: size, active: active, prominent: prominent, alwaysShowsTitle: alwaysShowsTitle, fillsIcon: fillsIcon) { icon }
         }
         .buttonStyle(PillButtonStyle())
         .accessibilityLabel(title)
@@ -89,13 +91,16 @@ public struct PillFace<Icon: View>: View {
     let active: Bool
     let prominent: Bool
     let alwaysShowsTitle: Bool
+    /// An image (a profile picture) fills the circle instead of sitting in it like a symbol.
+    var fillsIcon = false
     let icon: Icon
     @Environment(\.isFocused) private var focused
     @Environment(\.isEnabled) private var enabled
     @Environment(\.theme) private var theme
 
     public init(_ title: String, detail: String? = nil, size: PillSize = .regular, active: Bool = false, prominent: Bool = false,
-                alwaysShowsTitle: Bool = false, @ViewBuilder icon: () -> Icon) {
+                alwaysShowsTitle: Bool = false, fillsIcon: Bool = false, @ViewBuilder icon: () -> Icon) {
+        self.fillsIcon = fillsIcon
         self.title = title
         self.detail = detail
         self.size = size
@@ -111,7 +116,7 @@ public struct PillFace<Icon: View>: View {
         let d = size.diameter
         HStack(spacing: d * 0.16) {
             icon
-                .frame(width: d * 0.62, height: d * 0.62)
+                .frame(width: d * (fillsIcon ? 0.9 : 0.62), height: d * (fillsIcon ? 0.9 : 0.62))
                 .clipShape(.circle)
             if open {
                 VStack(alignment: .leading, spacing: 0) {
@@ -124,7 +129,7 @@ public struct PillFace<Icon: View>: View {
             }
         }
         .foregroundStyle(foreground)
-        .padding(.leading, d * 0.19)
+        .padding(.leading, d * (fillsIcon ? 0.05 : 0.19))
         .padding(.trailing, open ? d * 0.38 : d * 0.19)
         .frame(minWidth: d, minHeight: d)
         .background(background, in: .capsule)
@@ -132,7 +137,7 @@ public struct PillFace<Icon: View>: View {
             if active && !focused { Capsule().strokeBorder(theme.accent, lineWidth: 3) }
         }
         .scaleEffect(focused ? 1.08 : 1)
-        .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 18, y: 8)
+        .shadowWhen(focused, color: .black.opacity(0.35), radius: 18, y: 8)
         .opacity(enabled ? 1 : 0.4)
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
         .animation(.easeOut(duration: 0.2), value: active)

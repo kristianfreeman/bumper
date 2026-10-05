@@ -7,6 +7,8 @@ import Synchronization
 /// Always on; `-noTraceFile` turns it off.
 public enum TraceFile {
     public static let enabled = !ProcessInfo.processInfo.arguments.contains("-noTraceFile")
+    /// `-traceStderr`: also to standard error (a Mac app's sandboxed caches can't be read from a shell).
+    static let toStderr = ProcessInfo.processInfo.arguments.contains("-traceStderr")
 
     public static let directory: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appending(path: "perf", directoryHint: .isDirectory)
@@ -18,6 +20,7 @@ public enum TraceFile {
         guard enabled else { return }
         let t = start.duration(to: .now).components
         let line = String(format: "%8.3f [%@] %@\n", Double(t.seconds) + Double(t.attoseconds) / 1e18, category, message)
+        if toStderr { FileHandle.standardError.write(Data(line.utf8)) }
         handle.withLock { h in
             if h == nil {
                 try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

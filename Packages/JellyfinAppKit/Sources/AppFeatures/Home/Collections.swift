@@ -296,7 +296,7 @@ struct ViewAllTile: View {
             .frame(width: width, height: width * aspect)
             .background(focused ? Color.white : theme.surface, in: .rect(cornerRadius: 22))
             .scaleEffect(focused ? 1.06 : 1)
-            .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 20, y: 10)
+            .shadowWhen(focused, color: .black.opacity(0.35), radius: 20, y: 10)
             .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
         }
     }

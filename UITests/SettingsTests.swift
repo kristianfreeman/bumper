@@ -18,8 +18,12 @@ final class SettingsTests: XCTestCase {
         let autoplay = app.buttons["setting.autoplay"]
         XCTAssertTrue(autoplay.waitForExistence(timeout: 3), "Settings didn't open")
         remote.press(.right)                                  // sidebar → the page
-        for _ in 0..<4 where !autoplay.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.4) }
-        for _ in 0..<3 where !autoplay.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.4) }
+        // Steer toward the tile: down while above it, left while beside it.
+        let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        for _ in 0..<10 where !autoplay.hasFocus {
+            remote.press(focused.frame.maxY < autoplay.frame.minY ? .down : .left)
+            Thread.sleep(forTimeInterval: 0.4)
+        }
         XCTAssertTrue(autoplay.hasFocus, "couldn't reach Play Next Episode")
         let before = autoplay.value as? String
         remote.press(.select)

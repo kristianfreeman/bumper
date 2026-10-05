@@ -19,8 +19,14 @@ public struct ClientInfo: Sendable, Hashable, Codable {
     }
 
     func authorizationHeader(token: String?) -> String {
+        /// Plain ASCII: header values can't carry "Kristian’s MacBook Pro"'s
+        /// curly apostrophe (the server answered 400 to every request).
         func esc(_ s: String) -> String {
-            s.replacingOccurrences(of: "\"", with: "'")
+            let folded = s.replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'")
+                .replacingOccurrences(of: "“", with: "'").replacingOccurrences(of: "”", with: "'")
+                .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil)
+                .replacingOccurrences(of: "\"", with: "'")
+            return String(String.UnicodeScalarView(folded.unicodeScalars.filter { $0.isASCII && $0.value >= 32 }))
         }
         var parts = [
             "Client=\"\(esc(client))\"",

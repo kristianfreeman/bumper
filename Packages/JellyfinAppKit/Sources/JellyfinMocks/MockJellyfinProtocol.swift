@@ -150,6 +150,7 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         }
 
         // Parameterised routes
+        if path == "/QuickConnect/Authorize" { return (204, Data(), "text/plain") }
         // Display preferences (Bumper syncs its queue there), kept in memory.
         if parts.count == 2, parts[0] == "DisplayPreferences" {
             if request.httpMethod == "POST" {

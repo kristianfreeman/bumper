@@ -352,7 +352,7 @@ private struct SettingTileFace: View {
         .padding(24)
         .background(focused ? Color.white : theme.surface.opacity(0.75), in: .rect(cornerRadius: 26))
         .scaleEffect(focused ? 1.04 : 1)
-        .shadow(color: .black.opacity(focused ? 0.3 : 0), radius: 18, y: 10)
+        .shadowWhen(focused, color: .black.opacity(0.3), radius: 18, y: 10)
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
     }
 
@@ -417,11 +417,14 @@ private struct SectionTitle: View {
     }
 }
 
-/// Who's signed in, with switching and signing out.
+/// Who's signed in: switch, approve another device, sign out.
 private struct AccountCard: View {
     @Binding var confirmSignOut: Bool
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
+    @State private var approving = false
+    @State private var code = ""
+    @State private var result: String?
 
     var body: some View {
         if let session = app.session {
@@ -435,6 +438,11 @@ private struct AccountCard: View {
                         ForEach(app.accounts.accounts.filter { $0.id != session.id }) { other in
                             Pill("Switch to \(other.userName)", systemImage: "person.2", size: .small, alwaysShowsTitle: true) { app.switchAccount(other.id) }
                         }
+                        Pill("Approve a Device", systemImage: "iphone.and.arrow.forward", size: .small, alwaysShowsTitle: true) {
+                            code = ""
+                            approving = true
+                        }
+                        .accessibilityIdentifier("settings.approve")
                         Pill("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", size: .small, alwaysShowsTitle: true) { confirmSignOut = true }
                             .accessibilityIdentifier("settings.signOut")
                     }
@@ -442,9 +450,37 @@ private struct AccountCard: View {
                 }
                 Spacer()
             }
-            .padding(36)
-            .background(theme.surface.opacity(0.55), in: .rect(cornerRadius: 36))
+            .padding(Platform.isTV ? 36 : 20)
+            .background(theme.surface.opacity(0.55), in: .rect(cornerRadius: Platform.isTV ? 36 : 22))
             .tvFocusSection()
+            // Quick Connect, the other way round: another device (a new TV,
+            // phone, Mac) shows a code; entering it here signs that one in as you.
+            .alert("Approve a device", isPresented: $approving) {
+                TextField("Code", text: $code)
+                    #if os(iOS)
+                    .keyboardType(.numberPad)
+                    #endif
+                Button("Approve") { approve() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Enter the code the other device shows to sign it in as \(session.account.userName).")
+            }
+            .alert(result ?? "", isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil } })) {
+                Button("OK") { result = nil }
+            }
+        }
+    }
+
+    private func approve() {
+        let digits = code.filter(\.isNumber)
+        guard !digits.isEmpty, let client = app.session?.client else { return }
+        Task {
+            do {
+                try await client.quickConnectAuthorize(code: digits)
+                result = "Approved. The other device is signing in."
+            } catch {
+                result = "That code didn't work. Check it, or start again on the other device."
+            }
         }
     }
 }

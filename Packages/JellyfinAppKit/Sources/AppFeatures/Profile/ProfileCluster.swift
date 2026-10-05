@@ -20,8 +20,8 @@ struct ProfileCluster: View {
                 showSleepOptions = true
             }
             .accessibilityIdentifier("profile.sleep")
-            Pill(app.session?.account.userName ?? "Profile", detail: "Profile", size: .regular) {
-                UserAvatar(size: 76)
+            Pill(app.session?.account.userName ?? "Profile", detail: "Profile", size: .regular, fillsIcon: true) {
+                UserAvatar(size: PillSize.regular.diameter)
             } action: {
                 navigate(.profile)
             }

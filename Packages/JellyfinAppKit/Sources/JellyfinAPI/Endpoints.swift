@@ -122,6 +122,11 @@ extension JellyfinClient {
         try await send(Request(.post, "/QuickConnect/Initiate"))
     }
 
+    /// Approves another device's Quick Connect code as this user (it signs in on its own).
+    public func quickConnectAuthorize(code: String) async throws {
+        try await send(Request<Void>(.post, "/QuickConnect/Authorize", query: [.init(name: "code", value: code), .init(name: "userId", value: userId)]))
+    }
+
     public func quickConnectState(secret: String) async throws -> QuickConnectState {
         try await send(Request(.get, "/QuickConnect/Connect", query: [.init(name: "secret", value: secret)]))
     }

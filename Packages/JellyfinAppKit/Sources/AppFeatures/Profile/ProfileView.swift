@@ -224,7 +224,7 @@ struct FocusTile: ViewModifier {
             .background(theme.surface.opacity(focused ? 1 : 0.7), in: .rect(cornerRadius: 24))
             .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(theme.accent.opacity(focused ? 0.8 : 0), lineWidth: 3))
             .scaleEffect(focused ? 1.03 : 1)
-            .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 18, y: 8)
+            .shadowWhen(focused, color: .black.opacity(0.35), radius: 18, y: 8)
             .focusable()
             .focused($focused)
             .animation(.easeOut(duration: 0.18), value: focused)

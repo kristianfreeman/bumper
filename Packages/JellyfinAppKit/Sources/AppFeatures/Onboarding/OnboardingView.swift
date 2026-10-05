@@ -29,6 +29,11 @@ struct OnboardingView: View {
     }
 }
 
+/// "TV", "Mac", "iPad", "iPhone": what this device is called in the copy.
+private var thisDevice: String {
+    switch Layout.device { case .tv: "TV"; case .mac: "Mac"; case .pad: "iPad"; case .phone: "iPhone" }
+}
+
 /// The page's words: a small eyebrow, a headline, a line of lede — the
 /// same voice as Home and the collection pages.
 private struct OnboardingHeader: View {
@@ -107,10 +112,10 @@ private struct ServerRowFace: View {
         .foregroundStyle(focused ? .black : theme.primaryText)
         .padding(.horizontal, 22)
         .padding(.vertical, 18)
-        .frame(width: 820)
+        .frame(maxWidth: 820)
         .background(focused ? Color.white : theme.primaryText.opacity(0.08), in: .rect(cornerRadius: 28))
         .scaleEffect(focused ? 1.04 : 1)
-        .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 20, y: 10)
+        .shadowWhen(focused, color: .black.opacity(0.35), radius: 20, y: 10)
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
     }
 }
@@ -189,8 +194,11 @@ struct ServerConnectView: View {
             Text("The address you'd open in a browser to reach Jellyfin.")
         }
         .task {
+            // Tests: `-onboardServer <url>` picks that server straight away.
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-onboardServer"), i + 1 < args.count { connect(args[i + 1]) }
             while !Task.isCancelled {
-                let found = await ServerDiscovery.discover()
+                let found = await ServerDiscovery.discoverAll()
                 if !found.isEmpty { discovered = found }
                 searched = true
                 try? await Task.sleep(for: .seconds(4))
@@ -245,14 +253,18 @@ struct SignInView: View {
     @State private var busy: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 90) {
+        // Side by side on the TV, Mac and iPad; stacked on a phone. (The
+        // card used to squeeze the left column and its buttons.)
+        let layout = Layout.device == .phone ? AnyLayout(VStackLayout(alignment: .leading, spacing: 32)) : AnyLayout(HStackLayout(alignment: .top, spacing: Layout.device == .tv ? 90 : 48))
+        ScrollView {
+        layout {
             VStack(alignment: .leading, spacing: Layout.shelfSpacing + 8) {
                 OnboardingHeader(
                     eyebrow: server.name,
                     title: "Who's watching?",
                     lede: users.isEmpty && loadedUsers
-                        ? "Sign in with your Jellyfin name and password\(quickConnectCode == nil ? "" : ", or approve this TV from your phone")."
-                        : "Pick your profile\(quickConnectCode == nil ? "" : ", or approve this TV from your phone"). \(Brand.displayName) remembers you after this."
+                        ? "Sign in with your Jellyfin name and password\(quickConnectCode == nil ? "" : ", or approve this \(thisDevice) from another device")."
+                        : "Pick your profile\(quickConnectCode == nil ? "" : ", or approve this \(thisDevice) from another device"). \(Brand.displayName) remembers you after this."
                 )
                 if !users.isEmpty {
                     ScrollView(.horizontal) {
@@ -278,18 +290,21 @@ struct SignInView: View {
                     Pill("Other Server", systemImage: "arrow.left", size: .small, alwaysShowsTitle: true, action: onBack)
                         .accessibilityIdentifier("onboarding.back")
                 }
+                .fixedSize()                  // never squeezed narrower than their labels (a click on the text missed)
                 .tvFocusSection()
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(.red)
                 }
                 Spacer(minLength: 0)
             }
+            .frame(minWidth: Layout.device == .phone ? nil : 380, alignment: .leading)
             if let code = quickConnectCode {
                 QuickConnectCard(code: code)
             }
         }
         .padding(.horizontal, Layout.horizontalMargin)
-        .padding(.top, 90)
+        .padding(.top, Platform.isTV ? 90 : 48)
+        }
         .alert(username.isEmpty ? "Sign in to \(server.name)" : "Password for \(username)", isPresented: $askingPassword) {
             if users.first(where: { $0.name == username }) == nil {
                 TextField("Name", text: $username).textContentType(.username)
@@ -317,7 +332,14 @@ struct SignInView: View {
     /// Initiates Quick Connect and polls until approved on another device.
     private func runQuickConnect() async {
         let client = app.accounts.client(for: server)
-        guard (try? await client.quickConnectEnabled()) == true, let state = try? await client.quickConnectInitiate() else { return }
+        let state: QuickConnectState
+        do {
+            guard try await client.quickConnectEnabled() else { TraceFile.write("onboarding", "Quick Connect is off on \(server.name)"); return }
+            state = try await client.quickConnectInitiate()
+        } catch {
+            TraceFile.write("onboarding", "Quick Connect didn't start: \(error)")
+            return
+        }
         quickConnectCode = state.code
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(2))
@@ -377,7 +399,7 @@ private struct ProfileFace: View {
     @Environment(\.theme) private var theme
     @Environment(\.displayScale) private var scale
 
-    private let size: CGFloat = 170
+    private let size: CGFloat = Platform.isTV ? 170 : 110
 
     var body: some View {
         VStack(spacing: 20) {
@@ -393,7 +415,7 @@ private struct ProfileFace: View {
             .clipShape(.circle)
             .overlay { Circle().strokeBorder(theme.colorScheme == .light ? theme.primaryText : .white, lineWidth: focused ? 6 : 0) }
             .scaleEffect(focused ? 1.1 : 1)
-            .shadow(color: .black.opacity(focused ? 0.4 : 0), radius: 24, y: 12)
+            .shadowWhen(focused, color: .black.opacity(0.4), radius: 24, y: 12)
             Text(user.name ?? "")
                 .font(.headline)
                 .foregroundStyle(focused ? theme.primaryText : theme.secondaryText)
@@ -420,9 +442,9 @@ private struct QuickConnectCard: View {
                 ForEach(Array(code.enumerated()), id: \.offset) { _, c in
                     if c == " " { Color.clear.frame(width: 14, height: 1) } else {
                     Text(String(c))
-                        .font(.system(size: 64, weight: .bold, design: .rounded).monospacedDigit())
+                        .font(.system(size: Platform.isTV ? 64 : 40, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(theme.primaryText)
-                        .frame(width: 64, height: 92)
+                        .frame(width: Platform.isTV ? 64 : 42, height: Platform.isTV ? 92 : 60)
                         .background(theme.primaryText.opacity(0.08), in: .rect(cornerRadius: 16))
                     }
                 }
@@ -430,9 +452,9 @@ private struct QuickConnectCard: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(code)
             .accessibilityIdentifier("quickconnect.code")
-            Text("On your phone or computer, open Jellyfin, go to your profile, choose Quick Connect and enter this code. This TV signs in on its own.")
+            Text("In \(Brand.displayName) on another device (Settings → Approve a Device), or in Jellyfin under your profile → Quick Connect, enter this code. This \(thisDevice) signs in on its own.")
                 .font(.callout).foregroundStyle(theme.secondaryText)
-                .frame(width: 520, alignment: .leading)
+                .frame(maxWidth: 520, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(40)
