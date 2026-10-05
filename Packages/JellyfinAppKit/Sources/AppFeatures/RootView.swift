@@ -156,6 +156,9 @@ struct MainTabView: View {
     @Environment(\.remoteTab) private var remoteTab
     @State private var plan = SidebarPlan(views: [], hasAudiobooks: { _ in false })
     @State private var selection = "home"
+    #if os(macOS)
+    @State private var columns = NavigationSplitViewVisibility.all
+    #endif
 
     init(session: UserSession, initialTab: String? = nil) {
         self.session = session
@@ -208,11 +211,14 @@ struct MainTabView: View {
     /// view's adaptable sidebar didn't open there, and laid pages out wider
     /// than the window).
     private var macShell: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             List(selection: Binding<String?>(get: { selection }, set: { if let s = $0 { selection = s } })) {
-                BrandMark(.wordmark, height: 26, still: true)
+                // Sized to the rows, its left edge on their icons'.
+                BrandMark(.wordmark, height: 15, still: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
+                    .padding(.leading, 2)
+                    .padding(.top, 6)
+                    .padding(.bottom, 8)
                     .selectionDisabled()
                 ForEach(places) { place in
                     Label(place.title, systemImage: place.icon).tag(place.id)
@@ -222,6 +228,13 @@ struct MainTabView: View {
         } detail: {
             RoutedStack(initial: selection == "home" ? app.launchRoute : []) { page(for: selection) }
                 .id(selection)
+                // Its own size, not its content's: a vertical scroll view
+                // reports its content's width as its ideal, and the cards are
+                // laid out for the last width — the page kept its width and
+                // squeezed the sidebar when it opened.
+                .frame(minWidth: 520, idealWidth: 960, maxWidth: .infinity)
+                .measuresPageViewport()
+                .navigationSplitViewColumnWidth(min: 520, ideal: 960)
         }
         .onChange(of: selection) { _, tab in recordOpen(tab) }
         .onChange(of: app.pendingTab) { _, tab in
@@ -230,6 +243,14 @@ struct MainTabView: View {
             app.pendingTab = nil
         }
         .task { await loadLibraries() }
+        .task {
+            // Tests: `-sidebarToggleTest` closes the sidebar and opens it again.
+            guard ProcessInfo.processInfo.arguments.contains("-sidebarToggleTest") else { return }
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation { columns = .detailOnly }
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation { columns = .all }
+        }
     }
     #endif
 

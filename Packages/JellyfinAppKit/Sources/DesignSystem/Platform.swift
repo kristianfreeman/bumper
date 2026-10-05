@@ -164,3 +164,81 @@ extension View {
         #endif
     }
 }
+
+extension View {
+    /// Focused cards lift past a scroll view's edge on the TV; elsewhere
+    /// content stays inside (on the Mac it drew over the sidebar).
+    @ViewBuilder public func tvScrollClipDisabled() -> some View {
+        #if os(tvOS)
+        scrollClipDisabled()
+        #else
+        self
+        #endif
+    }
+
+    /// Keeps `width` at this view's width minus the page margins — once a
+    /// resize settles (a window drag, the Mac's sidebar opening), not on
+    /// every frame of it: each update re-lays out the whole page.
+    public func tracksPageWidth(_ width: Binding<CGFloat>) -> some View {
+        modifier(PageWidth(width: width))
+    }
+}
+
+private struct PageWidth: ViewModifier {
+    @Binding var width: CGFloat
+    @Environment(\.pageViewportWidth) private var viewport
+    @State private var pending: Task<Void, Never>?
+    @State private var measured = false
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.size.width - $0.safeAreaInsets.trailing } action: { w in
+                // The Mac measures in its shell instead: measured here, the
+                // page's width followed its own content while the sidebar
+                // opened, and never settled.
+                guard viewport == nil else { return }
+                apply(w)
+            }
+            .onChange(of: viewport, initial: true) { _, w in
+                if let w { apply(w) }
+            }
+    }
+
+    private func apply(_ page: CGFloat) {
+        let new = page - 2 * Layout.horizontalMargin
+        guard abs(new - width) > 0.5 else { return }
+        pending?.cancel()
+        if Platform.isTV || !measured {
+            measured = true
+            width = new                                   // the first measure (and the TV, which never resizes): at once
+            return
+        }
+        pending = Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth(duration: 0.2)) { width = new }
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// The Mac's page width, measured once by the window's shell (its size
+    /// already leaves out what the sidebar covers).
+    @Entry public var pageViewportWidth: CGFloat? = nil
+}
+
+extension View {
+    /// Measures this (a page column whose size doesn't follow its content)
+    /// and gives pages inside it that width.
+    public func measuresPageViewport() -> some View { modifier(ViewportMeasure()) }
+}
+
+private struct ViewportMeasure: ViewModifier {
+    @State private var width: CGFloat?
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.pageViewportWidth, width)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
