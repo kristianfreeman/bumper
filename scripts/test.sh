@@ -142,6 +142,7 @@ case "${1:-fast}" in
   settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
   player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
   tonight) step build_for_testing; step ui_run -only-testing:"BumperUITests/TonightTests" ;;
+  scroll) step build_for_testing; step ui_run -only-testing:"BumperUITests/ScrollTests" ;;
   sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/SidebarTests${2:+/$2}" ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
   search)

@@ -160,7 +160,9 @@ public struct FocusBackdrop: View {
 
     private var request: ImageRequest? {
         guard let item, let client, let source = ArtworkSource.resolve(item, .backdrop) else { return nil }
-        return source.request(client: client, pixelWidth: Int(1920 * scale))
+        // 1080p: a quarter of the pixels of 4K to fetch, keep and blend, and
+        // under the dimming nobody can tell (the A10X can).
+        return source.request(client: client, pixelWidth: 1920)
     }
 
 
@@ -184,9 +186,12 @@ public struct FocusBackdrop: View {
             // Dim once, above the stack. (An .opacity on the stack applies to
             // each image separately: the outgoing one showed through the
             // incoming one and vanished at the end of the fade — a flicker.)
-            theme.backgroundGradient.opacity(theme.colorScheme == .light ? 0.65 : 0.45)
-            LinearGradient(colors: [theme.backgroundBottom.opacity(0.2), theme.backgroundBottom.opacity(0.85), theme.backgroundBottom], startPoint: .top, endPoint: .bottom)
-            LinearGradient(colors: [theme.backgroundBottom.opacity(0.9), .clear], startPoint: .leading, endPoint: .center)
+            // One image, not three full-screen gradient layers: the A10X
+            // blends every full-screen layer every frame, and seven of them
+            // held Home to ~25 fps while scrolling.
+            if let overlay = Self.overlay(for: theme) {
+                Image(decorative: overlay, scale: 1).resizable()
+            }
         }
         .ignoresSafeArea()
         .task(id: request?.key ?? "none") {
@@ -204,13 +209,12 @@ public struct FocusBackdrop: View {
                 layers = [shown]                                         // already on screen
                 return
             }
-            // At most three layers (each is a full-screen image to composite):
-            // focus changes are debounced to ≥160 ms, so the oldest of three
-            // has finished its fade by the time a fourth arrives.
-            if layers.count >= 3 {
+            // At most two layers (each is a full-screen image to blend): the
+            // one fading in and the one under it.
+            if layers.count >= 2 {
                 var t = Transaction()
                 t.disablesAnimations = true
-                withTransaction(t) { layers.removeFirst(layers.count - 2) }
+                withTransaction(t) { layers.removeFirst(layers.count - 1) }
             }
             withAnimation(.easeInOut(duration: 0.35)) { layers.append(shown) }
             // Once it's opaque, drop what it covers. Cancelled (focus moved
@@ -224,8 +228,34 @@ public struct FocusBackdrop: View {
         }
     }
 
+    /// The dim and both gradients as one translucent image, per theme.
+    nonisolated(unsafe) private static var overlays: [String: CGImage] = [:]
+
+    static func overlay(for theme: Theme) -> CGImage? {
+        if let cached = overlays[theme.id] { return cached }
+        let w = 960, h = 540                                   // smooth gradients: scaled up is fine
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let topColor = UIColor(theme.backgroundTop).cgColor, bottomColor = UIColor(theme.backgroundBottom).cgColor
+        func alpha(_ c: CGColor, _ a: CGFloat) -> CGColor { c.copy(alpha: a * c.alpha) ?? c }
+        func gradient(_ colors: [CGColor], _ locations: [CGFloat], from: CGPoint, to: CGPoint) {
+            guard let g = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else { return }
+            ctx.drawLinearGradient(g, start: from, end: to, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        }
+        // CoreGraphics' origin is bottom-left: the screen's top is y = h.
+        let top = CGPoint(x: 0, y: h), bottom = CGPoint.zero
+        let dim: CGFloat = theme.colorScheme == .light ? 0.65 : 0.45
+        gradient([alpha(topColor, dim), alpha(bottomColor, dim)], [0, 1], from: top, to: bottom)
+        gradient([alpha(bottomColor, 0.2), alpha(bottomColor, 0.85), bottomColor], [0, 0.5, 1], from: top, to: bottom)
+        gradient([alpha(bottomColor, 0.9), alpha(bottomColor, 0)], [0, 1], from: .zero, to: CGPoint(x: w / 2, y: 0))
+        let image = ctx.makeImage()
+        overlays[theme.id] = image
+        return image
+    }
+
     private func layer(_ image: CGImage) -> some View {
-        Image(decorative: image, scale: scale)
+        Image(decorative: image, scale: 1)
             .resizable()
             .aspectRatio(contentMode: .fill)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

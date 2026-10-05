@@ -198,6 +198,18 @@ final class AppModel {
         self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
+        if ProcessInfo.processInfo.arguments.contains("-metricsFile") {
+            // Device runs (scripts/device-scroll-check.sh): frame timing to a
+            // file every second, read back with devicectl.
+            HitchMonitor.shared.start()
+            Task { @MainActor in
+                let url = PerfRecorder.shared.latestURL.deletingLastPathComponent().appending(path: "metrics.json")
+                while true {
+                    try? await Task.sleep(for: .seconds(1))
+                    try? Metrics.shared.snapshotJSON().write(to: url, atomically: true, encoding: .utf8)
+                }
+            }
+        }
         if let ms = options.simulateModeSwitchMs { DisplayModeManager.simulatedSwitch = .milliseconds(ms) }
         if let s = options.sleepAfterSeconds { sleepTimer.set(seconds: s) }
         if let ms = options.mediaLatencyMs { MockMedia.latency.withLock { $0 = .milliseconds(ms) } }

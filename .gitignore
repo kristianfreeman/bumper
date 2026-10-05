@@ -12,3 +12,5 @@ build/
 perf-results/
 iPhone/Info.plist
 .wrangler/
+.project-noshelf.yml
+BumperNoShelf.xcodeproj/

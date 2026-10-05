@@ -25,6 +25,11 @@ struct CollectionList<Header: View>: View {
     /// The collection the page last settled on (focus moving into another one moves the page).
     @State private var settled: String?
     @State private var settling: Task<Void, Never>?
+    /// Whether the page is moving (not observed: no redraw per phase change).
+    @State private var motion = Motion()
+    final class Motion { var scrolling = false }
+    /// The scroll view's top safe-area inset and height: where the page's top sits at launch.
+    @State private var frame: (inset: CGFloat, height: CGFloat) = (60, 1080)
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -37,20 +42,23 @@ struct CollectionList<Header: View>: View {
                         header()
                     }
                     .padding(.horizontal, Layout.horizontalMargin)
-                    .id(Self.top)
                     // Not lazy: a lazy stack estimates the height of collections it
                     // hasn't built, and corrects it as they appear — the page jumped.
-                    VStack(alignment: .leading, spacing: 80 - Self.snapInset) {
+                    VStack(alignment: .leading, spacing: 80 - Self.snapInset) {   // the markers make up the gap
                         // Launch focus goes to the first card on the page: Tonight's when it leads.
                         let tonightLeads = showsTonight && !app.tonight.isEmpty
                         if tonightLeads {
-                            SnapPoint(id: "tonight") {
+                            SnapPoint(id: "tonight", inset: 0) {
                                 TonightSection(store: app.tonight, available: width, firstCardFocus: firstCardFocus)
                             }
+                            .id("tonight")
                             .onFocused { settle("tonight", first: true, proxy) }
                         }
                         ForEach(sections) { section in
-                            SnapPoint(id: section.id) {
+                            // The first collection snaps to the page's top: no marker
+                            // above it (one pushed the first row down, and the page
+                            // started scrolled).
+                            SnapPoint(id: section.id, inset: !tonightLeads && section.id == sections.first?.id ? 0 : Self.snapInset) {
                                 CollectionSection(section: section, available: width, firstCardFocus: !tonightLeads && section.id == sections.first?.id ? firstCardFocus : nil)
                             }
                             .id(section.id)
@@ -64,9 +72,12 @@ struct CollectionList<Header: View>: View {
                 }
                 .padding(.top, 40)
                 .padding(.bottom, 120)
+                .overlay(alignment: .top) { Color.clear.frame(height: 0).id(Self.top) }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Layout.horizontalMargin } action: { width = $0 }
             }
             .scrollClipDisabled()
+            .onScrollPhaseChange { _, phase in motion.scrolling = phase != .idle }
+            .onGeometryChange(for: [CGFloat].self) { [$0.safeAreaInsets.top, $0.size.height] } action: { frame = ($0[0], max($0[1], 1)) }
             .task(id: sections.count) {
                 guard app.options.benchmark, sections.count > 1 else { return }
                 await Benchmark.scroll(through: sections.map(\.id)) { id in
@@ -77,6 +88,8 @@ struct CollectionList<Header: View>: View {
     }
 
     static var top: String { "page.top" }
+    /// `-perfNoSnap` (device measurements).
+    static var snapOff: Bool { ProcessInfo.processInfo.arguments.contains("-perfNoSnap") }
     /// Where a collection's top settles: this far below the top of the screen.
     static var snapInset: CGFloat { 140 }
 
@@ -89,15 +102,25 @@ struct CollectionList<Header: View>: View {
         let launching = settled == nil
         settled = id
         settling?.cancel()
-        guard !launching, !app.options.benchmark else { return }        // launch: the page starts at its top
+        guard !launching, !app.options.benchmark, !Self.snapOff else { return }        // launch: the page starts at its top
         // Only once focus rests: while someone is moving fast, the focus
         // engine's own scrolling leads, and a snap per collection would
         // fight the next press.
         settling = Task {
-            try? await Task.sleep(for: .milliseconds(220))
+            // Once the focus engine's own scroll has finished (snapping while
+            // it's still moving loses to it), and focus has rested a moment.
+            try? await Task.sleep(for: .milliseconds(200))
+            for _ in 0..<40 where motion.scrolling {
+                try? await Task.sleep(for: .milliseconds(40))
+            }
             guard !Task.isCancelled, settled == id else { return }
             withAnimation(.smooth(duration: 0.35)) {
-                if first { proxy.scrollTo(Self.top, anchor: .top) } else { proxy.scrollTo(SnapPoint<EmptyView>.marker(id), anchor: .top) }
+                if first {
+                    // The marker at the content's very top, put back where it starts: below the inset.
+                    proxy.scrollTo(Self.top, anchor: UnitPoint(x: 0, y: frame.inset / frame.height))
+                } else {
+                    proxy.scrollTo(SnapPoint<EmptyView>.marker(id), anchor: .top)
+                }
             }
         }
     }
@@ -114,13 +137,14 @@ struct CollectionList<Header: View>: View {
 /// height (like scroll-snap-align: start with a scroll padding).
 private struct SnapPoint<Content: View>: View {
     let id: String
+    var inset: CGFloat = CollectionList<EmptyView>.snapInset
     @ViewBuilder var content: () -> Content
 
     static func marker(_ id: String) -> String { "snap.\(id)" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: CollectionList<EmptyView>.snapInset).id(Self.marker(id))
+            Color.clear.frame(height: inset).id(Self.marker(id))
                 .accessibilityHidden(true)
             content()
         }

@@ -15,7 +15,7 @@ final class SidebarTests: XCTestCase {
     /// with every kind of library present (Audiobooks adds its own tab).
     func testSidebarOpensFromHome() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-reset"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-reset"] + (ProcessInfo.processInfo.environment["EXTRA_ARGS"].map { [$0] } ?? [])
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
         Thread.sleep(forTimeInterval: 1)

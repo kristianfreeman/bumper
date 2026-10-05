@@ -156,9 +156,18 @@ private struct OnFocused: ViewModifier {
 }
 
 /// Hero + backdrop bound to the tracker: the only views that re-render on focus moves.
+private struct BackgroundOnly: View {
+    @Environment(\.theme) private var theme
+    var body: some View { theme.backgroundGradient.ignoresSafeArea() }
+}
+
 struct TrackedBackdrop: View {
     let tracker: FocusTracker
-    var body: some View { FocusBackdrop(tracker.featured) }
+    /// `-perfNoBackdrop`: the theme background only (device measurements).
+    private static let off = ProcessInfo.processInfo.arguments.contains("-perfNoBackdrop")
+    var body: some View {
+        if Self.off { BackgroundOnly() } else { FocusBackdrop(tracker.featured) }
+    }
 }
 
 struct TrackedHero: View {

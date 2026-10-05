@@ -16,7 +16,7 @@ final class ScrollTests: XCTestCase {
         for _ in 0..<3 {
             // Two rows per collection: two Downs reach the next one.
             remote.press(.down); Thread.sleep(forTimeInterval: 0.5)
-            remote.press(.down); Thread.sleep(forTimeInterval: 1.0)
+            remote.press(.down); Thread.sleep(forTimeInterval: 1.8)   // the snap waits for the focus scroll to finish
             let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
             let headers = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'collection.'")).allElementsBoundByIndex
             // The collection holding focus: the nearest title above the focused card.

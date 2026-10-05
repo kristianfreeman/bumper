@@ -11,7 +11,7 @@ final class RapidScrollTests: XCTestCase {
     private func run(_ args: [String], wait identifier: String) {
         let app = XCUIApplication()
         // TEST_RUNNER_EXTRA_ARGS="-mockLatency 700": a slow server.
-        app.launchArguments = args + (ProcessInfo.processInfo.environment["EXTRA_ARGS"]?.split(separator: " ").map(String.init) ?? [])
+        app.launchArguments = args + ["-metricsFile"] + (ProcessInfo.processInfo.environment["EXTRA_ARGS"]?.split(separator: " ").map(String.init) ?? [])
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 10))
         Thread.sleep(forTimeInterval: 2)

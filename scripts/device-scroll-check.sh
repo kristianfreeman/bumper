@@ -14,10 +14,17 @@ tests=("${1:-testRapidDownOnHome}")
 [[ $# -eq 0 ]] && tests=(testRapidDownOnHome testRapidDownOnACollectionPage)
 for t in "${tests[@]}"; do
   echo "== $t"
-  scripts/with-timeout.sh 600 xcodebuild test -project Bumper.xcodeproj -scheme Bumper -destination "id=$DEVICE" \
+  scripts/with-timeout.sh 600 xcodebuild test -project "${PROJECT:-Bumper.xcodeproj}" -scheme Bumper -destination "id=$DEVICE" \
     -derivedDataPath build/device-ui -allowProvisioningUpdates -only-testing:"BumperUITests/RapidScrollTests/$t" >"$OUT/$t.log" 2>&1 \
     || { echo "test run failed (see $OUT/$t.log)"; grep -m3 "error:" "$OUT/$t.log" || true; }
+  if grep -q "System is asleep" "$OUT/$t.log"; then echo "the Apple TV is asleep: press a button on its remote, then run this again"; exit 1; fi
   pull Library/Caches/perf/trace.log "$OUT/$t-trace.log"
+  pull Library/Caches/perf/metrics.json "$OUT/$t-metrics.json" && python3 - "$OUT/$t-metrics.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+for k in ["ui.frameTime", "ui.hitchRatio", "image.decode", "image.blurhash"]:
+    if k in d: v = d[k]; print("%-15s n=%5d  p50=%6.1f  p95=%6.1f  max=%6.1f" % (k, v["count"], v["p50"], v["p95"], v["max"]))
+PY
   python3 - "$OUT/$t-trace.log" <<'PY'
 import re, sys
 lines = open(sys.argv[1]).read().splitlines()
