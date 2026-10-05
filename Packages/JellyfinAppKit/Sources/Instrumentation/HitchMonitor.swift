@@ -35,6 +35,11 @@ public final class HitchMonitor {
         #else
         guard let link = NSScreen.main?.displayLink(target: Proxy(self), selector: #selector(Proxy.tick(_:))) else { return }
         #endif
+        #if os(iOS)
+        // A display link ticks at 60 Hz on iOS unless it asks for more: it
+        // couldn't see a ProMotion screen's 120 (nor would the app run at it).
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+        #endif
         link.add(to: .main, forMode: .common)
         self.link = link
         isRunning = true

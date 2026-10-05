@@ -300,6 +300,12 @@ private struct LaunchFocusClaim: ViewModifier {
 }
 
 extension View {
+    /// Scrolling counts as interaction for frame timing (the TV's focus moves
+    /// already do; a touch screen or trackpad scrolls without them).
+    func notesScrollActivity() -> some View {
+        onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, _ in HitchMonitor.shared.noteActivity() }
+    }
+
     func claimsLaunchFocus(_ binding: FocusState<Bool>.Binding, ready: Bool, key: String) -> some View {
         modifier(LaunchFocusClaim(binding: binding, ready: ready, key: key))
     }

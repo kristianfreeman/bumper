@@ -374,6 +374,7 @@ struct CollectionPage: View {
             .padding(.vertical, 50)
         }
         .tvScrollClipDisabled()
+        .notesScrollActivity()
         .background(theme.backgroundGradient.ignoresSafeArea())
         .hidesNavigationBar()
         .task(id: filter) {

@@ -161,6 +161,9 @@ targets:
         NSLocalNetworkUsageDescription: Find your Jellyfin server and your Apple TV.
         NSBonjourServices: [_bumper._tcp]
         UIBackgroundModes: [audio]                 # audiobooks keep playing
+        # ProMotion: without it an iPhone app's own animations and frame
+        # timing stay at 60 Hz on a 120 Hz screen.
+        CADisableMinimumFrameDurationOnPhone: true
         # services/search, as on the TV (smart search and subtitle ranking).
         BumperSearchEndpoint: https://bumper-search.signalnerve.workers.dev/v1/interpret
 

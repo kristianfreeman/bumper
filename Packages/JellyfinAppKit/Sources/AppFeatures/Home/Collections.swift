@@ -57,6 +57,7 @@ struct CollectionList<Header: View>: View {
                 .padding(.bottom, 120)
             }
             .tvScrollClipDisabled()
+            .notesScrollActivity()
             .task(id: sections.count) {
                 guard app.options.benchmark, sections.count > 1 else { return }
                 await Benchmark.scroll(through: sections.map(\.id)) { id in
