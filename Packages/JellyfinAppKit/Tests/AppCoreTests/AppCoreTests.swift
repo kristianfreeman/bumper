@@ -146,14 +146,3 @@ struct PerfRecorderTests {
         #expect(header.unicodeScalars.allSatisfy { $0.isASCII })
     }
 }
-
-/// Real network, opt-in: RUN_LAN_SCAN=1 swift test --filter LANScanTests
-@Suite(.enabled(if: ProcessInfo.processInfo.environment["RUN_LAN_SCAN"] == "1"))
-struct LANScanTests {
-    @Test func findsAServerOnThisSubnet() async {
-        let start = ContinuousClock.now
-        let found = await ServerDiscovery.scanSubnet()
-        print("LAN-SCAN found \(found.map { "\($0.name) at \($0.address)" }) in \(ContinuousClock.now - start)")
-        #expect(!found.isEmpty)
-    }
-}

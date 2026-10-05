@@ -198,7 +198,9 @@ struct ServerConnectView: View {
             let args = ProcessInfo.processInfo.arguments
             if let i = args.firstIndex(of: "-onboardServer"), i + 1 < args.count { connect(args[i + 1]) }
             while !Task.isCancelled {
-                let found = await ServerDiscovery.discoverAll()
+                // On iPhone/iPad the broadcast needs Apple's multicast
+                // entitlement (requested); until then the address is typed.
+                let found = await ServerDiscovery.discover()
                 if !found.isEmpty { discovered = found }
                 searched = true
                 try? await Task.sleep(for: .seconds(4))
