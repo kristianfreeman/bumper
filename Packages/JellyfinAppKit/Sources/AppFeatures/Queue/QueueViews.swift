@@ -61,7 +61,7 @@ struct QueueSection: View {
             }
         }
         .padding(.horizontal, Layout.horizontalMargin)
-        .focusSection()
+        .tvFocusSection()
     }
 }
 
@@ -133,7 +133,7 @@ struct QueuePage: View {
                     Text(QueueWords.summary(store)).font(.title3).foregroundStyle(theme.secondaryText)
                     QueueControls(store: store, showsEdit: false).padding(.top, 10)
                 }
-                .focusSection()
+                .tvFocusSection()
                 if store.isEmpty {
                     Text("Add things from any page with “Add to Queue” — or hold Select on a card.")
                         .font(.callout).foregroundStyle(theme.secondaryText)
@@ -178,7 +178,7 @@ private struct QueueRow: View {
         }
         .padding(18)
         .background(theme.surface.opacity(0.6), in: .rect(cornerRadius: 22))
-        .focusSection()
+        .tvFocusSection()
     }
 }
 #endif

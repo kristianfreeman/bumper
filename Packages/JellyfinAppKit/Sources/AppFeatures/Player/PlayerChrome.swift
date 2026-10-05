@@ -137,7 +137,7 @@ struct TransportBar: View {
                             .onMoveCommand { if $0 == .down { leave() } }
                     }
                 }
-                .focusSection()
+                .tvFocusSection()
             }
             .padding(.bottom, 50)
             .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
@@ -361,7 +361,7 @@ struct MenuCard: View {
         .padding(.horizontal, 16)
         .frame(width: menu == .info ? 820 : 620, alignment: .leading)
         .overVideoPanel(cornerRadius: 32)
-        .focusSection()
+        .tvFocusSection()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .padding(.trailing, 90)
         .padding(.bottom, 290)

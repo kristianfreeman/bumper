@@ -86,7 +86,7 @@ public final class ImagePipeline: Sendable {
             if let existing = tasks[request.key] { return existing }
             let task = Task(priority: priority.taskPriority) { [self] in
                 defer { _ = inflight.withLock { $0.removeValue(forKey: request.key) } }
-                return try await load(request)
+                return try await load(request, urgent: priority != .prefetch)
             }
             tasks[request.key] = task
             return task
@@ -108,7 +108,7 @@ public final class ImagePipeline: Sendable {
 
     // MARK: Pipeline
 
-    private func load(_ request: ImageRequest) async throws -> CGImage {
+    private func load(_ request: ImageRequest, urgent: Bool) async throws -> CGImage {
         let data: Data
         if let cached = await disk.data(for: request.url.absoluteString) {
             data = cached
@@ -123,6 +123,10 @@ public final class ImagePipeline: Sendable {
             }
             await disk.store(data, for: request.url.absoluteString)
         }
+        // Decodes take turns (visible images first): many at once crowded
+        // the A10X's three cores and the page hitched while scrolling Home.
+        await DecodeGate.shared.enter(urgent: urgent)
+        defer { Task { await DecodeGate.shared.leave() } }
         let image = try Self.decode(data, maxPixelSize: request.maxPixelSize)
         memory.set(image, for: request.key)
         return image
@@ -144,6 +148,34 @@ public final class ImagePipeline: Sendable {
             guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { throw URLError(.cannotDecodeContentData) }
             return image
         }
+    }
+}
+
+// MARK: - Decode gate
+
+/// At most N decodes at a time (1 on a 3-core Apple TV 4K, 2 elsewhere),
+/// visible images ahead of prefetches.
+actor DecodeGate {
+    static let shared = DecodeGate(limit: ProcessInfo.processInfo.activeProcessorCount <= 3 ? 1 : 2)
+
+    private let limit: Int
+    private var running = 0
+    private var urgent: [CheckedContinuation<Void, Never>] = []
+    private var later: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) { self.limit = limit }
+
+    func enter(urgent isUrgent: Bool) async {
+        if running < limit { running += 1; return }
+        await withCheckedContinuation { cont in
+            if isUrgent { urgent.append(cont) } else { later.append(cont) }
+        }
+    }
+
+    func leave() {
+        if !urgent.isEmpty { urgent.removeFirst().resume() }
+        else if !later.isEmpty { later.removeFirst().resume() }
+        else { running -= 1 }
     }
 }
 

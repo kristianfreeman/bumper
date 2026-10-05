@@ -103,7 +103,7 @@ struct ItemDetailView: View {
                     header(item)
                         .frame(minHeight: 760, alignment: .bottomLeading)
                         .padding(.horizontal, Layout.horizontalMargin)
-                        .focusSection()
+                        .tvFocusSection()
 
                     if item.kind == .series && !model.seasons.isEmpty {
                         seasonPicker
@@ -284,7 +284,7 @@ struct ItemDetailView: View {
             .padding(.vertical, 12)
         }
         .scrollClipDisabled()
-        .focusSection()
+        .tvFocusSection()
     }
 
     private func toggleWatched() {
@@ -320,7 +320,7 @@ struct CastShelf: View {
             }
             .scrollClipDisabled()
         }
-        .focusSection()
+        .tvFocusSection()
     }
 }
 

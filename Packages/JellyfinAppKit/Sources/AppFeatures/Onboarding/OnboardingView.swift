@@ -163,7 +163,7 @@ struct ServerConnectView: View {
                         .frame(height: 72)
                     }
                 }
-                .focusSection()
+                .tvFocusSection()
                 HStack(spacing: 18) {
                     Pill("Type an Address", systemImage: "keyboard", size: .small, alwaysShowsTitle: true) { typing = true }
                         .accessibilityIdentifier("onboarding.address")
@@ -267,7 +267,7 @@ struct SignInView: View {
                         .padding(.horizontal, 10)
                     }
                     .scrollClipDisabled()
-                    .focusSection()
+                    .tvFocusSection()
                 }
                 HStack(spacing: 18) {
                     Pill(users.isEmpty ? "Sign In" : "Someone Else", systemImage: "person.badge.key", size: .small,
@@ -279,7 +279,7 @@ struct SignInView: View {
                     Pill("Other Server", systemImage: "arrow.left", size: .small, alwaysShowsTitle: true, action: onBack)
                         .accessibilityIdentifier("onboarding.back")
                 }
-                .focusSection()
+                .tvFocusSection()
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(.red)
                 }

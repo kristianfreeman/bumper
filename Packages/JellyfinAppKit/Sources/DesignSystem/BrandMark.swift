@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import SwiftUI
 
 /// Bumper's mark with its ink boil: four pre-drawn frames (in the app's
@@ -57,4 +56,3 @@ public struct BrandMark: View {
             .aspectRatio(contentMode: .fit)
     }
 }
-#endif

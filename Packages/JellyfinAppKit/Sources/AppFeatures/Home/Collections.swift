@@ -109,12 +109,13 @@ struct CollectionList<Header: View>: View {
         settling = Task {
             // Once the focus engine's own scroll has finished (snapping while
             // it's still moving loses to it), and focus has rested a moment.
-            try? await Task.sleep(for: .milliseconds(200))
+            // (Short: any wait after the scroll stops reads as lag.)
+            try? await Task.sleep(for: .milliseconds(60))
             for _ in 0..<40 where motion.scrolling {
                 try? await Task.sleep(for: .milliseconds(40))
             }
             guard !Task.isCancelled, settled == id else { return }
-            withAnimation(.smooth(duration: 0.35)) {
+            withAnimation(.smooth(duration: 0.25)) {
                 if first {
                     // The marker at the content's very top, put back where it starts: below the inset.
                     proxy.scrollTo(Self.top, anchor: UnitPoint(x: 0, y: frame.inset / frame.height))
@@ -212,7 +213,7 @@ struct CollectionSection: View {
             }
         }
         .padding(.horizontal, Layout.horizontalMargin)
-        .focusSection()
+        .tvFocusSection()
     }
 
     private var aspect: CGFloat {

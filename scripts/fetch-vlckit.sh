@@ -10,7 +10,10 @@ DEST="$ROOT/Vendor"
 CACHE="$ROOT/build/vlckit"
 mkdir -p "$DEST" "$CACHE"
 
-if [[ -d "$DEST/VLCKit.xcframework" && "$(cat "$DEST/VLCKit.VERSION" 2>/dev/null)" == "$URL" ]]; then
+# Apple TV, iPhone/iPad and Mac (device + simulator where there is one).
+PLATFORMS="tvos ios macos"
+STAMP="$URL [$PLATFORMS]"
+if [[ -d "$DEST/VLCKit.xcframework" && "$(cat "$DEST/VLCKit.VERSION" 2>/dev/null)" == "$STAMP" ]]; then
   echo "VLCKit up to date ($DEST/VLCKit.xcframework)"; exit 0
 fi
 echo "Downloading $URL"
@@ -20,13 +23,14 @@ rm -rf "$CACHE/unzipped" && mkdir -p "$CACHE/unzipped"
 unzip -q "$CACHE/VLCKit.zip" -d "$CACHE/unzipped"
 FRAMEWORK="$(find "$CACHE/unzipped" -maxdepth 3 -name 'VLCKit.xcframework' -type d | head -1)"
 [[ -n "$FRAMEWORK" ]] || { echo "VLCKit.xcframework not found in archive"; exit 1; }
-# Keep only the tvOS slices (device + simulator): ~0.7 GB instead of ~2.8 GB.
-python3 - "$FRAMEWORK" <<'PY'
+# Keep the platforms Bumper ships on (the archive also has watchOS, visionOS…).
+python3 - "$FRAMEWORK" "$PLATFORMS" <<'PY'
 import plistlib, shutil, sys, os
 root = sys.argv[1]
+wanted = set(sys.argv[2].split())
 info = os.path.join(root, "Info.plist")
 plist = plistlib.load(open(info, "rb"))
-keep = [lib for lib in plist["AvailableLibraries"] if lib.get("SupportedPlatform") == "tvos"]
+keep = [lib for lib in plist["AvailableLibraries"] if lib.get("SupportedPlatform") in wanted]
 for lib in plist["AvailableLibraries"]:
     if lib not in keep:
         shutil.rmtree(os.path.join(root, lib["LibraryIdentifier"]), ignore_errors=True)
@@ -36,6 +40,6 @@ PY
 rm -rf "$DEST/VLCKit.xcframework"
 mv "$FRAMEWORK" "$DEST/VLCKit.xcframework"
 find "$CACHE/unzipped" -maxdepth 2 -iname 'COPYING*' -exec cp {} "$DEST/VLCKit.COPYING.txt" \; -quit
-echo "$URL" > "$DEST/VLCKit.VERSION"
+echo "$STAMP" > "$DEST/VLCKit.VERSION"
 rm -rf "$CACHE/unzipped"
 echo "VLCKit → $DEST/VLCKit.xcframework"

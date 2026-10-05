@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import AppCore
 public import SwiftUI
 
@@ -70,4 +69,3 @@ public struct SubtitleText: View {
         }
     }
 }
-#endif

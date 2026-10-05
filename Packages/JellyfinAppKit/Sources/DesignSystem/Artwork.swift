@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import AppCore
 public import JellyfinAPI
 public import SwiftUI
@@ -228,4 +227,3 @@ public struct Artwork: View {
         }
     }
 }
-#endif

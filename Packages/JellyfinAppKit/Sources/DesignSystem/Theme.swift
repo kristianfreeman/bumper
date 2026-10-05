@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import SwiftUI
 
 /// A complete visual theme. Themes are the *only* thing the app sells:
@@ -143,4 +142,3 @@ public enum Layout {
     public static let castWidth: CGFloat = 160
     public static let squareWidth: CGFloat = 300          // audiobook covers, 5 per row
 }
-#endif

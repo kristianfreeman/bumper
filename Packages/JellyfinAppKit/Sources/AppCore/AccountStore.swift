@@ -1,4 +1,7 @@
 public import Foundation
+#if os(iOS)
+import UIKit
+#endif
 public import JellyfinAPI
 public import Observation
 
@@ -102,6 +105,9 @@ public final class AccountStore {
     private var deviceName: String {
         #if os(tvOS)
         "Apple TV"
+        #elseif os(iOS)
+        // The model ("iPhone", "iPad"): the user's own device name needs an entitlement.
+        UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
         #else
         Host.current().localizedName ?? "Mac"
         #endif

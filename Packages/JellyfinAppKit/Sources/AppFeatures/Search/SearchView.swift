@@ -155,7 +155,7 @@ private struct UnderstoodSection: View {
             }
         }
         .padding(.horizontal, Layout.horizontalMargin)
-        .focusSection()
+        .tvFocusSection()
     }
 }
 

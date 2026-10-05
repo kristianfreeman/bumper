@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import SwiftUI
 
 /// A person without a picture: their initials in a serif, on a warm colour
@@ -52,4 +51,3 @@ public struct Monogram: View {
         .accessibilityHidden(true)
     }
 }
-#endif

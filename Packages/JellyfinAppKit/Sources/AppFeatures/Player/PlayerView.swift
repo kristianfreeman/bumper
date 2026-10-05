@@ -87,7 +87,7 @@ struct PlayerView: View {
             }
         }
         .defaultFocus($focus, .surface)
-        .onExitCommand(perform: handleExit)
+        .tvExitCommand(perform: handleExit)
         .animation(.easeInOut(duration: 0.22), value: chromeVisible)
         .animation(.spring(duration: 0.28), value: openMenu)
         .task {

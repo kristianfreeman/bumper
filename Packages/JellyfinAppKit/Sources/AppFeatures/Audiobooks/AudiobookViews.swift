@@ -347,7 +347,7 @@ struct AudiobookNowPlayingView: View {
         // Full-width focus areas: pills are narrow at rest, and without this
         // Down from the right of one row finds nothing beneath it.
         .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
+        .tvFocusSection()
     }
 
     private var options: some View {
@@ -383,7 +383,7 @@ struct AudiobookNowPlayingView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
+        .tvFocusSection()
     }
 
     private var smartSpeedDetail: String? {
@@ -418,7 +418,7 @@ struct AudiobookNowPlayingView: View {
         .overVideoPanel(cornerRadius: 32)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
         .padding(60)
-        .focusSection()
+        .tvFocusSection()
     }
 
     /// Buffering, errors — and invisible values UI tests read.

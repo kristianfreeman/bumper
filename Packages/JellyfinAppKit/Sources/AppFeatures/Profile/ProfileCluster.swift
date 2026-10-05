@@ -28,7 +28,7 @@ struct ProfileCluster: View {
             }
             .accessibilityIdentifier("profile.avatar")
         }
-        .focusSection()
+        .tvFocusSection()
         // On the cluster (always present), not the button — so the sheet
         // survives the menu collapsing while it's up.
         .confirmationDialog("Sleep Timer", isPresented: $showSleepOptions, titleVisibility: .visible) {

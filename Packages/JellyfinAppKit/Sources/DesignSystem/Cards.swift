@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import JellyfinAPI
 public import SwiftUI
 
@@ -12,7 +11,7 @@ struct CardFocusModifier: ViewModifier {
     func body(content: Content) -> some View {
         let base = content
             .clipShape(.rect(cornerRadius: theme.cardCornerRadius))
-            .hoverEffect(.highlight)
+            .cardHighlight()
         // Only glow themes pay for a shadow, and only on the focused card:
         // a shadow (even a clear one) can force an offscreen render pass.
         if theme.focusStyle == .glow && isFocused {
@@ -188,7 +187,7 @@ public struct PersonCard: View {
                 Artwork(person.primaryImageTag.map { ArtworkSource(itemId: person.id, type: .primary, tag: $0, blurHash: person.imageBlurHashes?["Primary"]?[$0]) }, kind: .poster, width: Layout.castWidth)
                     .frame(width: Layout.castWidth, height: Layout.castWidth)
                     .clipShape(.circle)
-                    .hoverEffect(.highlight)
+                    .cardHighlight()
                 Text(person.name ?? "").font(.caption2).foregroundStyle(theme.primaryText).lineLimit(1)
                 Text(person.role ?? "").font(.caption2).foregroundStyle(theme.secondaryText).lineLimit(1)
             }
@@ -233,4 +232,3 @@ public struct Badge: View {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.secondaryText.opacity(0.7), lineWidth: 1.5))
     }
 }
-#endif

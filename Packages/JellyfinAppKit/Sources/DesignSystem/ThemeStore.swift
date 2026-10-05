@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import AppCore
 public import Observation
 public import StoreKit
@@ -95,4 +94,3 @@ public final class ThemeStore {
         await refreshEntitlements()
     }
 }
-#endif

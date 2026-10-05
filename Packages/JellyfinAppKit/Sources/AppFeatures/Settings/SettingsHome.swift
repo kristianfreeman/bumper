@@ -85,7 +85,7 @@ struct SettingsView: View {
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .onExitCommand(perform: editing == nil ? nil : { close() })
+        .tvExitCommand(perform: editing == nil ? nil : { close() })
         .confirmationDialog("Sign out of \(app.session?.server.name ?? "this server")?", isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) { app.signOut() }
             Button("Cancel", role: .cancel) {}
@@ -111,7 +111,7 @@ struct SettingsView: View {
             TileGrid(tiles: tiles, columns: columns) { tileView($0) }
             choices(for: tiles)
         }
-        .focusSection()                 // Down from any column lands in the next section
+        .tvFocusSection()                 // Down from any column lands in the next section
         .id(id)
     }
 
@@ -145,7 +145,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 6)
             }
             .scrollClipDisabled()
-            .focusSection()
+            .tvFocusSection()
             .id(editing)
             .onAppear { focusCurrent(of: tile) }
         }
@@ -184,7 +184,7 @@ struct SettingsView: View {
             }
             choices(for: tiles)
         }
-        .focusSection()                 // the preview isn't focusable: the whole width leads to the tiles
+        .tvFocusSection()                 // the preview isn't focusable: the whole width leads to the tiles
         .id("subtitles")
     }
 
@@ -218,7 +218,7 @@ struct SettingsView: View {
             }
             .scrollClipDisabled()
         }
-        .focusSection()
+        .tvFocusSection()
         .id("look")
     }
 
@@ -399,7 +399,7 @@ private struct TileGrid<Tile: View>: View {
                 }
             }
         }
-        .focusSection()
+        .tvFocusSection()
     }
 }
 
@@ -443,7 +443,7 @@ private struct AccountCard: View {
             }
             .padding(36)
             .background(theme.surface.opacity(0.55), in: .rect(cornerRadius: 36))
-            .focusSection()
+            .tvFocusSection()
         }
     }
 }

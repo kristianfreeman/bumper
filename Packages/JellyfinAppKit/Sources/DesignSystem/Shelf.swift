@@ -1,4 +1,3 @@
-#if os(tvOS)
 import AppCore
 import Instrumentation
 import os
@@ -68,7 +67,7 @@ public struct Shelf<Content: View>: View {
                 prefetch(after: visible)
             }
         }
-        .focusSection()
+        .tvFocusSection()
     }
 
     /// Warm the next screenful of artwork while the user is still looking at
@@ -129,7 +128,7 @@ public struct MediaGrid: View {
             }
         }
         .padding(.horizontal, Layout.horizontalMargin)
-        .focusSection()
+        .tvFocusSection()
     }
 }
 
@@ -237,7 +236,7 @@ public struct FocusBackdrop: View {
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: space,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        let topColor = UIColor(theme.backgroundTop).cgColor, bottomColor = UIColor(theme.backgroundBottom).cgColor
+        let topColor = theme.backgroundTop.cgColorValue, bottomColor = theme.backgroundBottom.cgColorValue
         func alpha(_ c: CGColor, _ a: CGFloat) -> CGColor { c.copy(alpha: a * c.alpha) ?? c }
         func gradient(_ colors: [CGColor], _ locations: [CGFloat], from: CGPoint, to: CGPoint) {
             guard let g = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: locations) else { return }
@@ -262,4 +261,3 @@ public struct FocusBackdrop: View {
             .clipped()
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import SwiftUI
 
 /// The premium catalogue: families of six, each theme defined by three
@@ -105,4 +104,3 @@ private struct RGB {
     func mix(_ o: RGB, _ t: Double) -> RGB { RGB(r: r + (o.r - r) * t, g: g + (o.g - g) * t, b: b + (o.b - b) * t) }
     var color: Color { Color(red: r, green: g, blue: b) }
 }
-#endif

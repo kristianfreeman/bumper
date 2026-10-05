@@ -1,4 +1,5 @@
 #if os(tvOS)
+import DesignSystem
 import Instrumentation
 import SwiftUI
 import UIKit
@@ -16,7 +17,7 @@ struct TopBand<Trailing: View>: View {
                 .frame(maxWidth: .infinity, minHeight: 90)
             trailing()
                 .frame(maxWidth: .infinity, minHeight: 90, alignment: .trailing)
-                .focusSection()
+                .tvFocusSection()
         }
     }
 }

@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import SwiftUI
 
 /// The app's one button: a circle with an icon (or an image) at rest, that
@@ -157,4 +156,3 @@ public struct PillButtonStyle: ButtonStyle {
         configuration.label.opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
-#endif

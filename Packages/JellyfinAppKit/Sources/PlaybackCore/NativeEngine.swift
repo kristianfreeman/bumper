@@ -281,7 +281,7 @@ public final class NativeEngine: PlayerEngine {
     /// Dropped frames + indicated bitrate. tvOS 27 fetches the log async;
     /// tvOS 26 reads it synchronously (deprecated in 27, fine on 26).
     static func accessLogStats(_ item: AVPlayerItem) async -> (Int, Double) {
-        if #available(tvOS 27, macOS 27, *) {
+        if #available(tvOS 27, iOS 27, macOS 27, *) {
             return await withCheckedContinuation { (cont: CheckedContinuation<(Int, Double), Never>) in
                 item.fetchAccessLog { log in
                     let event = log?.events.last

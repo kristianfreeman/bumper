@@ -85,7 +85,7 @@ struct ThemesView: View {
                             }
                         }
                     }
-                    .focusSection()
+                    .tvFocusSection()
                 }
                 if store.isUnlocked {
                     Text("Accent Colour").font(.headline)
@@ -131,7 +131,7 @@ struct ThemePreview: View {
                 Image(systemName: locked ? "lock.fill" : selected ? "checkmark.circle.fill" : "")
                     .font(.title3).padding(16).foregroundStyle(.white)
             }
-            .hoverEffect(.highlight)
+            .cardHighlight()
             Text(theme.name).font(.callout.weight(.semibold)).lineLimit(1)
             Text(theme.tagline).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }

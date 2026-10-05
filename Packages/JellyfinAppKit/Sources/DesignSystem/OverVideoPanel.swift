@@ -1,4 +1,3 @@
-#if os(tvOS)
 public import AppCore
 public import SwiftUI
 
@@ -25,4 +24,3 @@ extension View {
         }
     }
 }
-#endif

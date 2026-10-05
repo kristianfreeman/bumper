@@ -189,7 +189,7 @@ struct MoreLibrariesView: View {
                         LandscapeCard(library, kind: .poster) { navigate(.library(library)) }
                     }
                 }
-                .focusSection()
+                .tvFocusSection()
             }
             .padding(.horizontal, Layout.horizontalMargin)
             .padding(.vertical, 60)
@@ -279,7 +279,7 @@ struct CollectionPage: View {
                         Text(total == 1 ? "One title." : "\(total.formatted()) titles.").font(.callout).foregroundStyle(theme.secondaryText)
                     }
                 }
-                .focusSection()
+                .tvFocusSection()
                 let columns = 4
                 let cardWidth = ((width - CGFloat(columns - 1) * Layout.cardSpacing) / CGFloat(columns)).rounded(.down)
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Layout.cardSpacing, alignment: .top), count: columns),
@@ -293,7 +293,7 @@ struct CollectionPage: View {
                             }
                     }
                 }
-                .focusSection()
+                .tvFocusSection()
                 if model.items.isEmpty, model.total == 0 || model.total == nil {
                     Text("Nothing matches — try removing a part of the sentence.").font(.callout).foregroundStyle(theme.secondaryText)
                 }
@@ -388,18 +388,18 @@ struct FilterSentence: View {
                     .focused($focus, equals: .ask)
                     .accessibilityIdentifier("filter.ask")
             }
-            .focusSection()
+            .tvFocusSection()
             if let editing {
                 ChoiceRow(choices: choices(for: editing), focus: $focus) { choice in
                     choose(choice, in: editing)
                 }
-                .focusSection()
+                .tvFocusSection()
                 .id(editing)
             }
         }
         // On every change of row (one row replacing another doesn't "appear").
         .onChange(of: editing) { _, now in if let now { focusFirstChoice(in: now) } }
-        .onExitCommand(perform: editing == nil ? nil : { close() })
+        .tvExitCommand(perform: editing == nil ? nil : { close() })
     }
 
     // MARK: Choices
