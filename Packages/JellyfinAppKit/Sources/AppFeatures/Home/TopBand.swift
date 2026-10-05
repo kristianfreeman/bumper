@@ -24,6 +24,10 @@ struct TopBand<Trailing: View>: View {
 /// An invisible area that sends focus to the tab bar (on tvOS the sidebar's
 /// tab button). There's no API to open the sidebar; a focus guide pointing
 /// at the tab bar is the idiomatic way to let Up reach it.
+///
+/// tvOS 27 only, in effect: on tvOS 26 SwiftUI draws the sidebar itself (no
+/// UITabBarController) and the collapsed sidebar has no focusable item at
+/// all — only the system's Left and Menu open it — so the guide stays off.
 struct TabBarFocusGuide: UIViewRepresentable {
     func makeUIView(context: Context) -> GuideView { GuideView() }
     func updateUIView(_ view: GuideView, context: Context) { view.refresh() }
@@ -45,10 +49,22 @@ struct TabBarFocusGuide: UIViewRepresentable {
             refresh()
         }
 
+        private var retries = 0
+
         func refresh() {
-            guard let tabs = Self.tabBarController(from: window?.rootViewController) else { guide.isEnabled = false; return }
+            guard let tabs = Self.tabBarController(from: window?.rootViewController) else {
+                // The tab view's controller can join the hierarchy after this
+                // view does: look again shortly (up to ~5 s).
+                guide.isEnabled = false
+                guard window != nil, retries < 25 else { return }
+                retries += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.refresh() }
+                return
+            }
             guide.isEnabled = true
             guide.preferredFocusEnvironments = [tabs.tabBar]
+            if retries > 0 { TraceFile.write("focus", "sidebar guide found the tab bar after \(retries) tries") }
+            retries = 0
         }
 
         static func tabBarController(from root: UIViewController?) -> UITabBarController? {

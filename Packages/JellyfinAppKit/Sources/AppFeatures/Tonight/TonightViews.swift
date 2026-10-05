@@ -45,6 +45,11 @@ struct TonightSection: View {
                 Spacer()
                 TonightControls(store: store)
             }
+            // Up from the left half of the plan goes to the sidebar, not
+            // across to the controls on the right (as it does on any page).
+            .background(alignment: .leading) {
+                TabBarFocusGuide().frame(width: available / 2)
+            }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: 4), alignment: .leading, spacing: 44) {
                 ForEach(store.timeline.prefix(8), id: \.entry.id) { slot in
                     LandscapeCard(slot.entry.item, width: width) { app.play(slot.entry.item) }

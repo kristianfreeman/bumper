@@ -114,6 +114,24 @@ nonisolated struct GridSpec: Hashable, Sendable {
     }
 }
 
+/// BUMPER at the top of the sidebar, not selectable (tvOS 27: there's no
+/// sidebar header before it, and a fake tab would count toward the seven).
+private struct SidebarBrandHeader: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(tvOS 27.0, *) {
+            content.tabViewSidebarHeader {
+                BrandMark(.wordmark, height: 44, still: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .accessibilityIdentifier("sidebar.brand")
+            }
+        } else {
+            content
+        }
+    }
+}
+
 struct MainTabView: View {
     let session: UserSession
     @Environment(AppModel.self) private var app
@@ -154,6 +172,7 @@ struct MainTabView: View {
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
+            .modifier(SidebarBrandHeader())
             .toolbar(.hidden, for: .navigationBar)
         }
         .task { await loadLibraries() }

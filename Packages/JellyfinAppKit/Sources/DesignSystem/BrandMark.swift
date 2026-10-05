@@ -16,17 +16,20 @@ public struct BrandMark: View {
 
     let kind: Kind
     let height: CGFloat
+    let still: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.theme) private var theme
 
-    public init(_ kind: Kind = .wordmark, height: CGFloat) {
+    /// `still`: frame 0 only (the sidebar, anywhere it sits beside content).
+    public init(_ kind: Kind = .wordmark, height: CGFloat, still: Bool = false) {
         self.kind = kind
         self.height = height
+        self.still = still
     }
 
     public var body: some View {
         Group {
-            if reduceMotion {
+            if reduceMotion || still {
                 frame(0)
             } else {
                 TimelineView(.periodic(from: .now, by: 1 / BumperBrand.Boil.framesPerSecond)) { context in

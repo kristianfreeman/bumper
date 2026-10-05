@@ -24,6 +24,9 @@ final class SidebarTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.8)
         let afterLeft = focusedDescription(app)
         print("SIDEBAR-DEBUG content=\(content) afterLeft=\(afterLeft)")
+        if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/sidebar-open.png"))
+        }
         XCTAssertNotEqual(afterLeft, content, "Left from the first card didn't leave the row")
         XCTAssertTrue(afterLeft.hasPrefix("SIDEBAR"), "Left from the first card: focus on \(afterLeft), not the sidebar")
 
@@ -162,7 +165,9 @@ final class SidebarTests: XCTestCase {
 
     /// Up from the top row: the left half goes to the sidebar's tab button,
     /// the right half to the profile pills.
-    func testUpFromTheTopRowReachesTheSidebarOrTheProfile() {
+    func testUpFromTheTopRowReachesTheSidebarOrTheProfile() throws {
+        // tvOS 26's collapsed sidebar has no focusable item: only Left and Menu open it.
+        if #unavailable(tvOS 27.0) { throw XCTSkip("Up can't reach the sidebar before tvOS 27") }
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
@@ -183,5 +188,32 @@ final class SidebarTests: XCTestCase {
         let rightUp = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
         print("SIDEBAR-DEBUG up from third card: \(rightUp.identifier) '\(rightUp.label)'")
         XCTAssertTrue(rightUp.identifier.hasPrefix("profile."), "Up from the right half: focus on \(rightUp.identifier) '\(rightUp.label)'")
+    }
+
+    /// With Tonight leading Home, its controls sit top right: Up from the
+    /// left half still goes to the sidebar.
+    func testUpFromTonightReachesTheSidebar() throws {
+        // tvOS 26's collapsed sidebar has no focusable item: only Left and Menu open it.
+        if #unavailable(tvOS 27.0) { throw XCTSkip("Up can't reach the sidebar before tvOS 27") }
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0001"]
+        app.launch()
+        let add = app.buttons["detail.tonight"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !add.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.select)
+        Thread.sleep(forTimeInterval: 0.5)
+        remote.press(.menu)
+        XCTAssertTrue(app.descendants(matching: .any)["collection.tonight"].waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.2)
+        let card = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'card.tonight.'")).firstMatch
+        for _ in 0..<4 where !card.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.4) }
+        for _ in 0..<4 where !card.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.4) }
+        XCTAssertTrue(card.hasFocus, "couldn't reach the Tonight card (focus: \(focusedDescription(app)))")
+        remote.press(.up)
+        Thread.sleep(forTimeInterval: 0.8)
+        let up = focusedDescription(app)
+        XCTAssertTrue(up.hasPrefix("SIDEBAR"), "Up from the Tonight card: focus on \(up)")
     }
 }

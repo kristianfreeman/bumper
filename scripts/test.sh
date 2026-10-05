@@ -10,6 +10,7 @@
 #   scripts/test.sh unit                   ~1 min core tests on the tvOS simulator
 #   scripts/test.sh smoke [test]           ~25 s  deep-linked UI checks (optionally one test)
 #   scripts/test.sh player [test]          ~15 s  player controls on real clips (TestMedia/)
+#   scripts/test.sh sidebar [test]         ~15 s  sidebar and Up/Left/Menu focus routing (OS=26.2 for the TV's tvOS)
 #   scripts/test.sh profile [test]         ~15 s  Home profile corner: menu, sleep timer, stats
 #   scripts/test.sh settings [test]        ~15 s  Settings tab navigation
 #   scripts/test.sh search [test]          ~20 s  global search, with the search service running locally
@@ -141,6 +142,7 @@ case "${1:-fast}" in
   settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
   player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
   tonight) step build_for_testing; step ui_run -only-testing:"BumperUITests/TonightTests" ;;
+  sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/SidebarTests${2:+/$2}" ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
   search)
     # The search service, locally, answering without Jev.
