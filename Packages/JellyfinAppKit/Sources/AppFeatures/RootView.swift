@@ -163,6 +163,86 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        #if os(macOS)
+        macShell
+        #else
+        tabs
+        #endif
+    }
+
+    /// The places in the sidebar, in order (libraries most used first).
+    private struct Place: Identifiable { let id: String; let title: String; let icon: String }
+
+    private var places: [Place] {
+        var out = [Place(id: "home", title: "Home", icon: "house")]
+        for entry in plan.entries {
+            switch entry {
+            case .library(let view): out.append(Place(id: view.id, title: view.name ?? "Library", icon: icon(for: view)))
+            case .audiobooks: out.append(Place(id: "audiobooks", title: "Audiobooks", icon: "headphones"))
+            case .more: out.append(Place(id: "more", title: "More", icon: "square.grid.2x2"))
+            }
+        }
+        out.append(Place(id: "search", title: "Search", icon: "magnifyingglass"))
+        out.append(Place(id: "settings", title: "Settings", icon: "gearshape"))
+        return out
+    }
+
+    @ViewBuilder
+    private func page(for id: String) -> some View {
+        switch id {
+        case "home": HomeView()
+        case "search": SearchView()
+        case "settings": SettingsView()
+        case "remote": remoteTab
+        default:
+            ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
+                if case .library(let view) = entry, view.id == id { LibraryView(library: view) }
+                else if case .audiobooks(let libraries) = entry, id == "audiobooks" { AudiobookLibraryView(libraries: libraries) }
+                else if case .more(let libraries) = entry, id == "more" { MoreLibrariesView(libraries: libraries) }
+            }
+        }
+    }
+
+    #if os(macOS)
+    /// The Mac's own shape: a sidebar list and the page beside it (the tab
+    /// view's adaptable sidebar didn't open there, and laid pages out wider
+    /// than the window).
+    private var macShell: some View {
+        NavigationSplitView {
+            List(selection: Binding<String?>(get: { selection }, set: { if let s = $0 { selection = s } })) {
+                BrandMark(.wordmark, height: 26, still: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .selectionDisabled()
+                ForEach(places) { place in
+                    Label(place.title, systemImage: place.icon).tag(place.id)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
+        } detail: {
+            RoutedStack(initial: selection == "home" ? app.launchRoute : []) { page(for: selection) }
+                .id(selection)
+        }
+        .onChange(of: selection) { _, tab in recordOpen(tab) }
+        .onChange(of: app.pendingTab) { _, tab in
+            guard let tab else { return }
+            selection = tab
+            app.pendingTab = nil
+        }
+        .task { await loadLibraries() }
+    }
+    #endif
+
+    private func recordOpen(_ tab: String) {
+        // Opening a library counts toward its place in the order.
+        if tab == "audiobooks" {
+            for lib in app.libraries where lib.collectionType == "books" { app.libraryUsage.record(lib.id, weight: LibraryUsage.openWeight) }
+        } else if app.libraries.contains(where: { $0.id == tab }) {
+            app.libraryUsage.record(tab, weight: LibraryUsage.openWeight)
+        }
+    }
+
+    private var tabs: some View {
         // One stack *around* the tabs, not one per tab: pushed pages cover
         // the whole screen (like the TV app), and the sidebarAdaptable tab
         // view can't clip their top edge — it does that to pages pushed
@@ -194,14 +274,7 @@ struct MainTabView: View {
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
-            .onChange(of: selection) { _, tab in
-                // Opening a library counts toward its place in the order.
-                if tab == "audiobooks" {
-                    for lib in app.libraries where lib.collectionType == "books" { app.libraryUsage.record(lib.id, weight: LibraryUsage.openWeight) }
-                } else if app.libraries.contains(where: { $0.id == tab }) {
-                    app.libraryUsage.record(tab, weight: LibraryUsage.openWeight)
-                }
-            }
+            .onChange(of: selection) { _, tab in recordOpen(tab) }
             .onChange(of: app.pendingTab) { _, tab in
                 guard let tab else { return }
                 selection = tab

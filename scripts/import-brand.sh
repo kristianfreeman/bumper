@@ -49,26 +49,27 @@ stack "$BA/App Icon - App Store.imagestack" 1280x768
 imageset "$BA/Top Shelf Image.imageset" tv "1x=topshelf/topshelf-1920x720.png" "2x=topshelf/topshelf-3840x1440.png"
 imageset "$BA/Top Shelf Image Wide.imageset" tv "1x=topshelf/topshelf-wide-2320x720.png" "2x=topshelf/topshelf-wide-4640x1440.png"
 
-# Launch screen: the still sticker on soot.
-imageset "$TV/LaunchSymbol.imageset" tv "1x=frames/symbol-0@240.png" "2x=frames/symbol-0@480.png"
-mkdir -p "$TV/LaunchBackground.colorset"
-printf '{ "colors" : [ { "idiom" : "universal", "color" : { "color-space" : "srgb", "components" : { "red" : "0x17", "green" : "0x16", "blue" : "0x14", "alpha" : "1.000" } } } ], %s }\n' "$INFO" > "$TV/LaunchBackground.colorset/Contents.json"
-
-# The boil: four frames each of the wordmark and the sticker.
-for mark in wordmark symbol wordmark-light symbol-light; do
-  for i in 0 1 2 3; do
-    imageset "$TV/BumperBoil-$mark-$i.imageset" tv "1x=frames/$mark-$i@240.png" "2x=frames/$mark-$i@480.png"
+# The marks, for every app: the TV's catalog (idiom tv) and the iPhone/iPad
+# and Mac ones (universal). Launch symbol, boil frames, still vector marks.
+brand_images() {
+  local CAT="$1" IDIOM="$2"
+  imageset "$CAT/LaunchSymbol.imageset" "$IDIOM" "1x=frames/symbol-0@240.png" "2x=frames/symbol-0@480.png"
+  mkdir -p "$CAT/LaunchBackground.colorset"
+  printf '{ "colors" : [ { "idiom" : "universal", "color" : { "color-space" : "srgb", "components" : { "red" : "0x17", "green" : "0x16", "blue" : "0x14", "alpha" : "1.000" } } } ], %s }\n' "$INFO" > "$CAT/LaunchBackground.colorset/Contents.json"
+  for mark in wordmark symbol wordmark-light symbol-light; do
+    for i in 0 1 2 3; do
+      imageset "$CAT/BumperBoil-$mark-$i.imageset" "$IDIOM" "1x=frames/$mark-$i@240.png" "2x=frames/$mark-$i@480.png"
+    done
+    local dir="$CAT/BumperMark-$mark.imageset"
+    rm -rf "$dir"; mkdir -p "$dir"
+    cp "$DIST/$mark.svg" "$dir/$mark.svg"
+    printf '{ "images" : [ { "filename" : "%s.svg", "idiom" : "universal" } ], "properties" : { "preserves-vector-representation" : true }, %s }\n' "$mark" "$INFO" > "$dir/Contents.json"
   done
-done
-
-# The clean still marks (vectors) for places where the mark sits still at
-# small sizes, like the sidebar header.
-for mark in wordmark wordmark-light symbol symbol-light; do
-  dir="$TV/BumperMark-$mark.imageset"
-  rm -rf "$dir"; mkdir -p "$dir"
-  cp "$DIST/$mark.svg" "$dir/$mark.svg"
-  printf '{ "images" : [ { "filename" : "%s.svg", "idiom" : "universal" } ], "properties" : { "preserves-vector-representation" : true }, %s }\n' "$mark" "$INFO" > "$dir/Contents.json"
-done
+}
+mkdir -p iPhone/Assets.xcassets Mac/Assets.xcassets
+brand_images "$TV" tv
+brand_images iPhone/Assets.xcassets universal
+brand_images Mac/Assets.xcassets universal
 
 # iPhone: one 1024 icon.
 PHONE=iPhone/Assets.xcassets
