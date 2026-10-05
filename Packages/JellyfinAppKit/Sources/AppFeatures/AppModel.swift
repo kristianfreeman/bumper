@@ -207,6 +207,9 @@ final class AppModel {
         self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
+        #if DEBUG
+        Task { @MainActor in try? await Task.sleep(for: .seconds(2)); await self.probeSubtitles() }
+        #endif
         if ProcessInfo.processInfo.arguments.contains("-metricsFile") {
             // Device runs (scripts/device-scroll-check.sh): frame timing to a
             // file every second, read back with devicectl.
@@ -385,6 +388,40 @@ final class AppModel {
     }
 
     /// Back to the front: catch up with changes made on other devices.
+    #if DEBUG
+    /// `-subtitleProbe [itemId]` (debug builds): runs Find Subtitles' search
+    /// and ranking for an item (default: the first one in progress) on the
+    /// signed-in server and traces what comes back. Searches only; nothing
+    /// is downloaded.
+    func probeSubtitles() async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-subtitleProbe"), let client = session?.client else { return }
+        let given = i + 1 < args.count && !args[i + 1].hasPrefix("-") ? args[i + 1] : nil
+        var fallback: String?
+        if given == nil { fallback = try? await client.resumeItems(limit: 1).items.first?.id }
+        guard let id = given ?? fallback, let item = try? await client.item(id: id),
+              let source = item.mediaSources?.first else {
+            TraceFile.write("subtitles", "probe: no item to try"); return
+        }
+        let video = (source.mediaStreams ?? []).first { $0.type == .video }
+        let file = SubtitleFile(title: item.seriesName ?? item.name ?? "", year: item.productionYear,
+                                season: item.kind == .episode ? item.parentIndexNumber : nil, episode: item.kind == .episode ? item.indexNumber : nil,
+                                fileName: source.path.map { URL(fileURLWithPath: $0).lastPathComponent } ?? source.name,
+                                fps: video?.realFrameRate ?? video?.averageFrameRate,
+                                durationSeconds: item.runTimeTicks.map { Double($0) / Double(BaseItem.ticksPerSecond) })
+        let language = PlayerController.preferredLanguage()
+        TraceFile.write("subtitles", "probe: \(file.title) S\(file.season ?? 0)E\(file.episode ?? 0) [\(file.fileName ?? "?")] in \(language)")
+        do {
+            let found = try await client.remoteSubtitles(itemId: item.id, language: language)
+            let (ranked, judgedBy) = await subtitleRanker.rank(found, for: file)
+            TraceFile.write("subtitles", "probe: \(found.count) found, judged on \(judgedBy)")
+            for f in ranked.prefix(5) { TraceFile.write("subtitles", "probe:   \(f.confidenceText)  \(f.name)  — \(f.reasons.joined(separator: "; "))") }
+        } catch {
+            TraceFile.write("subtitles", "probe: search failed: \(error)")
+        }
+    }
+    #endif
+
     func refreshFromOtherDevices() {
         Task { await queueSync?.pull() }
         Task { await refreshProfile() }

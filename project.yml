@@ -161,6 +161,8 @@ targets:
         NSLocalNetworkUsageDescription: Find your Jellyfin server and your Apple TV.
         NSBonjourServices: [_bumper._tcp]
         UIBackgroundModes: [audio]                 # audiobooks keep playing
+        # services/search, as on the TV (smart search and subtitle ranking).
+        BumperSearchEndpoint: https://bumper-search.signalnerve.workers.dev/v1/interpret
 
   # Bumper for Mac: the same app (AppFeatures) in a window. Same bundle ID:
   # one listing and one themes purchase across TV, iPhone, iPad and Mac.
@@ -197,6 +199,8 @@ targets:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: Find your Jellyfin server and your Apple TV.
         NSBonjourServices: [_bumper._tcp]
+        # services/search, as on the TV (smart search and subtitle ranking).
+        BumperSearchEndpoint: https://bumper-search.signalnerve.workers.dev/v1/interpret
 
   BumperPhoneUITests:
     type: bundle.ui-testing
