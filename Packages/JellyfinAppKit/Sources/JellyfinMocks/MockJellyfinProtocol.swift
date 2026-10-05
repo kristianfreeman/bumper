@@ -58,6 +58,12 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
            let media = MockMedia.stream(itemId: String(parts[1]), range: request.value(forHTTPHeaderField: "Range")) {
             return media
         }
+        // Downloads: a test clip's own file, or (any other item) stand-in
+        // bytes, both with byte ranges like the real server.
+        if parts.count == 3, parts[0] == "Items", parts[2] == "Download" {
+            let range = request.value(forHTTPHeaderField: "Range")
+            return MockMedia.stream(itemId: String(parts[1]), range: range) ?? MockMedia.download(itemId: String(parts[1]), range: range)
+        }
         if parts.count >= 3, parts[0] == "Audio", parts[2].hasPrefix("stream") {
             let ticks = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name.lowercased() == "starttimeticks" }?.value
             if let book = MockBooks.stream(itemId: String(parts[1]), startTicks: Int64(ticks ?? "") ?? 0) { return book }

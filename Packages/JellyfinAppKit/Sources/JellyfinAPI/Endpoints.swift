@@ -344,6 +344,11 @@ extension JellyfinClient {
     }
 
     /// Server-relative URLs returned in PlaybackInfo (TranscodingUrl, DeliveryUrl).
+    /// The item's original file, as stored on the server (byte ranges work).
+    public func downloadURL(itemId: String) -> URL {
+        url("/Items/\(itemId)/Download", query: [.init(name: "api_key", value: accessToken)])
+    }
+
     public func absoluteURL(serverRelative path: String) -> URL? {
         if let url = URL(string: path), url.scheme != nil { return url }
         let base = baseURL.absoluteString.hasSuffix("/") ? String(baseURL.absoluteString.dropLast()) : baseURL.absoluteString

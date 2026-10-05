@@ -209,6 +209,32 @@ public enum MockMedia {
         return serve(dir.appending(path: fixtures[i].file), range: range)
     }
 
+    /// A catalog item's "file" for downloads: deterministic stand-in bytes
+    /// (the item's id repeated), 3 MB, so a download can be checked byte for byte.
+    static func download(itemId: String, range: String?) -> (Int, Data, [String: String]) {
+        let size = downloadSize
+        var start = 0, end = size - 1
+        if let range, range.hasPrefix("bytes=") {
+            let p = range.dropFirst(6).split(separator: "-", omittingEmptySubsequences: false)
+            if let s = p.first.flatMap({ Int($0) }) { start = s }
+            if p.count > 1, let e = Int(p[1]) { end = min(e, size - 1) }
+        }
+        guard start < size, start <= end else { return (416, Data(), ["Content-Range": "bytes */\(size)"]) }
+        let data = Data((start...end).map { downloadByte(itemId, at: $0) })
+        var headers = ["Content-Type": "video/mp4", "Accept-Ranges": "bytes", "Content-Length": String(data.count),
+                       "Content-Disposition": "attachment; filename=\"\(itemId).mp4\""]
+        if range != nil { headers["Content-Range"] = "bytes \(start)-\(end)/\(size)" }
+        return (range == nil ? 200 : 206, data, headers)
+    }
+
+    public static let downloadSize = 3 * 1024 * 1024 + 123
+
+    /// The stand-in file's byte at an offset (tests compare against it).
+    public static func downloadByte(_ itemId: String, at offset: Int) -> UInt8 {
+        let id = Array(itemId.utf8)
+        return id[offset % id.count] &+ UInt8(truncatingIfNeeded: offset / id.count)
+    }
+
     /// Simulated server time-to-first-byte for media requests (LAN ≈ 10–30 ms:
     /// the server opens the file and seeks). Applied by MockHTTPServer.
     public static let latency = Mutex<Duration>(.zero)
