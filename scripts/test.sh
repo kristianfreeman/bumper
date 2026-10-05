@@ -64,6 +64,11 @@ stop_sim_apps() {
   local udid; udid=$(booted_udid)
   [[ -n "$udid" ]] || return 0
   xcrun simctl terminate "$udid" "$BUNDLE" >/dev/null 2>&1 || true
+  # Bumper in any other booted simulator (iPhone, iPad) shares the Mac's
+  # loopback: its mock server would hold port 8097 and the TV's can't start.
+  for other in $(xcrun simctl list devices booted 2>/dev/null | grep -oE '[0-9A-F-]{36}'); do
+    xcrun simctl terminate "$other" "$BUNDLE" >/dev/null 2>&1 || true
+  done
   xcrun simctl terminate "$udid" "$BUNDLE.uitests.xctrunner" >/dev/null 2>&1 || true
   # xcodebuild's failure diagnostics (`simctl diagnose`) hang off the simulator
   # service, not our process tree, and can grind on for minutes.

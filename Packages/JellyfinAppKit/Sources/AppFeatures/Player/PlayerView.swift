@@ -30,8 +30,10 @@ struct PlayerView: View {
     enum PlayerFocus: Hashable { case surface, skip, control(PlayerMenu), option(String) }
 
     var body: some View {
-        layers
-            .modifier(PlayerLifecycle(view: self))
+        // Two halves for the type checker (one long chain was too much on
+        // macOS). Called on self: a modifier holding a copy of the view saw
+        // copies of its state, and playback never started.
+        lifecycle(layers)
     }
 
     @ViewBuilder
@@ -111,7 +113,7 @@ struct PlayerView: View {
 
     /// The player's modifiers, apart from its layers (one long chain was
     /// too much for the type checker on macOS).
-    fileprivate func lifecycle<V: View>(_ content: V) -> some View {
+    private func lifecycle<V: View>(_ content: V) -> some View {
         content
             .defaultFocus($focus, .surface)
             .tvExitCommand(perform: handleExit)
@@ -292,11 +294,6 @@ struct PlayerView: View {
 
 /// Hosts the active backend's video view (AVPlayerLayer-backed, or
 /// VLCKit's drawable). Swaps cleanly if the item moves to another backend.
-private struct PlayerLifecycle: ViewModifier {
-    let view: PlayerView
-    func body(content: Content) -> some View { view.lifecycle(content) }
-}
-
 #if canImport(UIKit)
 struct VideoSurface: UIViewRepresentable {
     let view: UIView
