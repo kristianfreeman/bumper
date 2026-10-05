@@ -218,7 +218,7 @@ final class AppModel {
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         companion.start()
         #if DEBUG
-        Task { @MainActor in try? await Task.sleep(for: .seconds(2)); await self.probeSubtitles() }
+        Task { @MainActor in try? await Task.sleep(for: .seconds(2)); await self.probeSubtitles(); await self.probeDownloads() }
         #endif
         if ProcessInfo.processInfo.arguments.contains("-metricsFile") {
             // Device runs (scripts/device-scroll-check.sh): frame timing to a
@@ -416,6 +416,59 @@ final class AppModel {
 
     /// Back to the front: catch up with changes made on other devices.
     #if DEBUG
+    /// `-downloadProbe [itemId]` (debug builds, a real server): downloads an
+    /// item (default: the shortest episode) as the original, checks the file
+    /// is video and opens, removes it; then the same as a Small transcode.
+    /// Traces each step; leaves nothing behind.
+    func probeDownloads() async {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-downloadProbe"), let session, let store = downloads else { return }
+        let client = session.client
+        let given = i + 1 < args.count && !args[i + 1].hasPrefix("-") ? args[i + 1] : nil
+        var id = given
+        if id == nil {
+            // A real episode (sorting by length found a missing one, 0 KB): Next Up's shortest.
+            let next = (try? await client.nextUp(limit: 20).items) ?? []
+            id = next.filter { ($0.runTimeTicks ?? 0) > 0 }.min { ($0.runTimeTicks ?? 0) < ($1.runTimeTicks ?? 0) }?.id
+        }
+        guard let id, let item = try? await client.item(id: id) else { TraceFile.write("downloads", "probe: no item"); return }
+        TraceFile.write("downloads", "probe: \(item.seriesName ?? "") \(item.name ?? id), \(item.runtime.map { Int($0.seconds) } ?? 0) s, source \(item.mediaSources?.first?.container ?? "?") \(item.mediaSources?.first?.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?")")
+        let only = args.firstIndex(of: "-downloadProbeOnly").flatMap { args.indices.contains($0 + 1) ? DownloadPreset(rawValue: args[$0 + 1]) : nil }
+        for preset in only.map({ [$0] }) ?? [DownloadPreset.original, .small] {
+            store.remove([id])
+            try? await Task.sleep(for: .milliseconds(300))
+            let start = ContinuousClock.now
+            store.download([item], client: client, accountId: session.account.id, quality: preset.quality)
+            var record: DownloadRecord?
+            for tick in 0..<1200 {                                // up to 10 minutes
+                try? await Task.sleep(for: .milliseconds(500))
+                record = store.record(id)
+                if tick % 30 == 29, let r = record {
+                    let done = r.pieces.filter { $0.file != nil }.count
+                    TraceFile.write("downloads", "probe \(preset.rawValue): \(ByteCountFormatter.string(fromByteCount: r.received, countStyle: .file)) so far, \(done)/\(r.pieces.count) pieces, \(String(describing: r.state))")
+                }
+                if let r = record, r.isDone { break }
+                if case .failed? = record?.state { break }
+            }
+            let secs = (ContinuousClock.now - start).components.seconds
+            guard let r = record, r.isDone, let file = store.localFile(for: id) else {
+                TraceFile.write("downloads", "probe \(preset.rawValue): FAILED after \(secs) s — \(String(describing: record?.state))")
+                continue
+            }
+            let head = (try? FileHandle(forReadingFrom: file).read(upToCount: 12)) ?? Data()
+            let kind = head.starts(with: [0x1A, 0x45, 0xDF, 0xA3]) ? "Matroska" : head.dropFirst(4).starts(with: Array("ftyp".utf8)) ? "MP4" : "unknown (\(head.map { String(format: "%02x", $0) }.joined()))"
+            let asset = AVURLAsset(url: file)
+            let playable = (try? await asset.load(.isPlayable)) ?? false
+            let duration = (try? await asset.load(.duration)).map { Int($0.seconds) } ?? -1
+            let size = r.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?"
+            let rate = r.size.map { Double($0) / max(1, Double(secs)) / 1_048_576 } ?? 0
+            let plan = planner.localPlan(item: r.item, source: r.item.mediaSources?.first ?? item.mediaSources![0], file: file, startPosition: nil, audioIndex: nil, subtitleIndex: nil)
+            TraceFile.write("downloads", "probe \(preset.rawValue): \(size) in \(secs) s (\(String(format: "%.1f", rate)) MB/s), \(r.pieces.count) piece(s), \(kind), AVFoundation playable \(playable), \(duration) s, plays in \(plan.engine.rawValue), subtitles \(r.subtitles?.count ?? 0)")
+        }
+        store.remove([id])
+        TraceFile.write("downloads", "probe: done, removed")
+    }
+
     /// `-subtitleProbe [itemId]` (debug builds): runs Find Subtitles' search
     /// and ranking for an item (default: the first one in progress) on the
     /// signed-in server and traces what comes back. Searches only; nothing

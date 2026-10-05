@@ -37,6 +37,7 @@ struct DownloadPill: View {
                     Pill("Downloaded", systemImage: "checkmark.circle.fill", active: true) { confirmRemove = true }
                 }
             }
+            .pillCaption(DownloadWords.caption(record))
             .accessibilityIdentifier("detail.download")
             .confirmationDialog("Remove the download?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove Download", role: .destructive) { store.remove([item.id]) }
@@ -84,6 +85,7 @@ struct SeasonDownloadPill: View {
                     }
                 }
             }
+            .pillCaption("Season")
             .accessibilityIdentifier("detail.downloadSeason")
             .confirmationDialog("Remove \(seasonName)'s downloads?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove Downloads", role: .destructive) { store.removeSeries(seriesId, seasonId: seasonId) }
@@ -294,6 +296,18 @@ struct DownloadedShowView: View {
 
 enum DownloadWords {
     static func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
+
+    /// A Download button's caption: "Download", "42%", "Paused", "Downloaded".
+    static func caption(_ r: DownloadRecord?) -> String {
+        switch r?.state {
+        case nil: "Download"
+        case .queued?: "Waiting"
+        case .downloading?, .finishing?: r?.progress.map { "\(Int($0 * 100))%" } ?? "Downloading"
+        case .paused?: "Paused"
+        case .failed?: "Retry"
+        case .done?: "Downloaded"
+        }
+    }
 
     static func count(_ n: Int, _ one: String, _ many: String) -> String {
         let words = ["No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"]

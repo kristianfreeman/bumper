@@ -67,6 +67,7 @@ targets:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false            # HTTPS only (exempt)
         # Soot, with the still sticker (scripts/import-brand.sh).
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -114,6 +115,7 @@ targets:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false            # HTTPS only (exempt)
         # Artwork comes from the Jellyfin server, usually plain HTTP at home.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -152,6 +154,7 @@ targets:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false            # HTTPS only (exempt)
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchSymbol
@@ -197,6 +200,7 @@ targets:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false            # HTTPS only (exempt)
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true

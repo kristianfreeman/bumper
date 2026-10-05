@@ -111,8 +111,27 @@ public struct PillFace<Icon: View>: View {
     }
 
     private var open: Bool { focused || alwaysShowsTitle }
+    @Environment(\.pillCaptions) private var captions
+    @Environment(\.pillCaption) private var caption
 
     public var body: some View {
+        // Touch and the Mac have no focus to open a pill and say what it
+        // is: where asked (a detail page's actions), its name sits beneath.
+        if captions && !alwaysShowsTitle && !Platform.isTV {
+            VStack(spacing: 6) {
+                face
+                Text(caption ?? title)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(theme.secondaryText)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        } else {
+            face
+        }
+    }
+
+    @ViewBuilder private var face: some View {
         let d = size.diameter
         HStack(spacing: d * 0.16) {
             icon
@@ -154,6 +173,18 @@ public struct PillFace<Icon: View>: View {
         if prominent { return theme.accent }
         return active ? theme.accent.opacity(0.22) : theme.primaryText.opacity(0.12)
     }
+}
+
+extension EnvironmentValues {
+    /// Pills show their name beneath them (off the TV, where focus would).
+    @Entry public var pillCaptions = false
+    /// A pill's short name for its caption ("Restart" for Play from Beginning).
+    @Entry public var pillCaption: String? = nil
+}
+
+extension View {
+    /// The short name a pill shows beneath it, where pills show one.
+    public func pillCaption(_ text: String) -> some View { environment(\.pillCaption, text) }
 }
 
 /// No system focus effect: the face draws its own.

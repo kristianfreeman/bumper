@@ -229,28 +229,44 @@ struct ItemDetailView: View {
 
     @ViewBuilder
     private func actionButtons(_ item: BaseItem) -> some View {
-        HStack(spacing: 22) {
+        if Layout.device == .phone {
+            // More buttons than a phone is wide: they scroll sideways.
+            ScrollView(.horizontal, showsIndicators: false) { actionRow(item) }
+                .scrollClipDisabled()
+        } else {
+            actionRow(item)
+        }
+    }
+
+    private func actionRow(_ item: BaseItem) -> some View {
+        HStack(spacing: Layout.device == .phone ? 18 : 22) {
             if let target = model.playTarget {
                 Pill(playLabel(target), systemImage: "play.fill", prominent: true) { app.play(target) }
+                    .pillCaption(target.resumePosition != nil ? "Resume" : "Play")
                     .focused($playFocused)
                     .onChange(of: playFocused) { _, focused in if focused { app.prepare(target) } }
                 if let cast = castLink, let tv = cast.connectedTo {
                     Pill("Play on \(tv)", systemImage: "tv") { cast.play(target.id) }
+                        .pillCaption("On TV")
                         .accessibilityIdentifier("detail.playOnTV")
                 }
                 if target.resumePosition != nil {
                     Pill("Play from Beginning", systemImage: "gobackward") { app.play(target, resume: false) }
+                        .pillCaption("Restart")
                 }
                 Pill(app.queue.contains(target.id) ? "In Queue" : "Add to Queue", systemImage: app.queue.contains(target.id) ? "text.badge.checkmark" : "text.badge.plus",
                      active: app.queue.contains(target.id)) { app.queue.toggle(target) }
+                    .pillCaption("Queue")
                     .accessibilityIdentifier("detail.queue")
                 if item.kind == .series || item.kind == .movie {
                     // On a loop, not marking anything watched (a show from a random episode).
                     Pill("Background Noise", systemImage: "infinity") { app.playInBackground(item) }
+                        .pillCaption("Background")
                         .accessibilityIdentifier("detail.background")
                 }
                 if item.kind.isPlayable, item.mediaSources?.first.map({ $0.audioStreams.count > 1 || !$0.subtitleStreams.isEmpty }) == true {
                     Pill("Audio and Subtitles", systemImage: "captions.bubble") { showTracks = true }
+                        .pillCaption("Audio")
                 }
             }
             // Downloads (iPhone, iPad, Mac): a film or episode, or a show's season.
@@ -262,10 +278,13 @@ struct ItemDetailView: View {
             }
             Pill(model.item.isPlayed ? "Watched" : "Mark Watched", systemImage: model.item.isPlayed ? "checkmark.circle.fill" : "checkmark.circle",
                  active: model.item.isPlayed) { toggleWatched() }
+                .pillCaption("Watched")
             Pill(model.item.isFavorite ? "Favourite" : "Add to Favourites", systemImage: model.item.isFavorite ? "heart.fill" : "heart",
                  active: model.item.isFavorite) { toggleFavorite() }
+                .pillCaption("Favourite")
         }
         .padding(.top, 8)
+        .environment(\.pillCaptions, true)                   // touch and the Mac: what each button does
     }
 
     private func playLabel(_ target: BaseItem) -> String {

@@ -121,7 +121,11 @@ public final class DownloadStore {
     }
 
     /// How many pieces download at once, and how big each is.
-    public static let parallelPieces = 4
+    /// How many pieces download at once (`-downloadParallel N` to try others).
+    @ObservationIgnored public var parallelPieces: Int = {
+        let a = ProcessInfo.processInfo.arguments
+        return a.firstIndex(of: "-downloadParallel").flatMap { a.indices.contains($0 + 1) ? Int(a[$0 + 1]) : nil } ?? 4
+    }()
     @ObservationIgnored public let pieceSize: Int64
 
     @ObservationIgnored public let directory: URL
@@ -238,7 +242,8 @@ public final class DownloadStore {
         r.state = .paused
         records[itemId] = r
         save()
-        Task { await downloader.cancel(download: itemId, keepResumeData: true); await advance() }
+        cancel(itemId, keepResumeData: true)
+        Task { await advance() }
     }
 
     public func resume(_ itemId: String) {
@@ -253,7 +258,7 @@ public final class DownloadStore {
     public func remove(_ itemIds: [String]) {
         for id in itemIds {
             guard let r = records.removeValue(forKey: id) else { continue }
-            Task { await downloader.cancel(download: id, keepResumeData: false) }
+            cancel(id, keepResumeData: false)
             if let file = r.file { try? FileManager.default.removeItem(at: directory.appending(path: file)) }
             for p in r.pieces { if let f = p.file { try? FileManager.default.removeItem(at: directory.appending(path: f)) } }
             try? FileManager.default.removeItem(at: directory.appending(path: id, directoryHint: .isDirectory))
@@ -266,6 +271,19 @@ public final class DownloadStore {
         remove(episodes(seriesId: seriesId, seasonId: seasonId).map(\.id))
     }
 
+    /// Stops an item's pieces. A start for the same item waits for this:
+    /// done in passing, the cancel landed after a quick remove-and-download
+    /// (or pause-and-resume) had begun again, and stopped the new pieces.
+    @ObservationIgnored private var cancelling: [String: Task<Void, Never>] = [:]
+
+    private func cancel(_ id: String, keepResumeData: Bool) {
+        let previous = cancelling[id]
+        cancelling[id] = Task { [downloader] in
+            await previous?.value
+            await downloader.cancel(download: id, keepResumeData: keepResumeData)
+        }
+    }
+
     private func isFailed(_ r: DownloadRecord) -> Bool { if case .failed = r.state { return true } else { return false } }
 
     /// Starts the next queued download when nothing is downloading.
@@ -276,6 +294,7 @@ public final class DownloadStore {
     }
 
     private func start(_ id: String) async {
+        if let pending = cancelling.removeValue(forKey: id) { await pending.value }
         guard var r = records[id], let client = clients[r.accountId] else { return }
         r.state = .downloading
         records[id] = r
@@ -295,12 +314,26 @@ public final class DownloadStore {
             TraceFile.write("downloads", "\(r.item.name ?? id): transcoding, about \(r.estimatedSize.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "?")")
         }
         if r.pieces.isEmpty {
-            // How big, and can it come in pieces?
-            var head = URLRequest(url: url)
-            head.httpMethod = "HEAD"
-            let response = (try? await client.session.data(for: head))?.1 as? HTTPURLResponse
-            let size = response?.expectedContentLength ?? -1
-            let ranges = response?.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased().contains("bytes") ?? false
+            // How big, and can it come in pieces? Ask for its first byte: a
+            // 206 with "bytes 0-0/<size>" answers both (a real server left
+            // Accept-Ranges off its HEAD reply, and the file came in one piece).
+            var probe = URLRequest(url: url)
+            probe.setValue(client.authorizationHeader, forHTTPHeaderField: "Authorization")
+            probe.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+            var response = (try? await client.session.data(for: probe))?.1 as? HTTPURLResponse
+            var size: Int64 = -1
+            var ranges = false
+            if response?.statusCode == 206, let total = response?.value(forHTTPHeaderField: "Content-Range")?.split(separator: "/").last.flatMap({ Int64($0) }) {
+                size = total
+                ranges = true
+            } else {
+                var head = URLRequest(url: url)
+                head.httpMethod = "HEAD"
+                head.setValue(client.authorizationHeader, forHTTPHeaderField: "Authorization")
+                response = (try? await client.session.data(for: head))?.1 as? HTTPURLResponse
+                size = response?.expectedContentLength ?? -1
+                ranges = response?.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased().contains("bytes") ?? false
+            }
             guard var current = records[id], current.state == .downloading else { return }
             current.size = size > 0 ? size : (current.item.mediaSources?.first?.size)
             current.pieces = Self.pieces(size: size > 0 ? size : nil, ranges: ranges, pieceSize: pieceSize)
@@ -354,11 +387,14 @@ public final class DownloadStore {
         guard let r = records[id], r.state == .downloading else { return }
         let inFlight = inFlightPieces[id] ?? []
         let waiting = r.pieces.indices.filter { r.pieces[$0].file == nil && !inFlight.contains($0) }
-        for i in waiting.prefix(max(0, Self.parallelPieces - inFlight.count)) {
+        for i in waiting.prefix(max(0, parallelPieces - inFlight.count)) {
             inFlightPieces[id, default: []].insert(i)
             let resume = r.pieces[i].resumeData
             records[id]?.pieces[i].resumeData = nil
-            downloader.fetch(url, range: r.pieces[i].range, download: id, piece: i, resumeData: resume, allowsCellular: allowsCellular)
+            // The token in a header too: servers don't all take it in the URL
+            // for downloads (a real one answered 401 to api_key alone).
+            let auth = clients[r.accountId].map { ["Authorization": $0.authorizationHeader] } ?? [:]
+            downloader.fetch(url, range: r.pieces[i].range, download: id, piece: i, headers: auth, resumeData: resume, allowsCellular: allowsCellular)
         }
     }
 

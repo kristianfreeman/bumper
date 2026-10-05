@@ -28,6 +28,11 @@ public final class SegmentedDownloader: NSObject, URLSessionDownloadDelegate, Se
     }
 
     private let handler = Mutex<(@Sendable (Event) -> Void)?>(nil)
+    /// Bytes so far per piece ("download|piece"), handed on at most four
+    /// times a second: URLSession reports every few kilobytes, and an event
+    /// (a hop to the main actor) for each flooded it — a 1 GB file crashed
+    /// the app.
+    private let progress = Mutex<(latest: [String: Int64], scheduled: Bool)>(([:], false))
     private let piecesDirectory: URL
     private let sessionBox = Mutex<URLSession?>(nil)
     /// The system's completion handler for background events (iOS), called
@@ -107,8 +112,26 @@ public final class SegmentedDownloader: NSObject, URLSessionDownloadDelegate, Se
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
                            totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard let (download, piece) = Self.parse(downloadTask.taskDescription) else { return }
-        send(.progress(download: download, piece: piece, received: totalBytesWritten))
+        guard let tag = downloadTask.taskDescription, Self.parse(tag) != nil else { return }
+        let schedule = progress.withLock { p -> Bool in
+            p.latest[tag] = totalBytesWritten
+            defer { p.scheduled = true }
+            return !p.scheduled
+        }
+        if schedule {
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.flushProgress() }
+        }
+    }
+
+    private func flushProgress() {
+        let batch = progress.withLock { p -> [String: Int64] in
+            defer { p.latest = [:]; p.scheduled = false }
+            return p.latest
+        }
+        for (tag, bytes) in batch {
+            guard let (download, piece) = Self.parse(tag) else { continue }
+            send(.progress(download: download, piece: piece, received: bytes))
+        }
     }
 
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
