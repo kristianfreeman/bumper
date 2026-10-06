@@ -248,14 +248,20 @@ public final class DownloadStore {
         return (eps.count, eps.filter(\.isDone).count, eps.filter(\.isActive).count)
     }
 
-    /// Space left on the device for downloads.
+    /// Space left on the device for downloads. Asked of the system at most
+    /// every few seconds: the query takes ~25 ms, and pages read this as
+    /// they draw.
     public var freeBytes: Int64? {
         #if os(tvOS)
         nil                                                       // no downloads there
         #else
-        (try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage
+        if let cached = freeCache, cached.at.duration(to: .now) < .seconds(5) { return cached.bytes }
+        let bytes = (try? directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage
+        freeCache = (bytes, .now)
+        return bytes
         #endif
     }
+    @ObservationIgnored private var freeCache: (bytes: Int64?, at: ContinuousClock.Instant)?
 
     /// Bytes on disk (finished files and pieces so far).
     public var bytesUsed: Int64 { records.values.reduce(0) { $0 + ($1.isDone ? ($1.size ?? $1.received) : $1.received) } }

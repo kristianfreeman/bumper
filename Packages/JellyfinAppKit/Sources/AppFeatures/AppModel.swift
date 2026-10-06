@@ -34,8 +34,8 @@ nonisolated struct PlaybackRequest: Identifiable, Sendable {
     var mediaSourceId: String?
     var audioIndex: Int?
     var subtitleIndex: Int?
-    /// Background Noise: plays on and on (next episode, then back to the
-    /// first) and tells the server nothing — nothing marked watched, no
+    /// Background: plays on and on (next episode, then back to the first)
+    /// and tells the server nothing — nothing marked watched, no
     /// resume points, Continue Watching and Next Up untouched.
     var background = false
 }
@@ -216,7 +216,9 @@ final class AppModel {
         sessionChanged()                                          // (didSet doesn't run in init)
         self.defaults = defaults
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
-        companion.start()
+        // Only the TV answers phones: a phone or Mac advertising itself showed
+        // up in the phone's list of TVs.
+        if Platform.isTV { companion.start() }
         #if DEBUG
         Task { @MainActor in try? await Task.sleep(for: .seconds(2)); await self.probeSubtitles(); await self.probeDownloads() }
         #endif
@@ -519,9 +521,21 @@ final class AppModel {
 
     // MARK: Playback
 
-    /// Background Noise: a show from a random episode (or this episode, or
-    /// this film), on a loop, without marking anything watched.
+    /// In or out of the Queue (the TV's too, while connected to one).
+    func toggleQueue(_ item: BaseItem) {
+        let adding = !queue.contains(item.id)
+        queue.toggle(item)
+        casting?.queue(item.id, adding)
+    }
+
+    /// Background: a show from a random episode (or this episode, or this
+    /// film), on a loop, without marking anything watched.
     func playInBackground(_ item: BaseItem) {
+        if let cast = casting {
+            cast.play(item.id, false, true)
+            cast.noteStarted(item.name, background: true)
+            return
+        }
         guard let client = session?.client else { return }
         TraceFile.write("player", "background: \(item.name ?? item.id)")
         Task {
@@ -569,7 +583,21 @@ final class AppModel {
         return book
     }
 
+    /// The iPhone/iPad's link to an Apple TV: while connected, Play,
+    /// Background and Queue go to the TV.
+    @ObservationIgnored var cast: CastLink?
+
+    /// Connected to a TV: what's played goes there (books stay on the phone).
+    private var casting: CastLink? { cast?.isConnected == true ? cast : nil }
+
     func play(_ item: BaseItem, resume: Bool = true, mediaSourceId: String? = nil, audioIndex: Int? = nil, subtitleIndex: Int? = nil) {
+        if let cast = casting {
+            TraceFile.write("cast", "play \(item.name ?? item.id) on \(cast.connectedTo ?? "?")")
+            libraryUsage.recordPlay(item, libraries: libraries)
+            cast.play(item.id, resume, false)
+            cast.noteStarted(item.seriesName.map { "\($0) · \(item.name ?? "")" } ?? item.name)
+            return
+        }
         if audiobook != nil { stopAudiobook() }             // one thing plays at a time
         libraryUsage.recordPlay(item, libraries: libraries)
         playback = PlaybackRequest(item: item, resume: resume, mediaSourceId: mediaSourceId, audioIndex: audioIndex, subtitleIndex: subtitleIndex)

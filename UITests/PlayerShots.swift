@@ -19,6 +19,7 @@ final class PlayerShots: XCTestCase {
         remote.press(.up); Thread.sleep(forTimeInterval: 0.5); shot("4-icons")
         remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("5-subtitles")
         remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("6-audio")
-        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("7-info")
+        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("7-playback")
+        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("8-info")
     }
 }

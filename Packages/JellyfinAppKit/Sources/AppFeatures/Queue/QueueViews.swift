@@ -37,18 +37,13 @@ struct QueueSection: View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Queue").font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
+                    Text("Queue").font(.sectionTitle).foregroundStyle(theme.primaryText)
                     Text(QueueWords.summary(store)).font(.callout).foregroundStyle(theme.secondaryText)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("collection.queue")
                 Spacer()
                 QueueControls(store: store)
-            }
-            // Up from the left half of the plan goes to the sidebar, not
-            // across to the controls on the right (as it does on any page).
-            .background(alignment: .leading) {
-                TabBarFocusGuide().frame(width: available / 2)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: columns), alignment: .leading, spacing: Layout.shelfSpacing) {
                 ForEach(store.timeline.prefix(8), id: \.entry.id) { slot in
@@ -130,7 +125,7 @@ struct QueuePage: View {
             VStack(alignment: .leading, spacing: 30) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Queue").font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
-                    Text(QueueWords.summary(store)).font(.title3).foregroundStyle(theme.secondaryText)
+                    Text(QueueWords.summary(store)).font(.pageLede).foregroundStyle(theme.secondaryText)
                     QueueControls(store: store, showsEdit: false).padding(.top, 10)
                 }
                 .tvFocusSection()

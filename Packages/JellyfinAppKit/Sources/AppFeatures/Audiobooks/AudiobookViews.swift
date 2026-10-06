@@ -64,7 +64,7 @@ struct AudiobookLibraryView: View {
             CollectionList(sections: model.sections, firstCardFocus: $firstCardFocused) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Audiobooks").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(.white)
-                    if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(.white.opacity(0.75)) }
+                    if let lede = model.lede { Text(lede).font(.pageLede).foregroundStyle(.white.opacity(0.75)) }
                 }
                 .padding(.top, 20)
             }

@@ -26,6 +26,7 @@ final class CompanionBridge {
     private unowned let app: AppModel
     private let host: CompanionHost
     private var ticker: Task<Void, Never>?
+    private var lastPlaying: CompanionNowPlaying?
 
     static var deviceName: String {
         #if canImport(UIKit)
@@ -38,7 +39,9 @@ final class CompanionBridge {
     init(app: AppModel) {
         self.app = app
         let name = Self.deviceName
-        host = CompanionHost(name: name.isEmpty || name == "Apple TV" ? "\(Brand.displayName) on Apple TV" : name)
+        // Apps only see "Apple TV" for the device's name: advertise without
+        // one, and the system uses the room ("Living Room") for us.
+        host = CompanionHost(name: name.isEmpty || name == "Apple TV" ? nil : name)
     }
 
     func start() {
@@ -69,6 +72,12 @@ final class CompanionBridge {
             queue: app.queue.timeline.map { CompanionPlanEntry(item: Self.item($0.entry.item, client: client), start: $0.start, suggested: $0.entry.ambient, overruns: $0.overruns) },
             doneBy: app.queue.plan.doneBy,
             queueSummary: QueueWords.summary(app.queue))
+        if let p = state.playing, p != lastPlaying {
+            if Int(p.position) / 10 != Int(lastPlaying?.position ?? -10) / 10 || p.paused != lastPlaying?.paused {
+                TraceFile.write("companion", "playing \(p.item.title) at \(Int(p.position)) of \(Int(p.duration)) s\(p.paused ? ", paused" : "")")
+            }
+            lastPlaying = p
+        }
         host.publish(state)
     }
 
@@ -78,6 +87,9 @@ final class CompanionBridge {
         switch command {
         case .play(let id):
             if let item = try? await client.item(id: id) { app.play(item) }
+        case .playItem(let id, let resume, let background):
+            guard let item = try? await client.item(id: id) else { break }
+            if background { app.playInBackground(item) } else { app.play(item, resume: resume) }
         case .addToQueue(let id):
             if let item = try? await client.item(id: id) { app.queue.add(item) }
         case .removeFromQueue(let id):

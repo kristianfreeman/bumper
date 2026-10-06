@@ -222,3 +222,10 @@ struct LocalPlanTests {
         #expect(b.engine == .vlc && b.method == .directPlay && b.startPosition == .seconds(30))
     }
 }
+
+@Test func aResumePointPastTheEndStartsFromTheBeginning() {
+    #expect(PlaybackPlanner.usableStart(.seconds(4387), runtime: .seconds(1200)) == nil)
+    #expect(PlaybackPlanner.usableStart(.seconds(1198), runtime: .seconds(1200)) == nil)
+    #expect(PlaybackPlanner.usableStart(.seconds(600), runtime: .seconds(1200)) == .seconds(600))
+    #expect(PlaybackPlanner.usableStart(.seconds(600), runtime: nil) == .seconds(600))
+}

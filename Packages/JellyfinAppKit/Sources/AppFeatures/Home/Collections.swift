@@ -25,10 +25,9 @@ struct CollectionList<Header: View>: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 70) {
-                    // The profile corner is pinned above the page (RootView),
-                    // beside the header; a phone's header starts below it.
+                    // Beside the TV's profile corner (pinned over the page);
+                    // elsewhere below the navigation bar, which holds it.
                     header()
-                        .padding(.top, Layout.device == .phone ? PillSize.regular.diameter + 8 : 0)
                         .padding(.horizontal, Layout.horizontalMargin)
                     // Not lazy on the TV: a lazy stack estimates the height of
                     // collections it hasn't built, and corrects it as they appear —
@@ -43,6 +42,15 @@ struct CollectionList<Header: View>: View {
                             QueueSection(store: app.queue, available: width, firstCardFocus: firstCardFocus)
                                 .id("queue")
                         }
+                        // Before anything has loaded: rows of skeleton cards, so the
+                        // page has its shape from the first frame (it used to be the
+                        // title alone, centred, then everything jumped into place).
+                        if sections.isEmpty && !queueLeads {
+                            ForEach(0..<2, id: \.self) { i in
+                                CollectionSection(section: BrowseSection(id: "placeholder-\(i)", title: " ", items: [], style: .landscape), available: width)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                         ForEach(sections) { section in
                             CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
                                 .id(section.id)
@@ -53,7 +61,8 @@ struct CollectionList<Header: View>: View {
                         }
                     }
                 }
-                .padding(.top, 40)
+                .frame(maxWidth: .infinity, alignment: .leading)          // the page's width, loaded or not
+                .padding(.top, Platform.isTV ? 40 : 8)
                 .padding(.bottom, 120)
             }
             .tvScrollClipDisabled()
@@ -97,9 +106,9 @@ struct CollectionSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(section.title).font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
+                Text(section.title).font(.sectionTitle).foregroundStyle(theme.primaryText)
                 if let subtitle = section.subtitle {
-                    Text(subtitle).font(.callout).foregroundStyle(theme.secondaryText).lineLimit(2)
+                    Text(subtitle).font(.sectionSubtitle).foregroundStyle(theme.secondaryText).lineLimit(2)
                 }
             }
             .accessibilityElement(children: .combine)

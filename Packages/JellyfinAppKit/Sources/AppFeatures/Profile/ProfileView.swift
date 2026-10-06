@@ -167,6 +167,11 @@ struct ProfileView: View {
                 Text("Last active \(active.formatted(.relative(presentation: .named)))")
                     .font(.callout).foregroundStyle(theme.secondaryText)
             }
+            // The TV's profile is a tab: switching people is here.
+            if app.accounts.accounts.count > 1 {
+                Pill("Switch User", systemImage: "person.2", alwaysShowsTitle: true) { app.switchToNextAccount() }
+                    .accessibilityIdentifier("profile.switch")
+            }
             Spacer(minLength: 0)
         }
         .padding(.top, 40)

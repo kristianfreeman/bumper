@@ -25,13 +25,14 @@ It is free and open source. The only purchase is an optional themes unlock.
   is sent to the server later.
 - **Queue.** Line up what to watch and when it should end; it syncs between your devices through
   the server.
-- **Background Noise.** A show plays on a loop from a random episode without marking anything
-  watched.
+- **Background.** A show plays on a loop from a random episode without marking anything
+  watched. Start it from a page, or switch it on in the player.
 - **Audiobooks.** Chapters, speed with pitch kept, and Smart Speed, which shortens silences.
 - **On the TV:** the Top Shelf (continue watching, recently added, your libraries), frame-rate and
   dynamic-range matching, and a sleep timer.
-- **On the iPhone and iPad:** a TV button that connects to Bumper on your Apple TV to see what's on
-  it, queue things and play them there.
+- **On the iPhone and iPad:** one tap on the TV button connects to Bumper on your Apple TV; from
+  then on Play, Background and Queue go to the TV while you keep browsing. Whatever the TV is
+  playing shows above the tabs, with play/pause.
 - **Sign-in** with a password or Quick Connect, and any number of servers and users.
 
 ## Requirements
@@ -88,7 +89,8 @@ On a Mac on a home network, a 1.05 GB original downloads in 13–15 seconds.
 ```bash
 scripts/test.sh                  # core logic on macOS, in seconds
 scripts/test.sh smoke            # TV UI checks against the mock server
-scripts/test.sh sidebar|settings|profile|player
+scripts/test.sh tabs|settings|profile|player
+scripts/test.sh phone            # the iPhone UI tests
 scripts/test.sh device           # playback and seeking on a real Apple TV
 scripts/device-scroll-check.sh   # frame timing while scrolling, on a real Apple TV
 scripts/phone-scroll-check.sh    # the same on a real iPhone

@@ -65,8 +65,6 @@ struct SearchView: View {
             if query.isEmpty, let i = args.firstIndex(of: "-searchQuery"), i + 1 < args.count { query = args[i + 1] }
         }
         .searchable(text: $query, prompt: "Titles, or what you're in the mood for")
-        // Clear of the sidebar's pill, which sits top-left over the keyboard otherwise.
-        .padding(.top, 70)
         .task(id: query) {
             // Debounce keystrokes; the task is cancelled by the next one.
             let term = term
@@ -127,7 +125,7 @@ private struct UnderstoodSection: View {
             HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(understood.filter.parts.map(understood.filter.text).joined(separator: " · ").capitalizedFirst)
-                        .font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
+                        .font(.sectionTitle).foregroundStyle(theme.primaryText)
                     Text(understood.items.isEmpty ? "Nothing in your library fits that yet." : "From your \(understood.filter.libraryName == "Everything" ? "library" : understood.filter.libraryName.lowercased()).")
                         .font(.callout).foregroundStyle(theme.secondaryText)
                 }

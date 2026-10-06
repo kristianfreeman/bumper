@@ -16,6 +16,8 @@ struct RemoteGestures: UIViewRepresentable {
     let transport: TransportModel
     /// The video has focus (no icon, no menu).
     let active: Bool
+    /// Select: first, bring the controls up (true: done, nothing to toggle).
+    var showsControls: () -> Bool = { false }
     /// Up/down (click or swipe): bring up the icon row.
     let onVertical: () -> Void
 
@@ -40,6 +42,7 @@ struct RemoteGestures: UIViewRepresentable {
         c.transport = transport
         c.active = active
         c.onVertical = onVertical
+        c.showsControls = showsControls
     }
 
     final class InstallerView: UIView {
@@ -55,6 +58,7 @@ struct RemoteGestures: UIViewRepresentable {
         var transport: TransportModel?
         var active = false
         var onVertical: (() -> Void)?
+        var showsControls: (() -> Bool)?
         private var recognizers: [UIGestureRecognizer] = []
         private var playPause: PressRecognizer?
         private weak var host: UIView?
@@ -80,7 +84,12 @@ struct RemoteGestures: UIViewRepresentable {
             arrows.onEnded = { [weak self] in self?.arrowEnded($0) }
 
             let select = PressRecognizer(types: [.select])
-            select.onEnded = { [weak self] _ in self?.transport?.togglePlayPause(source: "select") }
+            select.onEnded = { [weak self] _ in
+                guard let self else { return }
+                // Not mid-scrub (Select there plays from the head).
+                if self.transport?.isScrubbing != true, self.showsControls?() == true { TraceFile.write("input", "select: controls up"); return }
+                self.transport?.togglePlayPause(source: "select")
+            }
 
             let playPause = PressRecognizer(types: [.playPause])
             playPause.onEnded = { [weak self] _ in self?.transport?.togglePlayPause(source: "Play/Pause") }

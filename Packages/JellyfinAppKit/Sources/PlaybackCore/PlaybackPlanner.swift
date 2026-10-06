@@ -107,10 +107,19 @@ public struct PlaybackPlanner: Sendable {
 
     /// Always what VLCKit can Direct Play, so the server never transcodes a
     /// file one of our backends can play.
+    /// A resume point at (or past) the end is from somewhere else (a
+    /// re-encoded file, another cut): start from the beginning. The player
+    /// held its clock at an unreachable point, and showed it everywhere.
+    static func usableStart(_ start: Duration?, runtime: Duration?) -> Duration? {
+        guard let start, let runtime, runtime > .zero else { return start }
+        return start >= runtime - .seconds(5) ? nil : start
+    }
+
     /// A downloaded file: the same player, the same engine rules — only the
     /// URL is local, and there's no server to transcode, so whatever AVPlayer
     /// can't open goes to VLCKit.
     public func localPlan(item: BaseItem, source: MediaSource, file: URL, startPosition: Duration?, audioIndex: Int?, subtitleIndex: Int?) -> PlaybackPlan {
+        let startPosition = Self.usableStart(startPosition, runtime: item.runtime)
         let subtitle = subtitleIndex ?? source.defaultSubtitleStreamIndex          // as streaming does
         let blockers = avPlayerBlockers(source: source, audioIndex: audioIndex, subtitleIndex: subtitle)
         let native = preference == .automatic && blockers.isEmpty
@@ -144,6 +153,7 @@ public struct PlaybackPlanner: Sendable {
         audioIndex: Int? = nil,
         subtitleIndex: Int? = nil
     ) async throws -> PlaybackPlan {
+        let startPosition = Self.usableStart(startPosition, runtime: item.runtime)
         var request = PlaybackInfoRequest(userId: client.userId, deviceProfile: deviceProfile())
         request.maxStreamingBitrate = maxBitrate
         request.mediaSourceId = mediaSourceId

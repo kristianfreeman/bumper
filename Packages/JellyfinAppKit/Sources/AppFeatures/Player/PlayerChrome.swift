@@ -5,14 +5,17 @@ import JellyfinAPI
 import PlaybackCore
 import SwiftUI
 
-/// The three menus the icon row above the timeline opens.
+/// The menus the icon row above the timeline opens. Playback holds
+/// Background and the sleep timer (which live only here: they're about
+/// what's playing).
 enum PlayerMenu: String, CaseIterable, Hashable {
-    case subtitles, audio, info
+    case subtitles, audio, playback, info
 
     var symbol: String {
         switch self {
         case .subtitles: "captions.bubble"
         case .audio: "speaker.wave.2"
+        case .playback: "gearshape"
         case .info: "info.circle"
         }
     }
@@ -21,6 +24,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         switch self {
         case .subtitles: "Subtitles"
         case .audio: "Audio"
+        case .playback: "Playback"
         case .info: "Info"
         }
     }
@@ -51,14 +55,15 @@ struct FlashView: View {
     var body: some View {
         ZStack {
             if let flash {
+                let scale = Platform.isTV ? 1 : 0.6
                 Image(systemName: flash.symbol)
-                    .font(.system(size: flash.edge == .center ? 64 : 48, weight: .semibold))
+                    .font(.system(size: (flash.edge == .center ? 64 : 48) * scale, weight: .semibold))
                     .foregroundStyle(.white)
-                    .frame(width: 150, height: 150)
+                    .frame(width: 150 * scale, height: 150 * scale)
                     .background(Color.black.opacity(0.55), in: .circle)
                     .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 2))
                     .frame(maxWidth: .infinity, alignment: alignment(flash.edge))
-                    .padding(.horizontal, 220)
+                    .padding(.horizontal, Platform.isTV ? 220 : 48)
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                     .id(flash.id)
             }
@@ -91,9 +96,11 @@ struct ChromeScrim: View {
     }
 }
 
-/// Bottom controls: title, the icon row, then the timeline (with the scrub
-/// preview riding above its head while paused).
+/// Bottom controls: what's playing (and how long until it ends), the icon
+/// row, then the timeline (with the scrub preview riding above its head
+/// while paused).
 struct TransportBar: View {
+    @Environment(AppModel.self) private var app
     let controller: PlayerController
     let engine: any PlayerEngine
     let scrubTime: Duration?
@@ -106,85 +113,83 @@ struct TransportBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
-            // Beside each other on the TV, Mac and iPad. A phone: the title
-            // alone, small (its menus sit at the top, by Close).
-            let phone = Layout.device == .phone
             HStack(alignment: .bottom, spacing: 40) {
-                VStack(alignment: .leading, spacing: phone ? 4 : 8) {
-                    if let kicker {
-                        Text(kicker).font(phone ? .caption.weight(.semibold) : .callout.weight(.semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
-                    }
-                    Text(controller.item.name ?? "")
-                        .font(.system(size: Platform.isTV ? 52 : phone ? 19 : Layout.pageTitleSmall, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if !facts.isEmpty {
-                        HStack(spacing: 14) {
-                            ForEach(Array(facts.enumerated()), id: \.offset) { i, fact in
-                                if i > 0 { Circle().fill(.white.opacity(0.5)).frame(width: 5, height: 5) }
-                                if fact.boxed { Badge(fact.text) } else { Text(fact.text) }
-                            }
-                        }
-                        .font(phone ? .caption.weight(.medium) : .callout.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    }
-                }
+                PlayingTitle(controller: controller, engine: engine)
                 Spacer(minLength: 0)
-                if !phone {
-                HStack(spacing: 22) {
+                HStack(spacing: 18) {
                     ForEach(PlayerMenu.allCases, id: \.self) { menu in
-                        Pill(menu.title, systemImage: menu.symbol + (openMenu == menu || badge(for: menu) ? ".fill" : ""), active: badge(for: menu)) { open(menu) }
+                        Pill(menu.title, systemImage: menu.symbol + (openMenu == menu || lit(menu) ? ".fill" : ""),
+                             detail: detail(menu), size: .small, active: lit(menu)) { open(menu) }
                             .accessibilityIdentifier("control.\(menu.rawValue)")
                             .focused(focus, equals: .control(menu))
-                            .tvMoveCommand { if $0 == .down { leave() } }
+                            // Down: back to the video — not while a card is open
+                            // (a press before focus has moved into the card closed it).
+                            .tvMoveCommand { if $0 == .down && openMenu == nil { leave() } }
+                            .disabled(openMenu != nil && openMenu != menu)       // a card open: focus stays in it
                     }
                 }
+                // The row moves as one as a pill opens to show its name (as on
+                // the detail page), instead of its neighbours jumping aside.
+                .animation(.spring(duration: 0.3, bounce: 0.2), value: focus.wrappedValue)
                 .tvFocusSection()
-                }
             }
-            .padding(.bottom, phone ? 14 : 50)
+            .padding(.bottom, 44)
             .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
             .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
             Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
                      scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused,
                      seek: { t in Task { await controller.seek(to: t) } })
         }
-        .padding(.horizontal, Platform.isTV ? 90 : Layout.horizontalMargin + 8)
-        .padding(.top, Platform.isTV ? 60 : 24)
-        .padding(.bottom, Platform.isTV ? 64 : Layout.device == .phone ? 8 : 28)
+        .padding(.horizontal, 90)
+        .padding(.top, 60)
+        .padding(.bottom, 64)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
     }
 
-    private struct Fact { let text: String; var boxed = false }
-
-    /// "2012 · PG-13 · 2 h 44 min · Ends at 10:42 PM · 4K · HDR10"
-    private var facts: [Fact] {
-        let item = controller.item
-        var out: [Fact] = []
-        if controller.isBackground { out.append(Fact(text: "Background · not marking watched", boxed: true)) }
-        if item.seriesName == nil, let year = item.productionYear { out.append(Fact(text: String(year))) }
-        if let rating = item.officialRating, !rating.isEmpty { out.append(Fact(text: rating, boxed: true)) }
-        let total = engine.duration ?? item.runtime
-        if let total, total >= .seconds(60) {
-            let left = max(.zero, total - controller.displayTime)
-            out.append(Fact(text: Self.length(total)))
-            let end = Date.now.addingTimeInterval(left.seconds / Double(max(0.1, engine.rate)))
-            out.append(Fact(text: "Ends at " + end.formatted(date: .omitted, time: .shortened)))
+    /// Lit: subtitles on; Background or a sleep timer on.
+    private func lit(_ menu: PlayerMenu) -> Bool {
+        switch menu {
+        case .subtitles: controller.selectedSubtitle != nil || controller.foundSubtitle != nil
+        case .playback: controller.isBackground || app.sleepTimer.isActive
+        default: false
         }
-        if let f = engine.videoFormat {
-            out.append(Fact(text: f.height >= 2000 ? "4K" : f.height >= 700 ? "HD" : "SD", boxed: true))
-            if f.dynamicRange != .sdr { out.append(Fact(text: f.dynamicRange.rawValue, boxed: true)) }
-        }
-        return out
     }
 
-    private static func length(_ d: Duration) -> String {
-        let minutes = Int(d.seconds / 60)
-        return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) min" : "\(minutes) min"
+    private func detail(_ menu: PlayerMenu) -> String? {
+        guard menu == .playback else { return nil }
+        return app.sleepTimer.shortLabel.map { "Sleep in \($0)" } ?? (controller.isBackground ? "Background" : nil)
+    }
+}
+
+/// What's playing, said briefly: the show and episode, the title, and when
+/// it ends — Background, when it's on, as a tag of its own.
+struct PlayingTitle: View {
+    let controller: PlayerController
+    let engine: any PlayerEngine
+
+    var body: some View {
+        let phone = Layout.device == .phone
+        VStack(alignment: .leading, spacing: phone ? 4 : 8) {
+            if controller.isBackground {
+                Label("Background", systemImage: "infinity")
+                    .font((phone ? Font.caption : .callout).weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, phone ? 8 : 14)
+                    .padding(.vertical, phone ? 3 : 5)
+                    .background(.white.opacity(0.85), in: .capsule)
+                    .accessibilityIdentifier("player.backgroundTag")
+            }
+            if let kicker { Text(kicker).font((phone ? Font.caption : .callout).weight(.semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
+            Text(controller.item.name ?? "")
+                .font(.system(size: Platform.isTV ? 48 : phone ? 19 : Layout.pageTitleSmall, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let ends {
+                Text(ends).font((phone ? Font.caption : .callout).weight(.medium)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+            }
+        }
     }
 
     private var kicker: String? {
@@ -194,30 +199,17 @@ struct TransportBar: View {
         return series
     }
 
-    private func badge(for menu: PlayerMenu) -> Bool {
-        switch menu {
-        case .subtitles: controller.selectedSubtitle != nil
-        default: false
-        }
-    }
-}
-
-private struct Badge: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(.white.opacity(0.9))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.5), lineWidth: 2))
+    /// "Ends at 10:42 PM" (Background goes on, so no end).
+    private var ends: String? {
+        guard !controller.isBackground, let total = engine.duration ?? controller.item.runtime, total >= .seconds(60) else { return nil }
+        let left = max(.zero, total - controller.displayTime)
+        let end = Date.now.addingTimeInterval(left.seconds / Double(max(0.1, engine.rate)))
+        return "Ends at " + end.formatted(date: .omitted, time: .shortened)
     }
 }
 
 /// Progress, times, and — while scrubbing — a frame preview above the head.
-private struct Timeline: View {
+struct Timeline: View {
     let time: Duration
     let duration: Duration
     let scrubTime: Duration?
@@ -317,9 +309,9 @@ struct BareButtonStyle: ButtonStyle {
     }
 }
 
-/// "Find Subtitles": searching, then what was found — best fit first, with
-/// how sure we are and why.
-private struct FoundSubtitles: View {
+/// "Find Subtitles": searching, then what was found — the best first,
+/// called out only when it's a clear fit; the rest by how well they match.
+struct FoundSubtitles: View {
     let controller: PlayerController
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
     let close: () -> Void
@@ -331,67 +323,76 @@ private struct FoundSubtitles: View {
         case .searching:
             HStack(spacing: 16) {
                 ProgressView()
-                Text("Looking for subtitles that fit this file…").foregroundStyle(.white.opacity(0.75))
+                Text("Searching…").foregroundStyle(.white.opacity(0.75))
             }
             .padding(20)
             .focusable()
             .focused(focus, equals: .option("sub-searching"))
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message).foregroundStyle(.white.opacity(0.75)).padding(.horizontal, 20).padding(.bottom, 8)
-                OptionRow(title: "Back", detail: nil, selected: false, id: "sub-back", focus: focus) { controller.subtitleSearch = .idle }
-            }
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.white.opacity(0.75))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(20)
+                .focusable()
+                .focused(focus, equals: .option("sub-failed"))
         case .results(let found):
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     ForEach(Array(found.enumerated()), id: \.element.id) { i, sub in
-                        OptionRow(title: sub.name,
-                                  detail: Self.detail(sub, best: i == 0), selected: controller.foundSubtitle?.id == sub.id,
-                                  id: "found-\(sub.id)", focus: focus) {
+                        OptionRow(title: sub.name, detail: Self.detail(sub, best: i == 0), selected: controller.foundSubtitle?.id == sub.id,
+                                  id: "found-\(sub.id)", focus: focus, highlighted: i == 0 && Self.isClearFit(sub)) {
                             Task { await controller.use(sub) }
                             close()
                         }
                     }
-                    OptionRow(title: "Back", detail: nil, selected: false, id: "sub-back", focus: focus) { controller.subtitleSearch = .idle }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
             .tvScrollClipDisabled()
             .frame(maxHeight: 560)
         }
     }
 
-    /// "Best match · 94% · Same release group (SPARKS)"
+    /// Sure enough to say so.
+    static func isClearFit(_ sub: FoundSubtitle) -> Bool { sub.confidence >= 0.8 }
+
+    /// "Best match · 94%" for a clear fit at the top; else "46% match".
     static func detail(_ sub: FoundSubtitle, best: Bool) -> String {
-        ([best ? "Best match" : nil, sub.confidenceText, sub.reasons.first, sub.remote.hearingImpaired == true ? "SDH" : nil] as [String?])
-            .compactMap { $0 }.joined(separator: " · ")
+        best && isClearFit(sub) ? "Best match · \(sub.confidenceText)" : "\(sub.confidenceText) match"
     }
 }
 
 /// The card a chrome icon opens, anchored above the icon row on the right.
+/// Focus stays inside it (up and down its rows); Menu steps back out — from
+/// found subtitles to the list, from the list to the icon.
 struct MenuCard: View {
+    @Environment(AppModel.self) private var app
     let menu: PlayerMenu
     let controller: PlayerController
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(menu.title, systemImage: menu.symbol)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(heading)
                 .font(.headline)
-                .foregroundStyle(.white.opacity(0.7))
-                .padding(.horizontal, 20)
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, 26)
+                .contentTransition(.opacity)
             content
         }
-        .padding(.vertical, 26)
-        .padding(.horizontal, 16)
-        .frame(width: menu == .info ? 820 : 620, alignment: .leading)
-        .overVideoPanel(cornerRadius: 32)
+        .padding(.vertical, 24)
+        .padding(.horizontal, 10)
+        .frame(width: menu == .info ? 900 : 600, alignment: .leading)
+        .overVideoPanel(cornerRadius: 34)
         .tvFocusSection()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .padding(.trailing, 90)
-        .padding(.bottom, 290)
+        .padding(.bottom, 270)
         .defaultFocus(focus, defaultOption)
+        .animation(.spring(duration: 0.3), value: controller.subtitleSearch)
         .onChange(of: controller.subtitleSearch) { _, now in
             // Searching → results: focus onto the best match.
             guard now != .idle else { return }
@@ -413,54 +414,105 @@ struct MenuCard: View {
         }
     }
 
+    private var heading: String {
+        if menu == .subtitles, controller.subtitleSearch != .idle { return "Found Subtitles" }
+        return menu == .info ? (controller.item.kind == .episode ? "About This Episode" : "About This Film") : menu.title
+    }
+
     @ViewBuilder
     private var content: some View {
         switch menu {
         case .subtitles:
             if controller.subtitleSearch == .idle {
+                let rows = controller.subtitleOptions.count + 2 + (controller.foundSubtitle == nil ? 0 : 1)
                 ScrollView {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 6) {
                         OptionRow(title: "Off", detail: nil, selected: controller.selectedSubtitle == nil && controller.foundSubtitle == nil, id: "sub-off", focus: focus) {
                             Task { await controller.selectSubtitle(nil) }
                             close()
                         }
                         ForEach(controller.subtitleOptions, id: \.index) { stream in
-                            OptionRow(title: stream.displayTitle ?? stream.language ?? "Track \(stream.index)",
-                                      detail: stream.codec?.uppercased(), selected: controller.selectedSubtitle == stream.index,
+                            OptionRow(title: Self.trackName(stream), detail: Self.trackNote(stream), selected: controller.selectedSubtitle == stream.index,
                                       id: "sub-\(stream.index)", focus: focus) {
                                 Task { await controller.selectSubtitle(stream.index) }
                                 close()
                             }
                         }
                         if let found = controller.foundSubtitle {
-                            OptionRow(title: found.name, detail: "Found · \(found.confidenceText)", selected: true, id: "sub-found", focus: focus) { close() }
+                            OptionRow(title: found.name, detail: "\(found.confidenceText) match", selected: true, id: "sub-found", focus: focus) { close() }
                         }
-                        OptionRow(title: "Find Subtitles…", detail: "Your server searches; the best fit comes first", selected: false, id: "sub-find", focus: focus) {
+                        OptionRow(title: "Find Subtitles…", detail: nil, selected: false, id: "sub-find", focus: focus, symbol: "magnifyingglass") {
                             Task { await controller.findSubtitles() }
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
                 }
                 .tvScrollClipDisabled()
-                .frame(maxHeight: min(560, CGFloat(controller.subtitleOptions.count + 2 + (controller.foundSubtitle == nil ? 0 : 1)) * 76))
+                .frame(maxHeight: min(560, CGFloat(rows) * 84))
             } else {
                 FoundSubtitles(controller: controller, focus: focus, close: close)
             }
         case .audio:
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 ForEach(controller.audioOptions) { track in
-                    OptionRow(title: track.title, detail: track.detail ?? track.codec?.uppercased(),
-                              selected: controller.engine?.selectedAudioTrack == track.id, id: "audio-\(track.id)", focus: focus) {
+                    OptionRow(title: track.title, detail: track.detail, selected: controller.engine?.selectedAudioTrack == track.id, id: "audio-\(track.id)", focus: focus) {
                         Task { await controller.selectAudio(track.id) }
                         close()
                     }
                 }
             }
+            .padding(.horizontal, 10)
+        case .playback:
+            let timer = app.sleepTimer
+            VStack(alignment: .leading, spacing: 6) {
+                OptionRow(title: "Background", detail: controller.isBackground ? "Plays on; nothing is marked watched" : nil, selected: false,
+                          id: "background", focus: focus, symbol: "infinity", trailing: controller.isBackground ? "On" : "Off") {
+                    controller.setBackground(!controller.isBackground)
+                }
+                Text("Sleep Timer")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .padding(.horizontal, 26)
+                    .padding(.top, 14)
+                OptionRow(title: "Off", detail: nil, selected: !timer.isActive, id: "sleep-off", focus: focus) {
+                    timer.reset()
+                    close()
+                }
+                ForEach(SleepTimer.presets, id: \.self) { minutes in
+                    OptionRow(title: SleepTimer.title(minutes), detail: nil, selected: timer.mode == .minutes(minutes), id: "sleep-\(minutes)", focus: focus,
+                              trailing: timer.mode == .minutes(minutes) ? timer.shortLabel.map { "\($0) left" } : nil) {
+                        timer.set(.minutes(minutes))
+                        close()
+                    }
+                }
+                OptionRow(title: controller.item.kind == .episode ? "End of This Episode" : "End of This Film", detail: nil,
+                          selected: timer.mode == .endOfItem, id: "sleep-end", focus: focus) {
+                    timer.set(.endOfItem)
+                    close()
+                }
+            }
+            .padding(.horizontal, 10)
         case .info:
-            InfoContent(controller: controller)
+            ItemAbout(controller: controller)
+                .padding(.horizontal, 26)
                 .focusable()
                 .focused(focus, equals: .option("info"))
         }
+    }
+
+    /// "English", "English (Forced)" — the language, not the stream's label.
+    static func trackName(_ s: MediaStream) -> String {
+        let name = s.language.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? s.displayTitle ?? "Track \(s.index)"
+        return s.isForced == true ? "\(name) (Forced)" : name
+    }
+
+    /// Only what tells two tracks apart: hearing-impaired, a title of its own.
+    static func trackNote(_ s: MediaStream) -> String? {
+        let label = (s.title ?? "") + " " + (s.displayTitle ?? "")
+        if label.contains("SDH") || label.localizedCaseInsensitiveContains("hearing impaired") { return "SDH" }
+        guard let title = s.title, !title.isEmpty, title.lowercased() != (s.language ?? "").lowercased() else { return nil }
+        return title
     }
 
     private func isOption(_ f: PlayerView.PlayerFocus?) -> Bool {
@@ -471,93 +523,141 @@ struct MenuCard: View {
         switch menu {
         case .subtitles:
             switch controller.subtitleSearch {
-            case .results(let found): .option(found.first.map { "found-\($0.id)" } ?? "sub-back")
+            case .results(let found): .option(found.first.map { "found-\($0.id)" } ?? "sub-find")
             case .searching: .option("sub-searching")
-            case .failed: .option("sub-back")
+            case .failed: .option("sub-failed")
             case .idle: .option(controller.foundSubtitle != nil ? "sub-found" : controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")
             }
         case .audio: .option((controller.engine?.selectedAudioTrack ?? controller.audioOptions.first?.id).map { "audio-\($0)" } ?? "audio-none")
+        case .playback: .option("background")
         case .info: .option("info")
         }
     }
 }
 
+/// A row in a card: the choice, a quiet line under it when it says
+/// something, a check when it's the current one. Focused, it lifts — white,
+/// a little larger, with a shadow — and its neighbours stay put.
 private struct OptionRow: View {
     let title: String
     let detail: String?
     let selected: Bool
     let id: String
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    /// A clear best match: in the accent.
+    var highlighted = false
+    var symbol: String? = nil
+    /// A state at the end of the row ("On", "12m left").
+    var trailing: String? = nil
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) { Face(title: title, detail: detail, selected: selected) }
+        Button(action: action) { Face(title: title, detail: detail, selected: selected, highlighted: highlighted, symbol: symbol, trailing: trailing) }
             .buttonStyle(BareButtonStyle())
             .focused(focus, equals: .option(id))
             .accessibilityIdentifier("option.\(id)")
+            .accessibilityValue(trailing ?? (selected ? "selected" : ""))
     }
 
     private struct Face: View {
         let title: String
         let detail: String?
         let selected: Bool
+        let highlighted: Bool
+        let symbol: String?
+        let trailing: String?
         @Environment(\.isFocused) private var focused
+        @Environment(\.theme) private var theme
 
         var body: some View {
             HStack(spacing: 16) {
-                Image(systemName: "checkmark")
-                    .font(.body.weight(.bold))
-                    .opacity(selected ? 1 : 0)
-                    .frame(width: 30)
-                Text(title).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1)
-                Spacer(minLength: 12)
-                if let detail { Text(detail).font(.caption.weight(.semibold)).opacity(0.6) }
+                Group {
+                    if let symbol { Image(systemName: symbol) } else { Image(systemName: "checkmark").opacity(selected ? 1 : 0) }
+                }
+                .font(.body.weight(.bold))
+                .foregroundStyle(focused ? Color.black : selected || highlighted ? theme.accent : .white.opacity(0.8))
+                .frame(width: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1).truncationMode(.middle)
+                    if let detail {
+                        Text(detail).font(.caption.weight(highlighted ? .bold : .medium))
+                            .foregroundStyle(focused ? Color.black.opacity(0.6) : highlighted ? theme.accent : .white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let trailing {
+                    Text(trailing).font(.callout.weight(.semibold).monospacedDigit()).opacity(0.7).contentTransition(.numericText())
+                }
             }
             .foregroundStyle(focused ? .black : .white)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(focused ? Color.white : .clear, in: .rect(cornerRadius: 16))
-            .scaleEffect(focused ? 1.03 : 1)
-            .animation(.spring(duration: 0.18), value: focused)
+            .padding(.horizontal, 18)
+            .padding(.vertical, detail == nil ? 16 : 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(focused ? Color.white : selected ? Color.white.opacity(0.07) : .clear, in: .rect(cornerRadius: 18, style: .continuous))
+            .scaleEffect(focused ? 1.025 : 1)
+            .shadowWhen(focused, color: .black.opacity(0.35), radius: 16, y: 6)
+            .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
         }
     }
 }
 
-private struct InfoContent: View {
+/// About what's playing: the art, what it is, what happens (spoiler-safe),
+/// who's in it, and what's next.
+struct ItemAbout: View {
     let controller: PlayerController
+    @Environment(AppModel.self) private var app
+    @Environment(\.jellyfin) private var client
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let engine = controller.engine {
-                row("Player", engine.kind == .vlc ? "VLCKit" : "AVPlayer")
-                if let f = engine.videoFormat {
-                    row("Video", "\(f.codec.uppercased()) · \(f.width)×\(f.height) · \(f.frameRate.formatted(.number.precision(.fractionLength(0...3)))) fps")
-                    row("Range", "\(f.dynamicRange.rawValue) · \(f.bitDepth)-bit · \(f.hardwareDecoded ? "hardware" : "software") decode")
+        let item = controller.item
+        let tv = Platform.isTV
+        HStack(alignment: .top, spacing: tv ? 32 : 16) {
+            Artwork(item: item, kind: item.kind == .episode ? .still : .backdrop, width: tv ? 300 : 120)
+                .frame(width: tv ? 300 : 120, height: (tv ? 300 : 120) * 9 / 16)
+                .clipShape(.rect(cornerRadius: tv ? 16 : 10))
+            VStack(alignment: .leading, spacing: tv ? 10 : 6) {
+                Text(item.name ?? "").font(tv ? .title3.weight(.bold) : .headline).lineLimit(2)
+                Text(Self.facts(item)).font(tv ? .callout : .caption).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                if let overview = item.overview(hidingSpoilers: app.settings.hideSpoilers) {
+                    Text(overview).font(tv ? .callout : .footnote).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 5 : 6)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                row("Audio", engine.stats.audio)
-                row("Method", engine.stats.method)
-                if let bitrate = controller.plan?.mediaSource.bitrate, bitrate > 0 {
-                    row("Bitrate", Self.mbps(Double(bitrate) / 1e6))
-                } else if let mbps = engine.stats.bitrateMbps, mbps > 0 {
-                    row("Bitrate", Self.mbps(mbps))
+                if let cast = Self.cast(item) {
+                    Text(cast).font(tv ? .callout : .footnote).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
                 }
-            }
-            if let reasons = controller.plan?.reasons, !reasons.isEmpty {
-                Text(reasons.joined(separator: "\n")).font(.caption).foregroundStyle(.white.opacity(0.55))
+                if let next = controller.nextEpisode {
+                    Label("Next: \([next.episodeLabel, next.name].compactMap { $0 }.joined(separator: " · "))", systemImage: "forward.end")
+                        .font((tv ? Font.callout : .footnote).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.top, 4)
+                }
             }
         }
-        .padding(.horizontal, 20)
         .foregroundStyle(.white)
     }
 
-    private static func mbps(_ value: Double) -> String {
-        "\(value.formatted(.number.precision(.fractionLength(1)))) Mb/s"
+    /// "S2 · E3 · 2019 · 48 min · TV-14 · Drama, Mystery"
+    static func facts(_ item: BaseItem) -> String {
+        var parts: [String] = []
+        if let label = item.episodeLabel { parts.append(label) }
+        if let year = item.productionYear { parts.append(String(year)) }
+        if let runtime = item.runtime { parts.append(MetadataLine.runtimeString(runtime)) }
+        if let rating = item.officialRating, !rating.isEmpty { parts.append(rating) }
+        if let genres = item.genres, !genres.isEmpty { parts.append(genres.prefix(2).joined(separator: ", ")) }
+        return parts.joined(separator: " · ")
     }
 
-    private func row(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(label).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.6)).frame(width: 140, alignment: .leading)
-            Text(value).font(.callout).lineLimit(2)
+    /// "With Rhea Seehorn, Bob Odenkirk and Giancarlo Esposito · Directed by Vince Gilligan"
+    static func cast(_ item: BaseItem) -> String? {
+        let people = item.people ?? []
+        let actors = people.filter { $0.type == "Actor" }.prefix(3).compactMap(\.name)
+        let director = people.first { $0.type == "Director" }?.name
+        var parts: [String] = []
+        if !actors.isEmpty {
+            parts.append("With " + (actors.count > 1 ? actors.dropLast().joined(separator: ", ") + " and " + actors.last! : actors[0]))
         }
+        if let director { parts.append("Directed by \(director)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

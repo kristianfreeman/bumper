@@ -15,15 +15,31 @@ struct BumperPhoneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // The Apple TV sits behind the TV button in the corner (like a
-            // cast button), not a tab of its own.
+            // The Apple TV sits behind the TV button (like a cast button), not
+            // a tab of its own: connected, what you play goes to the TV.
             AppRoot(cast: cast, castPanel: AnyView(RemoteTab().environment(companion)))
                 .task {
-                    cast.play = { [companion] id in companion.send(.play(itemId: id)) }
+                    cast.connect = { [companion] name in companion.cast(to: name) }
+                    cast.disconnect = { [companion] in companion.stopCasting() }
+                    cast.play = { [companion] id, resume, background in
+                        companion.send(resume && !background ? .play(itemId: id) : .playItem(itemId: id, resume: resume, background: background))
+                    }
+                    cast.queue = { [companion] id, add in companion.send(add ? .addToQueue(itemId: id) : .removeFromQueue(itemId: id)) }
+                    cast.playPause = { [companion] in companion.send(.playPause) }
                     companion.startBrowsing()
                 }
-                .onChange(of: companion.connectedTo, initial: true) { _, name in cast.connectedTo = name }
-                .onChange(of: companion.tvs.isEmpty, initial: true) { _, none in cast.available = !none }
+                // Watching first: a link that dropped says "Lost", not "Disconnected".
+                .onChange(of: "\(companion.connectedTo ?? "")|\(companion.casting)", initial: true) { _, _ in
+                    cast.watching = companion.connectedTo
+                    cast.connectedTo = companion.casting ? companion.connectedTo : nil
+                }
+                .onChange(of: companion.tvs.map(\.name), initial: true) { _, names in cast.tvs = names }
+                .onChange(of: companion.state?.playing, initial: true) { _, playing in
+                    cast.nowPlaying = playing.map {
+                        CastLink.NowPlaying(itemId: $0.item.id, title: $0.item.title, subtitle: $0.item.subtitle, imageURL: $0.item.imageURL,
+                                            position: $0.position, duration: $0.duration, paused: $0.paused)
+                    }
+                }
         }
     }
 }

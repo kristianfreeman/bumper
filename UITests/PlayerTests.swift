@@ -71,27 +71,80 @@ final class PlayerTests: XCTestCase {
         remote.press(.select)
         let best = app.buttons["option.found-os-1001"]
         XCTAssertTrue(best.waitForExistence(timeout: 8), "no results")
+        // Menu steps back to the list (not out of the card), and in again.
+        remote.press(.menu)
+        XCTAssertTrue(find.waitForExistence(timeout: 2), "Menu from the results closed the card instead of going back to the list")
+        for _ in 0..<8 where !find.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.25) }
+        remote.press(.select)
+        XCTAssertTrue(best.waitForExistence(timeout: 8), "no results the second time")
         XCTAssertTrue(waitForFocus(best, timeout: 2), "focus didn't land on the best match")
         XCTAssertTrue(best.label.contains("Best match"), "first result isn't marked: \(best.label)")
         remote.press(.select)
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 5), "the found subtitle didn't come on (VLCKit reports '\(status.label)')")
     }
 
-    /// Background Noise from a page: it plays, and says it isn't marking anything watched.
-    func testBackgroundNoiseSaysItIsNotMarkingWatched() {
+    /// Background from a page: it plays, tagged as Background.
+    func testBackgroundFromAPageIsTagged() {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-route", "item:media-0"]
         app.launch()
         let background = app.buttons["detail.background"]
-        XCTAssertTrue(background.waitForExistence(timeout: 8), "no Background Noise on the page")
+        XCTAssertTrue(background.waitForExistence(timeout: 8), "no Background on the page")
         let remote = XCUIRemote.shared
         for _ in 0..<6 where !background.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
-        XCTAssertTrue(background.hasFocus, "couldn't reach Background Noise")
+        XCTAssertTrue(background.hasFocus, "couldn't reach Background")
         remote.press(.select)
         XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
-        remote.press(.playPause)                                    // chrome up
-        let note = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'not marking watched'")).firstMatch
-        XCTAssertTrue(note.waitForExistence(timeout: 3), "the player doesn't say it's in the background")
+        remote.press(.select)                                       // controls up
+        XCTAssertTrue(app.descendants(matching: .any)["player.backgroundTag"].waitForExistence(timeout: 3), "the player doesn't show it's in the background")
+    }
+
+    /// Playback (Background and the sleep timer, only here): the sleep
+    /// timer sets from its card, and the pill then shows the time left.
+    func testSleepTimerFromPlayback() {
+        let app = launchPlaying(6)
+        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        remote.press(.playPause)
+        remote.press(.up)
+        let playback = app.buttons["control.playback"]
+        XCTAssertTrue(playback.waitForExistence(timeout: 2), "no Playback in the player")
+        for _ in 0..<4 where !playback.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(playback.hasFocus, "couldn't reach Playback")
+        remote.press(.select)
+        let fifteen = app.buttons["option.sleep-15"]
+        XCTAssertTrue(fifteen.waitForExistence(timeout: 2), "no sleep options")
+        XCTAssertTrue(app.buttons["option.background"].exists, "no Background switch")
+        for _ in 0..<4 where !fifteen.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.select)
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline, !(playback.value as? String ?? "").contains("m") { Thread.sleep(forTimeInterval: 0.1) }
+        XCTAssertTrue(["Sleep in 15m", "Sleep in 14m"].contains(playback.value as? String ?? ""), "the pill doesn't show the time left (\(playback.value ?? "nil"))")
+    }
+
+    /// Select with the controls down brings them up and the video plays on;
+    /// on the icons, Left from the first goes nowhere; Play/Pause there
+    /// still pauses and plays.
+    func testSelectShowsTheControlsAndPlayPauseWorksFromTheIcons() {
+        let app = launchPlaying(6)
+        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
+        Thread.sleep(forTimeInterval: 5)                              // the controls hide
+        let remote = XCUIRemote.shared
+        let subtitles = app.buttons["control.subtitles"]
+        XCTAssertFalse(subtitles.exists, "the controls didn't hide")
+        remote.press(.select)
+        XCTAssertTrue(subtitles.waitForExistence(timeout: 2), "Select didn't bring the controls up")
+        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists, "Select paused instead of only showing the controls")
+        remote.press(.up)
+        XCTAssertTrue(waitForFocus(subtitles, timeout: 2), "Up didn't reach the icons")
+        remote.press(.left)
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(subtitles.hasFocus, "Left from the first icon left the icons")
+        remote.press(.playPause)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].waitForExistence(timeout: 2), "Play/Pause on the icons didn't pause")
+        Thread.sleep(forTimeInterval: 0.6)
+        remote.press(.playPause)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].waitForExistence(timeout: 2), "Play/Pause on the icons didn't resume")
     }
 
     /// One press of Play/Pause pauses — and stays paused. (It could arrive

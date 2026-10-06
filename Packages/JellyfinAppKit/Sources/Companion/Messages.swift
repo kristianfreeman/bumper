@@ -85,6 +85,9 @@ public struct CompanionState: Codable, Sendable, Hashable {
 /// What the phone asks for.
 public enum CompanionCommand: Codable, Sendable, Hashable {
     case play(itemId: String)
+    /// Play from the start (`resume` false), or as Background (on a loop,
+    /// nothing marked watched; a show from a random episode).
+    case playItem(itemId: String, resume: Bool, background: Bool)
     case addToQueue(itemId: String)
     case removeFromQueue(itemId: String)
     case moveInQueue(itemId: String, by: Int)

@@ -10,10 +10,12 @@
 #   scripts/test.sh unit                   ~1 min core tests on the tvOS simulator
 #   scripts/test.sh smoke [test]           ~25 s  deep-linked UI checks (optionally one test)
 #   scripts/test.sh player [test]          ~15 s  player controls on real clips (TestMedia/)
-#   scripts/test.sh sidebar [test]         ~15 s  sidebar and Up/Left/Menu focus routing (OS=26.2 for the TV's tvOS)
+#   scripts/test.sh tabs [test]            ~15 s  the tab bar along the top, and Up/Down/Menu focus routing
 #   scripts/test.sh profile [test]         ~15 s  Home profile corner: menu, sleep timer, stats
 #   scripts/test.sh settings [test]        ~15 s  Settings tab navigation
 #   scripts/test.sh search [test]          ~20 s  global search, with the search service running locally
+#   scripts/test.sh one Class[/test]       any one TV UI test class or test
+#   scripts/test.sh phone [Class[/test]]   ~2 min the iPhone UI tests (not the companion: companion-check.sh)
 #   scripts/test.sh device                 playback + seek speed on the real Apple TV (the playback truth)
 #   scripts/test.sh seek                   seek/skip speed in the simulator (EXTENSIVE=1: every clip)
 #   scripts/test.sh ui                     full UI + performance suite (CI)
@@ -126,6 +128,25 @@ build_for_testing() {
     -destination "$DEST" -derivedDataPath "$DD/app" -quiet
 }
 
+PHONE_DEST="id=${PHONE_SIM:-1A0FD3DB-4719-4459-9EC9-C0B989A6FFA1}"   # iPhone 17 Pro
+
+build_for_testing_phone() {
+  need_vlckit; need_project
+  capped 400 xcodebuild build-for-testing -project Bumper.xcodeproj -scheme BumperPhone -configuration "$CONFIG" \
+    -destination "$PHONE_DEST" -derivedDataPath "$DD/phone" -quiet
+}
+
+# The same cut-offs as the TV's: a stuck test fails in a minute, not ten.
+phone_run() {
+  mkdir -p "$OUT"
+  capped 600 xcodebuild test-without-building -project Bumper.xcodeproj -scheme BumperPhone -configuration "$CONFIG" -destination "$PHONE_DEST" \
+    -derivedDataPath "$DD/phone" -resultBundlePath "$OUT/phone.xcresult" \
+    -test-timeouts-enabled YES -default-test-execution-time-allowance 60 -maximum-test-execution-time-allowance 120 \
+    -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" \
+    "$@" 2>&1 | tee "$OUT/phone.log" | summarize
+  echo "log: $OUT/phone.log   results: $OUT/phone.xcresult"
+}
+
 ui_run() {
   mkdir -p "$OUT"
   stop_sim_apps                                       # clean slate on the simulator
@@ -144,13 +165,13 @@ case "${1:-fast}" in
   fast) step fast ;;
   perf) step perf ;;
   unit) step unit ;;
-  smoke) step build_for_testing; step ui_run -only-testing:"BumperUITests/SmokeTests${2:+/$2}" -only-testing:"BumperUITests/SidebarTests" -only-testing:"BumperUITests/ScrollTests" ;;
+  smoke) step build_for_testing; step ui_run -only-testing:"BumperUITests/SmokeTests${2:+/$2}" -only-testing:"BumperUITests/TabBarTests" -only-testing:"BumperUITests/ScrollTests" ;;
   profile) step build_for_testing; step ui_run -only-testing:"BumperUITests/ProfileTests${2:+/$2}" ;;
   settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
   player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
   queue) step build_for_testing; step ui_run -only-testing:"BumperUITests/QueueTests" ;;
   scroll) step build_for_testing; step ui_run -only-testing:"BumperUITests/ScrollTests" ;;
-  sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/SidebarTests${2:+/$2}" ;;
+  tabs|sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/TabBarTests${2:+/$2}" ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
   search)
     # The search service, locally, answering without Jev.
@@ -161,6 +182,10 @@ case "${1:-fast}" in
     for _ in $(seq 1 60); do curl -s -o /dev/null -w '%{http_code}' -I localhost:8787/v1/interpret | grep -q 204 && break; sleep 0.5; done
     step ui_run -only-testing:"BumperUITests/SearchTests${2:+/$2}"
     kill_tree "$WRANGLER" ;;
+  one) step build_for_testing; step ui_run -only-testing:"BumperUITests/$2" ;;   # any TV UI test: one Class[/test]
+  phone) step build_for_testing_phone
+         if [[ -n "${2:-}" ]]; then step phone_run -only-testing:"BumperPhoneUITests/$2"
+         else step phone_run -skip-testing:BumperPhoneUITests/CompanionTests -skip-testing:BumperPhoneUITests/PhoneScrollTests; fi ;;
   books) step build_for_testing; step ui_run -only-testing:"BumperUITests/AudiobookTests${2:+/$2}" ;;
   shots) step build_for_testing; SHOTS="$PWD/perf-results/shots"; rm -rf "$SHOTS"; TEST_RUNNER_SHOTS_DIR="$SHOTS" step ui_run -only-testing:"BumperUITests/PlayerShots" -only-testing:"BumperUITests/SettingsShots" -only-testing:"BumperUITests/HomeShots" -only-testing:"BumperUITests/BookShots"; echo "shots: $SHOTS" ;;
   ui) CONFIG=Release; step build_for_testing; PERF_ITERATIONS="${PERF_ITERATIONS:-5}" step ui_run ;;

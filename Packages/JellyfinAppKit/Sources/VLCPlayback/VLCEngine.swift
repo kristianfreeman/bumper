@@ -44,6 +44,8 @@ public final class VLCEngine: PlayerEngine {
     @ObservationIgnored private let events = Events()
     @ObservationIgnored private var plan: PlaybackPlan?
     @ObservationIgnored private var firstFrameSpan: Span?
+    @ObservationIgnored private var loggedBadClock = false
+    @ObservationIgnored private var heldAtStart = false
     @ObservationIgnored private var started: CheckedContinuation<Void, any Error>?
     @ObservationIgnored private var seekWaiter: (target: Duration, continuation: CheckedContinuation<Void, Never>)?
     @ObservationIgnored private var hasPlayed = false
@@ -55,7 +57,12 @@ public final class VLCEngine: PlayerEngine {
     private static let log = Perf.logger("vlc-engine")
 
     public init(subtitleStyle: VLCSubtitleStyle) {
-        player = VLCMediaPlayer(options: subtitleStyle.options)
+        // Diagnostics: `-vlcPlayerOptions "opt1=x opt2"` (A/B-testing
+        // player-level options — the video output — on a device; written
+        // without their dashes, which the argument parser would take as flags).
+        let extra = (UserDefaults.standard.string(forKey: "vlcPlayerOptions") ?? "").split(separator: " ").map { $0.hasPrefix("-") ? String($0) : "--" + $0 }
+        player = VLCMediaPlayer(options: subtitleStyle.options + extra)
+        if !extra.isEmpty { TraceFile.write("vlc", "player options: \(extra.joined(separator: " "))") }
         if ProcessInfo.processInfo.arguments.contains("-vlcLog") {   // VLC's own log (diagnostics)
             if TraceFile.enabled {                                       // on device: a file we can pull
                 let url = TraceFile.directory.appending(path: "vlc.log")
@@ -125,6 +132,12 @@ public final class VLCEngine: PlayerEngine {
         // resume point: 15 min into a 1 GB file failed after 20 s; trusted,
         // 0.8 s (Apple TV 4K).
         if Self.isMatroska(plan.mediaSource.container) { media.addOption(":demux=mkv_trusted") }
+        // AVI: FFmpeg's reader. VLC's own works out display times from the
+        // decode times AVI carries, and with packed-B-frame DivX/Xvid (most
+        // older AVIs) they come out a frame or two early — "picture is too
+        // late", and over half the frames dropped (an SD sitcom at 15 fps on
+        // an Apple TV 4K). FFmpeg's unpacks them: every frame, none late.
+        if Self.isAVI(plan.mediaSource.container) { media.addOption(":demux=avformat") }
         // Diagnostics: `-vlcMediaOptions ":opt1 :opt2"` (A/B-testing VLC options on a device).
         for option in (UserDefaults.standard.string(forKey: "vlcMediaOptions") ?? "").split(separator: " ") {
             media.addOption(String(option))
@@ -134,6 +147,7 @@ public final class VLCEngine: PlayerEngine {
         // the pause — a play() sent before it would be swallowed by it.
         if !autoplay { media.addOption(":start-paused") }
         startsPaused = !autoplay
+        heldAtStart = !autoplay
         player.media = media
 
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, any Error>) in
@@ -149,6 +163,10 @@ public final class VLCEngine: PlayerEngine {
             }
         }
         startStats()
+    }
+
+    nonisolated static func isAVI(_ container: String?) -> Bool {
+        (container ?? "").lowercased().split(separator: ",").contains { $0 == "avi" || $0 == "divx" }
     }
 
     nonisolated static func isMatroska(_ container: String?) -> Bool {
@@ -267,7 +285,13 @@ public final class VLCEngine: PlayerEngine {
     /// waiting one, so dragging never builds a backlog.
     public func thumbnail(at time: Duration) async -> CGImage? {
         guard let plan, let media = VLCMedia(url: plan.url) else { return nil }
-        if Self.isMatroska(plan.mediaSource.container) { media.addOption(":demux=mkv_trusted") }   // see load()
+        if Self.isMatroska(plan.mediaSource.container) { media.addOption(":demux=mkv_trusted") }
+        // AVI: FFmpeg's reader. VLC's own works out display times from the
+        // decode times AVI carries, and with packed-B-frame DivX/Xvid (most
+        // older AVIs) they come out a frame or two early — "picture is too
+        // late", and over half the frames dropped (an SD sitcom at 15 fps on
+        // an Apple TV 4K). FFmpeg's unpacks them: every frame, none late.
+        if Self.isAVI(plan.mediaSource.container) { media.addOption(":demux=avformat") }   // see load()
         media.addOption(":no-audio")
         thumbnailer?.cancel()
         thumbnailWaiter?.resume(returning: nil)
@@ -323,11 +347,36 @@ public final class VLCEngine: PlayerEngine {
     }
 
     fileprivate func timeChanged() {
-        guard let now = Self.duration(player.time) else { return }
+        guard var now = Self.duration(player.time) else { return }
+        // Opened held (`:start-paused`, a prepared item) on the monotonic
+        // clock, VLC's `time` after play() can be the system clock's, not the
+        // file's — hours into a 20-minute clip (seen in the simulator, and
+        // reported to the server as progress). Past the end it can't be
+        // right: the position along the file (0…1) is.
+        if let length = duration, now > length + .seconds(2) {
+            now = .milliseconds(Int64(Double(player.position) * length.milliseconds))
+            // After a held start (`:start-paused`) the picture can stay on its
+            // first frame too (seen in the simulator): one seek to where it is
+            // sets the clock to the file's again. Only then — a real Apple TV
+            // didn't need it, and a seek as playback starts isn't free.
+            if heldAtStart {
+                heldAtStart = false
+                player.time = VLCTime(int: Int32(clamping: Int64(now.milliseconds)))
+                TraceFile.write("vlc", "clock wrong after a held start: re-seek to \(Int(now.milliseconds)) ms")
+            }
+            if !loggedBadClock {
+                loggedBadClock = true
+                let reported = Self.duration(player.time)?.seconds ?? -1
+                Self.log.error("VLC clock \(reported, privacy: .public) s past the end (\(length.seconds, privacy: .public) s): using its position instead")
+                TraceFile.write("vlc", "clock \(Int(reported)) s past the end (\(Int(length.seconds)) s): using its position")
+            }
+        }
         // Until the opening seek lands, the clock still shows the file's
         // start: hold the resume point (no 0:00 flash, no early "first frame").
         if let target = startTarget {
-            guard now >= target - .seconds(3) else { currentTime = target; return }
+            // (A target past the end never lands: let the clock go.)
+            let reachable = duration.map { target < $0 } ?? true
+            guard !reachable || now >= target - .seconds(3) else { currentTime = target; return }
             startTarget = nil
         }
         currentTime = now
@@ -342,6 +391,7 @@ public final class VLCEngine: PlayerEngine {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self else { return }
                 TraceFile.write("vlc", "clock 2 s later: \(self.player.time.value?.intValue ?? -1) ms, position \(self.player.position)")
+                self.describeSurface()
             }
         }
         if duration == nil || duration == .zero, let length = Self.duration(player.media?.length), length > .zero { duration = length }
@@ -353,16 +403,45 @@ public final class VLCEngine: PlayerEngine {
     private func startStats() {
         statsTask?.cancel()
         statsTask = Task { [weak self] in
+            var tick = 0
+            var last: (decoded: Int, lost: Int, late: Int, shown: Int) = (0, 0, 0, 0)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self, let media = self.player.media else { return }
                 let s = media.statistics
+                tick += 1
+                // Every 10 s in the trace: frames decoded, shown, dropped and late
+                // over that time ("laggy" on a real TV is one of these).
+                if tick % 10 == 0 {
+                    let now = (decoded: Int(s.decodedVideo), lost: Int(s.lostPictures), late: Int(s.latePictures), shown: Int(s.displayedPictures))
+                    TraceFile.write("vlc", "10 s: \(now.decoded - last.decoded) decoded, \(now.shown - last.shown) shown, \(now.lost - last.lost) dropped, \(now.late - last.late) late; \(String(format: "%.1f", Double(s.demuxBitrate) * 8)) Mb/s; rate \(self.player.rate)")
+                    last = now
+                }
                 self.stats.droppedFrames = Int(s.lostPictures)
                 Metrics.shared.record(.droppedFrames, value: Double(s.lostPictures))
                 self.stats.decodedFrames = Int(s.decodedVideo)
                 if s.demuxBitrate > 0 { self.stats.bitrateMbps = Double(s.demuxBitrate) * 8 }     // bytes/µs → Mb/s
             }
         }
+    }
+
+    /// What VLC draws into (diagnostics): its views and layers and their
+    /// pixel scale. `-vlcSurfaceScale <s>` sets that scale (test: drawing
+    /// at 1080p on a 4K screen, the TV scaling up).
+    private func describeSurface() {
+        #if canImport(UIKit)
+        let forced = UserDefaults.standard.object(forKey: "vlcSurfaceScale") as? Double
+        func walk(_ v: UIView, _ depth: Int) {
+            if let forced {
+                v.contentScaleFactor = forced
+                v.layer.contentsScale = forced
+                v.layer.sublayers?.forEach { $0.contentsScale = forced }
+            }
+            TraceFile.write("vlc", String(repeating: "  ", count: depth) + "\(type(of: v)) \(Int(v.bounds.width))x\(Int(v.bounds.height)) @\(v.contentScaleFactor) layer \(type(of: v.layer))")
+            v.subviews.forEach { walk($0, depth + 1) }
+        }
+        walk(surface, 0)
+        #endif
     }
 
     // MARK: Helpers

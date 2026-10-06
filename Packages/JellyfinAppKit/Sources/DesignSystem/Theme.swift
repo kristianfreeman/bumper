@@ -163,9 +163,9 @@ public enum Layout {
     public static let castWidth = pick(tv: 160, mac: 110, pad: 110, phone: 84)
     public static let squareWidth = pick(tv: 300, mac: 200, pad: 200, phone: 150)          // audiobook covers
     /// Page titles ("Good evening, Kristian.", "Settings") and smaller ones (collection pages).
-    public static let pageTitle = pick(tv: 64, mac: 40, pad: 44, phone: 34)
-    public static let pageTitleSmall = pick(tv: 56, mac: 34, pad: 38, phone: 30)
-    public static let sectionTitle = pick(tv: 44, mac: 28, pad: 30, phone: 24)
+    public static let pageTitle = pick(tv: 64, mac: 40, pad: 44, phone: 28)
+    public static let pageTitleSmall = pick(tv: 56, mac: 34, pad: 38, phone: 26)
+    public static let sectionTitle = pick(tv: 44, mac: 28, pad: 30, phone: 20)
 
     /// Pills (and other controls drawn for the TV) at this fraction of their TV size.
     public static let pillScale = pick(tv: 1, mac: 0.55, pad: 0.6, phone: 0.55)
@@ -184,4 +184,14 @@ public enum Layout {
     public static func cardWidth(_ available: CGFloat, columns: Int) -> CGFloat {
         ((available - CGFloat(columns - 1) * cardSpacing) / CGFloat(columns)).rounded(.down)
     }
+}
+
+extension Font {
+    /// The line under a page's title ("Five films arrived this week."):
+    /// big on the TV, body size in a hand.
+    public static var pageLede: Font { Layout.device == .phone ? .body : .title3 }
+    /// A collection's title on a page ("Pick up where you left off").
+    public static var sectionTitle: Font { Layout.device == .phone ? .headline : .title3.weight(.bold) }
+    /// The line under a collection's title.
+    public static var sectionSubtitle: Font { Layout.device == .phone ? .subheadline : .callout }
 }

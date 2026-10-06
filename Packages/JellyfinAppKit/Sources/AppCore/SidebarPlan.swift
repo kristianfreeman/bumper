@@ -28,7 +28,9 @@ public struct SidebarPlan: Sendable, Equatable {
 
     /// `views`: the server's libraries, in its order. `hasAudiobooks`: which
     /// books libraries hold any (the rest are e-books).
-    public init(views: [BaseItem], hasAudiobooks: (BaseItem) -> Bool) {
+    /// - Parameter maxTabs: library tabs at most (an iPhone's tab bar has
+    ///   room for fewer).
+    public init(views: [BaseItem], maxTabs: Int = SidebarPlan.maxLibraryTabs, hasAudiobooks: (BaseItem) -> Bool) {
         let shown = views.filter { $0.collectionType == nil || Self.supported.contains($0.collectionType!) }
         let books = shown.filter { $0.collectionType == "books" && hasAudiobooks($0) }
         let hasMovies = shown.contains { $0.collectionType == "movies" }
@@ -46,15 +48,15 @@ public struct SidebarPlan: Sendable, Equatable {
                 tabs.append(.library(view))
             }
         }
-        if tabs.count > Self.maxLibraryTabs {
-            let overflow = tabs[(Self.maxLibraryTabs - 1)...].flatMap { entry -> [BaseItem] in
+        if tabs.count > maxTabs {
+            let overflow = tabs[(maxTabs - 1)...].flatMap { entry -> [BaseItem] in
                 switch entry {
                 case .library(let v): [v]
                 case .audiobooks(let vs): vs
                 case .more(let vs): vs
                 }
             }
-            tabs = Array(tabs.prefix(Self.maxLibraryTabs - 1)) + [.more(overflow)]
+            tabs = Array(tabs.prefix(maxTabs - 1)) + [.more(overflow)]
         }
         entries = tabs
     }

@@ -1,23 +1,24 @@
 import XCTest
 
-/// Settings: one page, reached from the sidebar; switches flip where they
+/// Settings: one page, reached from the tab bar; switches flip where they
 /// are and choices open under their section.
 @MainActor
 final class SettingsTests: XCTestCase {
-    /// From the sidebar's Settings tab, a switch flips in place.
+    /// From the Settings tab, a switch flips in place.
     func testSwitchFlipsInPlaceFromSettingsTab() {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
         let remote = XCUIRemote.shared
-        remote.press(.menu)                                   // content → sidebar (on Home)
-        XCTAssertTrue(app.buttons["gearshape"].waitForExistence(timeout: 2), "Sidebar didn't open")
-        for _ in 0..<4 { remote.press(.down) }                // Home → Movies → TV Shows → Search → Settings
-        remote.press(.select)
+        remote.press(.menu)                                   // content → the tabs (on Home)
+        Thread.sleep(forTimeInterval: 0.8)
+        let settingsTab = app.buttons["gearshape"]
+        XCTAssertTrue(settingsTab.waitForExistence(timeout: 2), "no Settings tab")
+        for _ in 0..<6 where !settingsTab.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.4) }   // along to Settings
         let autoplay = app.buttons["setting.autoplay"]
         XCTAssertTrue(autoplay.waitForExistence(timeout: 3), "Settings didn't open")
-        remote.press(.right)                                  // sidebar → the page
+        remote.press(.down)                                   // the tabs → the page
         // Steer toward the tile: down while above it, left while beside it.
         let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
         for _ in 0..<10 where !autoplay.hasFocus {

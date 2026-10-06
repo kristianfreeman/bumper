@@ -206,7 +206,7 @@ struct LibraryView: View {
             }) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(library.name ?? "Library").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
-                    if let lede = model.lede { Text(lede).font(.title3).foregroundStyle(theme.secondaryText) }
+                    if let lede = model.lede { Text(lede).font(.pageLede).foregroundStyle(theme.secondaryText) }
                 }
                 .padding(.top, 20)
             }
@@ -234,7 +234,7 @@ struct MoreLibrariesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 40) {
-                Text("More").font(.title2.bold()).foregroundStyle(theme.primaryText)
+                Text("More").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.landscapeMin), spacing: Layout.cardSpacing)], alignment: .leading, spacing: Layout.shelfSpacing) {
                     ForEach(libraries) { library in
                         LandscapeCard(library, kind: .poster) { navigate(.library(library)) }
@@ -341,9 +341,9 @@ struct CollectionPage: View {
                         }
                     }
                     if let understood {
-                        Text(understood).font(.title3).foregroundStyle(theme.secondaryText).transition(.opacity)
+                        Text(understood).font(.pageLede).foregroundStyle(theme.secondaryText).transition(.opacity)
                     } else if let lede {
-                        Text(lede).font(.title3).foregroundStyle(theme.secondaryText)
+                        Text(lede).font(.pageLede).foregroundStyle(theme.secondaryText)
                             .frame(maxWidth: 1200, alignment: .leading)
                             .transition(.opacity)
                     }

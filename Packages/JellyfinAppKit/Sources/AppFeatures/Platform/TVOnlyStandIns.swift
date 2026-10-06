@@ -7,26 +7,15 @@ import SwiftUI
 
 // The Apple TV's own machinery, as no-ops on iPhone, iPad and Mac, so the
 // shared screens need no special cases. (The real ones: RemoteGestures,
-// TopBand, TopShelfWriter, DisplayModeManager, InputTrace, SeekBench.)
+// TopShelfWriter, DisplayModeManager, InputTrace, SeekBench.)
 
 /// The Siri Remote's clicks and swipes: touch and the pointer handle it here.
 struct RemoteGestures: View {
     let transport: TransportModel
     let active: Bool
+    var showsControls: () -> Bool = { false }
     let onVertical: () -> Void
     var body: some View { Color.clear.allowsHitTesting(false) }
-}
-
-/// Up to the sidebar from the top row: there's no focus engine on touch.
-struct TopBand<Trailing: View>: View {
-    @ViewBuilder var trailing: () -> Trailing
-    var body: some View {
-        HStack { Spacer(); trailing() }
-    }
-}
-
-struct TabBarFocusGuide: View {
-    var body: some View { Color.clear.frame(height: 0) }
 }
 
 /// No Top Shelf off the TV.

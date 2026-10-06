@@ -27,7 +27,13 @@ struct PlayerView: View {
     @State private var thumbTask: Task<Void, Never>?
     /// Pinched out: the picture fills the screen (iPhone, iPad).
     @State private var fills = false
+    /// Off the TV: the Find Subtitles and Info sheets.
+    @State private var findingSubtitles = false
+    @State private var showsInfo = false
     @FocusState private var focus: PlayerFocus?
+    /// Focus is on the icon row: the video isn't a place to move to (Left
+    /// from the first icon went onto it, invisibly). Down goes back.
+    @State private var onControls = false
 
     enum PlayerFocus: Hashable { case surface, skip, control(PlayerMenu), option(String) }
 
@@ -69,7 +75,7 @@ struct PlayerView: View {
             // Presses and swipes on it are read by RemoteGestures.
             Color.clear
                 .contentShape(.rect)
-                .focusable(openMenu == nil)
+                .focusable(openMenu == nil && !onControls)
                 .focused($focus, equals: .surface)
                 .ignoresSafeArea()
                 .accessibilityIdentifier("player.surface")
@@ -84,21 +90,26 @@ struct PlayerView: View {
                 })
                 #endif
             if let controller {
-                RemoteGestures(transport: controller.transport, active: focus == .surface && openMenu == nil) {
+                RemoteGestures(transport: controller.transport, active: focus == .surface && openMenu == nil,
+                               // Select with the controls down brings them up (playing on);
+                               // with them up, it plays and pauses.
+                               showsControls: { if chromeVisible { return false }; showChrome(); return true }) {
                     showChrome()
                     focus = .control(.subtitles)
                 }
                 .frame(width: 0, height: 0)
             }
             preparingOverlay
+            #if os(tvOS)
             if chromeVisible, let controller, let engine = controller.engine {
                 TransportBar(controller: controller, engine: engine, scrubTime: controller.transport.head, scrubThumb: scrubThumb,
-                             openMenu: openMenu, focus: $focus, open: { open($0) }, leave: { focus = .surface })
+                             openMenu: openMenu, focus: $focus, open: { open($0) }, leave: { backToVideo() })
                     .transition(.opacity)
             }
-            #if !os(tvOS)
-            if chromeVisible, openMenu == nil, let controller, let engine = controller.engine {
-                TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() }, open: { open($0) })
+            #else
+            if chromeVisible, let controller, let engine = controller.engine {
+                TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
+                              findingSubtitles: $findingSubtitles, showsInfo: $showsInfo)
                     .transition(.opacity)
             }
             #endif
@@ -168,12 +179,33 @@ struct PlayerView: View {
                 }
             }
             .hidesSystemOverlays()
+            #if !os(tvOS)
+            .sheet(isPresented: $findingSubtitles, onDismiss: { controller?.subtitleSearch = .idle; showChrome() }) {
+                if let controller { FindSubtitlesSheet(controller: controller) { findingSubtitles = false } }
+            }
+            .sheet(isPresented: $showsInfo, onDismiss: { showChrome() }) {
+                if let controller { InfoSheet(controller: controller) }
+            }
+            #endif
+    }
+
+    /// From the icon row back to the video: it becomes focusable again first.
+    private func backToVideo() {
+        onControls = false
+        Task { @MainActor in
+            for _ in 0..<5 where focus != .surface {
+                await Task.yield()
+                focus = .surface
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+        }
     }
 
     /// Any focus on the controls keeps them up; back on the video, the timer resumes.
     private func focusChanged(_ now: PlayerFocus?) {
         TraceFile.write("focus", now.map { "\($0)" } ?? "none")
         if case .control = now {
+            onControls = true
             hideTask?.cancel()
             chromeVisible = true
         } else if now == .surface {
@@ -216,8 +248,8 @@ struct PlayerView: View {
             }
             .focused($focus, equals: .skip)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(.horizontal, 90)
-            .padding(.bottom, chromeVisible ? 300 : 90)
+            .padding(.horizontal, Platform.isTV ? 90 : Layout.horizontalMargin + 8)
+            .padding(.bottom, Platform.isTV ? (chromeVisible ? 300 : 90) : (chromeVisible ? SubtitleOverlay.controlsHeight : 24))
             .transition(.opacity)
         }
     }
@@ -249,9 +281,11 @@ struct PlayerView: View {
     /// Menu/Back: close a menu → cancel a scrub → leave the icons → hide the
     /// controls → leave the player.
     private func handleExit() {
+        // Found subtitles → back to the list (not out of the card).
+        if openMenu == .subtitles, let controller, controller.subtitleSearch != .idle { controller.subtitleSearch = .idle; return }
         if openMenu != nil { closeMenu(); return }
         if controller?.transport.cancel() == true { showChrome(); return }
-        if case .control = focus { focus = .surface; return }
+        if case .control = focus { backToVideo(); return }
         if chromeVisible && controller?.isPlaying == true { chromeVisible = false; return }
         leavePlayer()
     }
@@ -295,7 +329,7 @@ struct PlayerView: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, openMenu == nil, controller.isPlaying else { return }
+            guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, openMenu == nil, !findingSubtitles, !showsInfo, controller.isPlaying else { return }
             if case .control = focus { return }
             chromeVisible = false
         }

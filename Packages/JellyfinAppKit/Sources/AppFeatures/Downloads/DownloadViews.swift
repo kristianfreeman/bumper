@@ -9,6 +9,7 @@ import SwiftUI
 /// Paused (resumes) → Downloaded (offers removal).
 struct DownloadPill: View {
     let item: BaseItem
+    var size: PillSize = .regular
     @Environment(AppModel.self) private var app
     @State private var confirmRemove = false
 
@@ -18,7 +19,7 @@ struct DownloadPill: View {
             Group {
                 switch record?.state {
                 case nil:
-                    Pill("Download", systemImage: "arrow.down.circle") { start(store, session, app.defaultDownloadPreset) }
+                    Pill("Download", systemImage: "arrow.down.circle", size: size) { start(store, session, app.defaultDownloadPreset) }
                         // Any other size: long-press (iPhone, iPad) or right-click (Mac).
                         .contextMenu {
                             ForEach(DownloadPreset.allCases) { preset in
@@ -26,15 +27,15 @@ struct DownloadPill: View {
                             }
                         }
                 case .queued?:
-                    Pill("Waiting to Download", systemImage: "clock", active: true) { store.pause(item.id) }
+                    Pill("Waiting to Download", systemImage: "clock", size: size, active: true) { store.pause(item.id) }
                 case .downloading?, .finishing?:
-                    Pill(record?.progress.map { "Downloading \(Int($0 * 100))%" } ?? "Downloading", systemImage: "pause.circle", active: true) { store.pause(item.id) }
+                    Pill(record?.progress.map { "Downloading \(Int($0 * 100))%" } ?? "Downloading", systemImage: "pause.circle", size: size, active: true) { store.pause(item.id) }
                 case .paused?:
-                    Pill(record?.progress.map { "Paused at \(Int($0 * 100))%" } ?? "Paused", systemImage: "arrow.down.circle") { store.resume(item.id) }
+                    Pill(record?.progress.map { "Paused at \(Int($0 * 100))%" } ?? "Paused", systemImage: "arrow.down.circle", size: size) { store.resume(item.id) }
                 case .failed?:
-                    Pill("Download Again", systemImage: "exclamationmark.arrow.circlepath") { store.resume(item.id) }
+                    Pill("Download Again", systemImage: "exclamationmark.arrow.circlepath", size: size) { store.resume(item.id) }
                 case .done?:
-                    Pill("Downloaded", systemImage: "checkmark.circle.fill", active: true) { confirmRemove = true }
+                    Pill("Downloaded", systemImage: "checkmark.circle.fill", size: size, active: true) { confirmRemove = true }
                 }
             }
             .pillCaption(DownloadWords.caption(record))
@@ -61,6 +62,7 @@ struct SeasonDownloadPill: View {
     let seasonId: String?
     let seasonName: String
     let episodes: [BaseItem]
+    var size: PillSize = .regular
     @Environment(AppModel.self) private var app
     @State private var confirmRemove = false
 
@@ -69,11 +71,11 @@ struct SeasonDownloadPill: View {
             let summary = store.summary(seriesId: seriesId, seasonId: seasonId)
             Group {
                 if summary.total >= episodes.count && summary.done == summary.total {
-                    Pill("\(seasonName) Downloaded", systemImage: "checkmark.circle.fill", active: true) { confirmRemove = true }
+                    Pill("\(seasonName) Downloaded", systemImage: "checkmark.circle.fill", size: size, active: true) { confirmRemove = true }
                 } else if summary.active > 0 {
-                    Pill("Downloading \(summary.done) of \(summary.total)", systemImage: "arrow.down.circle", active: true) {}
+                    Pill("Downloading \(summary.done) of \(summary.total)", systemImage: "arrow.down.circle", size: size, active: true) {}
                 } else {
-                    Pill("Download \(seasonName)", systemImage: "arrow.down.circle") {
+                    Pill("Download \(seasonName)", systemImage: "arrow.down.circle", size: size) {
                         store.download(episodes, client: session.client, accountId: session.account.id, quality: app.defaultDownloadPreset.quality)
                     }
                     .contextMenu {
@@ -120,9 +122,8 @@ struct DownloadsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Downloads").font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
                     Text(DownloadWords.lede(films: films.count, episodes: shows.reduce(0) { $0 + $1.count }, used: store?.bytesUsed ?? 0, free: store?.freeBytes))
-                        .font(.title3).foregroundStyle(theme.secondaryText)
+                        .font(.pageLede).foregroundStyle(theme.secondaryText)
                 }
-                .padding(.top, Layout.device == .phone ? PillSize.regular.diameter + 8 : 0)
                 if all.isEmpty {
                     Text("Download a film or an episode from its page, and it plays from here with no connection.")
                         .font(.callout).foregroundStyle(theme.secondaryText)
@@ -170,7 +171,7 @@ struct DownloadsView: View {
     private func section<C: View>(_ title: String, subtitle: String, @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
+                Text(title).font(.sectionTitle).foregroundStyle(theme.primaryText)
                 Text(subtitle).font(.callout).foregroundStyle(theme.secondaryText)
             }
             content()
@@ -254,7 +255,7 @@ struct DownloadedShowView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(episodes.first?.item.seriesName ?? "Show").font(.system(size: Layout.pageTitleSmall, weight: .bold)).foregroundStyle(theme.primaryText)
                         Text("\(DownloadWords.count(episodes.count, "episode", "episodes")) on this device, \(DownloadWords.bytes(episodes.reduce(0) { $0 + ($1.size ?? 0) })).")
-                            .font(.title3).foregroundStyle(theme.secondaryText)
+                            .font(.pageLede).foregroundStyle(theme.secondaryText)
                     }
                     Spacer()
                     if !episodes.isEmpty {
@@ -265,7 +266,7 @@ struct DownloadedShowView: View {
                 ForEach(seasons, id: \.key) { season, eps in
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
-                            Text(season == 0 ? "Specials" : "Season \(season)").font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
+                            Text(season == 0 ? "Specials" : "Season \(season)").font(.sectionTitle).foregroundStyle(theme.primaryText)
                             Spacer()
                             Pill("Remove Season", systemImage: "trash", size: .small) { store?.remove(eps.map(\.id)) }
                         }

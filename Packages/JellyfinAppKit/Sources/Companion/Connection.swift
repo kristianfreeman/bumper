@@ -63,17 +63,26 @@ public final class CompanionHost: @unchecked Sendable {
     private var listener: NWListener?
     private var connections: [UUID: CompanionConnection] = [:]
     private var latest: CompanionState?
-    private let name: String
+    /// nil: the system's name for this device (the room, "Living Room") —
+    /// it fills that in when advertising, though apps can't read it.
+    private let name: String?
+    /// The name the service was registered under (the room, once advertised).
+    private var advertised: String?
     /// A phone asked for something; reply through the connection if needed.
     public var onCommand: (@Sendable (CompanionCommand, CompanionConnection) -> Void)?
     public var onLog: (@Sendable (String) -> Void)?
 
-    public init(name: String) { self.name = name }
+    public init(name: String?) { self.name = name }
 
     public func start() {
         queue.async { [self] in
             guard listener == nil, let l = try? NWListener(using: .tcp) else { return }
             l.service = NWListener.Service(name: name, type: CompanionService.type)
+            l.serviceRegistrationUpdateHandler = { [weak self] change in
+                guard let self, case .add(let endpoint) = change, case .service(let registered, _, _, _) = endpoint else { return }
+                self.advertised = registered
+                self.onLog?("advertised as \(registered)")
+            }
             l.newConnectionHandler = { [weak self] nw in self?.accept(nw) }
             l.stateUpdateHandler = { [weak self] state in self?.onLog?("listener \(state)") }
             l.start(queue: queue)
@@ -110,7 +119,7 @@ public final class CompanionHost: @unchecked Sendable {
         c.onClose = { [weak self] in self?.queue.async { self?.connections[c.id] = nil } }
         c.onReady = { [weak self, weak c] in
             guard let self, let c else { return }
-            c.send(.hello(name: self.name, version: CompanionService.version))
+            c.send(.hello(name: self.advertised ?? self.name ?? "Apple TV", version: CompanionService.version))
             if let latest = self.latest { c.send(.state(latest)) }
         }
         c.start()

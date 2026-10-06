@@ -45,6 +45,7 @@ final class PlayerController {
     init(request: PlaybackRequest, app: AppModel) {
         self.request = request
         self.app = app
+        isBackground = request.background
         transport.target = self
         transport.log = { TraceFile.write("input", $0) }
         phonePlayPause = NotificationCenter.default.addObserver(forName: .companionPlayPause, object: nil, queue: .main) { [weak self] _ in
@@ -53,7 +54,13 @@ final class PlayerController {
     }
 
     var item: BaseItem { details ?? plan?.item ?? request.item }
-    var isBackground: Bool { request.background }
+    /// Background: plays on and on (round to the first episode again) and
+    /// tells the server nothing. Starts from the request; switched with
+    /// `setBackground(_:)` while playing.
+    private(set) var isBackground: Bool
+    /// The show's first episode, where Background goes after the last.
+    @ObservationIgnored private var firstEpisode: BaseItem?
+    @ObservationIgnored private var client: JellyfinClient?
     /// The full item (year, rating, trickplay…): shelves and episode lists
     /// hand the player a lightweight one.
     private(set) var details: BaseItem?
@@ -68,6 +75,7 @@ final class PlayerController {
         ThemeMusic.shared.stop(fadeOut: .milliseconds(300))
         let client = session.client
         // Request the TV mode switch immediately from what we already know.
+        if !app.settings.matchContent { TraceFile.write("display", "matching is off in the app's settings") }
         if app.settings.matchContent {
             DisplayModeManager.request(for: request.item.mediaStreams?.first { $0.type == .video } ?? request.item.mediaSources?.first?.videoStream)
         }
@@ -82,7 +90,13 @@ final class PlayerController {
                 self.plan = plan
                 self.engine = engine
                 TraceFile.write("player", "Plan: \(plan.engine.rawValue) \(plan.method.rawValue) — prepared")
-                if matching { await DisplayModeManager.waitForSwitch() }
+                // The plan knows the stream (a shelf's item often has no frame
+                // rate): ask with it, and wait for the TV's switch before the
+                // picture moves — starting in ~80 ms, the switch came after.
+                if matching {
+                    DisplayModeManager.request(for: plan.mediaSource.videoStream)
+                    await DisplayModeManager.waitForSwitch()
+                }
             } else {
                 let start = request.resume ? request.item.resumePosition : nil
                 if let file = app.downloads?.localFile(for: request.item.id), let record = app.downloads?.record(request.item.id),
@@ -138,8 +152,9 @@ final class PlayerController {
                 }
             }
 
-            // Background Noise tells the server nothing: no reporter at all.
-            if !request.background {
+            // Background tells the server nothing: no reporter at all.
+            self.client = client
+            if !isBackground {
                 let reporter = PlaybackReporter(client: client, plan: plan, outbox: app.outbox)
                 self.reporter = reporter
                 Task { await reporter.start(position: plan.startPosition) }
@@ -158,6 +173,24 @@ final class PlayerController {
             phase = .failed(error.localizedDescription)
             Self.log.error("Playback failed: \(error.localizedDescription, privacy: .public)")
             TraceFile.write("player", "Playback failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Turns Background on or off mid-play. On: what's been watched so far is
+    /// reported once (a resume point), then nothing more. Off: reporting
+    /// starts again from here, as if this were a normal play.
+    func setBackground(_ on: Bool) {
+        guard on != isBackground, let engine, let plan else { return }
+        isBackground = on
+        let position = engine.currentTime
+        TraceFile.write("player", "background \(on ? "on" : "off") at \(Int(position.seconds))s")
+        if on {
+            if let reporter { Task { await reporter.stop(position: position) } }
+            reporter = nil
+        } else if let client {
+            let reporter = PlaybackReporter(client: client, plan: plan, outbox: app.outbox)
+            self.reporter = reporter
+            Task { await reporter.start(position: position) }
         }
     }
 
@@ -230,8 +263,9 @@ final class PlayerController {
         if plan.item.kind == .episode, let seriesId = plan.item.seriesId {
             if let eps = try? await client.episodes(seriesId: seriesId, seasonId: nil).items,
                let idx = eps.firstIndex(where: { $0.id == plan.item.id }) {
-                // Background Noise goes round: after the last, the first again.
-                if idx + 1 < eps.count { nextEpisode = eps[idx + 1] } else if request.background { nextEpisode = eps.first }
+                // Background goes round: after the last, the first again.
+                if idx + 1 < eps.count { nextEpisode = eps[idx + 1] }
+                firstEpisode = eps.first
             }
         }
         segments = await segs
@@ -285,10 +319,10 @@ final class PlayerController {
             app.playback = nil
             return
         }
-        // Background Noise: on to the next (round to the first; a film again),
+        // Background: on to the next (round to the first; a film again),
         // still telling the server nothing.
-        if request.background {
-            app.playback = PlaybackRequest(item: nextEpisode ?? request.item, resume: false, background: true)
+        if isBackground {
+            app.playback = PlaybackRequest(item: nextEpisode ?? firstEpisode ?? item, resume: false, background: true)
             return
         }
         // Queue first: the next thing in the plan, in order.
@@ -317,14 +351,17 @@ final class PlayerController {
     let transport = TransportModel()
     @ObservationIgnored private var phonePlayPause: (any NSObjectProtocol)?
 
-    /// Now Playing's commands (on hardware, the Play/Pause button often
-    /// arrives as separate play / pause commands, alongside the press).
+    /// Now Playing's commands. On an Apple TV the remote's Play/Pause button
+    /// arrives only as these — as "play" or "pause", picked from what the
+    /// system last heard — so a "pause" while paused is the button pressed
+    /// again, not a no-op: it plays (a living-room TV ignored the second press
+    /// and only Select resumed). Each is one press; the transport drops the
+    /// same press arriving twice.
     func playPause(_ intent: PlayPauseIntent = .toggle, via source: String) {
-        switch intent {
-        case .toggle: transport.togglePlayPause(source: source)
-        case .play: if !isPlaying || transport.isScrubbing { transport.togglePlayPause(source: source) }
-        case .pause: if isPlaying { transport.togglePlayPause(source: source) }
+        if intent != .toggle, (intent == .play) == (isPlaying && !transport.isScrubbing) {
+            TraceFile.write("input", "\(source) \(intent.rawValue) while already \(isPlaying ? "playing" : "paused"): taken as the button")
         }
+        transport.togglePlayPause(source: source)
     }
 
     private func reportState() {

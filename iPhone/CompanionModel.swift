@@ -18,7 +18,14 @@ final class CompanionModel {
     }
 
     private(set) var tvs: [TV] = []
+    /// The TV the phone is linked to: it always watches one quietly (what's
+    /// playing there shows above the tabs), whether or not it's casting.
     private(set) var connectedTo: String?
+    /// Sending to the TV: what's played on the phone starts there. Only
+    /// when asked (the TV button), never just from opening the app.
+    private(set) var casting = false
+    /// The service name of the TV linked to (its Bonjour name).
+    private var linked: String?
     private(set) var state: CompanionState?
     private(set) var results: [CompanionItem] = []
     private(set) var resultsTitle: String?
@@ -39,13 +46,23 @@ final class CompanionModel {
             Task { @MainActor in
                 guard let self else { return }
                 self.tvs = found.sorted { $0.name < $1.name }
-                // One TV: connect without asking.
+                // One TV: watch it (what it plays shows on the phone). Casting
+                // to it is the TV button's job.
                 if self.connection == nil, let only = self.tvs.first, self.tvs.count == 1 { self.connect(only) }
             }
         }
         b.start(queue: queue)
         browser = b
     }
+
+    /// Casts to a TV by name (one the browser found): from now on Play goes there.
+    func cast(to name: String) {
+        if linked != name, let tv = tvs.first(where: { $0.name == name }) { connect(tv) }
+        casting = true
+    }
+
+    /// Stops sending to the TV; the phone keeps watching what it plays.
+    func stopCasting() { casting = false }
 
     func connect(_ tv: TV) {
         connection?.cancel()
@@ -55,6 +72,7 @@ final class CompanionModel {
             Task { @MainActor in
                 guard let self, self.connection === c else { return }
                 self.connection = nil
+                self.linked = nil
                 self.connectedTo = nil
                 self.state = nil
                 // Try again shortly (the TV may have gone to sleep, or restarted the app).
@@ -63,6 +81,7 @@ final class CompanionModel {
             }
         }
         connection = c
+        linked = tv.name
         connectedTo = tv.name
         c.start()
     }
@@ -111,7 +130,7 @@ final class CompanionModel {
 
     private func receive(_ message: CompanionMessage) {
         switch message {
-        case .hello(let name, _): connectedTo = name
+        case .hello: break                          // the name found on the network (the room) stays
         case .state(let s): state = s
         case .results(let query, let items, let understood):
             results = items

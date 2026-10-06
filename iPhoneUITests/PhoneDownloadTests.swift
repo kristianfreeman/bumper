@@ -15,13 +15,17 @@ final class PhoneDownloadTests: XCTestCase {
         XCTAssertTrue(done.waitForExistence(timeout: 20), "never finished downloading (button: \(download.label))")
         shot(app, "detail-downloaded")
 
-        // The Downloads tab lists it.
+        // Downloads (in the profile menu: the iPhone's tab bar holds Home,
+        // the libraries and Search) lists it.
         app.terminate()
         app.launchArguments = ["-mock"]                                 // same downloads, Home first
         app.launch()
-        let tab = app.tabBars.buttons["Downloads"].exists ? app.tabBars.buttons["Downloads"] : app.buttons["Downloads"]
-        if !tab.waitForExistence(timeout: 8) { app.tabBars.buttons["More"].tap() }
-        (tab.exists ? tab : app.staticTexts["Downloads"]).tap()
+        let avatar = app.buttons["profile.avatar"]
+        XCTAssertTrue(avatar.waitForExistence(timeout: 8), "no profile menu")
+        avatar.tap()
+        let item = app.buttons["menu.downloads"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3), "no Downloads in the profile menu")
+        item.tap()
         let card = app.buttons["downloads.film.movie-0001"]
         XCTAssertTrue(card.waitForExistence(timeout: 5), "the film isn't on the Downloads page")
         shot(app, "downloads-page")
@@ -45,7 +49,7 @@ final class PhoneDownloadTests: XCTestCase {
             XCTAssertTrue(download.waitForExistence(timeout: 10), "\(id): no Download button")
             download.tap()
             XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Downloaded'")).firstMatch.waitForExistence(timeout: 60), "\(id): never finished downloading")
-            app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play' OR label BEGINSWITH 'Resume'")).firstMatch.tap()
+            app.buttons["detail.play"].tap()
             XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 10), "\(id): the downloaded file didn't play")
             Thread.sleep(forTimeInterval: 2)
             shot(app, "playing-\(id)")

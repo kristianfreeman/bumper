@@ -33,6 +33,7 @@ public struct AppRoot: View {
             .preferredColorScheme(app.themes.theme.colorScheme)
             .tint(app.themes.theme.accent)
             .onOpenURL { app.open($0) }                     // the Top Shelf: bumper://play/<id>
+            .onAppear { app.cast = cast }       // Play while connected goes to the TV (the views read it from the environment)
     }
 
     /// Call from the App's init, as early as possible.
@@ -148,41 +149,21 @@ nonisolated struct GridSpec: Hashable, Sendable {
     }
 }
 
-/// "Bumper" at the top of the sidebar in plain sidebar-title type, not
-/// selectable (tvOS 27; there's no sidebar header before it, and a fake tab
-/// would count toward the seven). The sidebar's focus leans on there being
-/// a header: without one, Menu and Up from the page stopped reaching it.
-private struct SidebarTitle: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(tvOS 27.0, *) {
-            content.tabViewSidebarHeader {
-                Text(Brand.displayName)
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .focusable(false)
-                    .accessibilityIdentifier("sidebar.title")
-            }
-        } else {
-            content
-        }
-    }
-}
-
-extension EnvironmentValues {
-
-}
-
 struct MainTabView: View {
     let session: UserSession
     @Environment(AppModel.self) private var app
+    @Environment(\.castLink) private var cast
 
-    @State private var plan = SidebarPlan(views: [], hasAudiobooks: { _ in false })
+    @State private var plan = SidebarPlan(views: [], maxTabs: MainTabView.libraryTabs, hasAudiobooks: { _ in false })
     @State private var selection = "home"
+    #if os(tvOS)
+    /// Your picture for the tab bar, round, drawn once it's loaded.
+    @State private var profileIcon: UIImage?
+    #endif
     #if os(macOS)
-    @State private var columns = NavigationSplitViewVisibility.all
+    /// The Mac: each place's pushed pages, and the places built so far.
+    @State private var paths: [String: [Route]] = [:]
+    @State private var visited: Set<String> = []
     #endif
 
     init(session: UserSession, initialTab: String? = nil) {
@@ -190,15 +171,65 @@ struct MainTabView: View {
         _selection = State(initialValue: initialTab ?? "home")
     }
 
+    /// The places run along the top, like the Music app's: the TV's and the
+    /// iPad's floating tab bar, the Mac's segmented control in the window
+    /// toolbar. An iPhone has its tab bar at the bottom.
     var body: some View {
         #if os(macOS)
         macShell
+        #elseif os(tvOS)
+        // One stack around the tabs: a pushed page covers the whole screen,
+        // tab bar and all, like the TV app's.
+        RoutedStack(initial: app.launchRoute) { tabs.hidesNavigationBarEntirely() }
+            .task { await loadLibraries() }
+            .task(id: session.account.imageTag) { profileIcon = await ProfileIcon.make(session: session) }
+            .task { await tabSwitchTest() }
         #else
+        // A stack per tab (each keeps its own history, and the tab bar stays
+        // as pages are pushed), with the TV's bar above the tabs.
         tabs
+            .castBar(cast)
+            .task { await loadLibraries() }
+            .task { await tabSwitchTest() }
         #endif
     }
 
-    /// The places in the sidebar, in order (libraries most used first).
+    /// Tests: `-tabSwitchTest` goes through every place twice, timing the
+    /// frames (switching is what the places bar is for; it must be instant).
+    private func tabSwitchTest() async {
+        guard ProcessInfo.processInfo.arguments.contains("-tabSwitchTest") else { return }
+        try? await Task.sleep(for: .seconds(3))
+        Metrics.shared.reset()
+        HitchMonitor.shared.start()
+        HitchMonitor.shared.resetTotals()
+        let ids = places.map(\.id).filter { $0 != "search" }
+        // First visits build each page; after that a switch only shows one.
+        for label in ["tabs, first visit", "tabs, switching back"] {
+            var each: [String] = []
+            for id in ids {
+                Metrics.shared.reset()
+                let start = ContinuousClock.now
+                selection = id
+                // The main thread is busy until the switch has been laid out
+                // and committed: the time until it next runs anything else.
+                await withCheckedContinuation { done in DispatchQueue.main.async { DispatchQueue.main.async { done.resume() } } }
+                let busy = start.duration(to: .now).milliseconds
+                for _ in 0..<6 { HitchMonitor.shared.noteActivity(); try? await Task.sleep(for: .milliseconds(100)) }
+                each.append("\(id) \(Int(busy)) ms busy, frame \(Int(Metrics.shared.summary(.frameTime)?.max ?? 0)) ms")
+            }
+            TraceFile.write("benchmark", "\(label), worst frame: \(each.joined(separator: ", "))")
+        }
+    }
+
+    /// An iPhone's tab bar holds five: Home, three libraries (the rest
+    /// behind More) and Search. There, and on an iPad (whose floating bar
+    /// shares the navigation bar's row), Downloads and Settings are in the
+    /// profile menu instead.
+    private static var phone: Bool { Layout.device == .phone }
+    private static var placesInMenu: Bool { Layout.device == .phone || Layout.device == .pad }
+    static var libraryTabs: Int { phone ? 3 : SidebarPlan.maxLibraryTabs }
+
+    /// The places, in order (libraries most used first).
     private struct Place: Identifiable { let id: String; let title: String; let icon: String }
 
     private var places: [Place] {
@@ -210,69 +241,84 @@ struct MainTabView: View {
             case .more: out.append(Place(id: "more", title: "More", icon: "square.grid.2x2"))
             }
         }
-        if app.downloads != nil { out.append(Place(id: "downloads", title: "Downloads", icon: "arrow.down.circle")) }
+        if app.downloads != nil && !Self.placesInMenu { out.append(Place(id: "downloads", title: "Downloads", icon: "arrow.down.circle")) }
         out.append(Place(id: "search", title: "Search", icon: "magnifyingglass"))
-        out.append(Place(id: "settings", title: "Settings", icon: "gearshape"))
+        if !Self.placesInMenu { out.append(Place(id: "settings", title: "Settings", icon: "gearshape")) }
         return out
     }
 
-    @ViewBuilder
     private func page(for id: String) -> some View {
-        switch id {
-        case "home": HomeView()
-        case "search": SearchView()
-        case "downloads": DownloadsView()
-        case "settings": SettingsView()
-        default:
-            ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
-                if case .library(let view) = entry, view.id == id { LibraryView(library: view) }
-                else if case .audiobooks(let libraries) = entry, id == "audiobooks" { AudiobookLibraryView(libraries: libraries) }
-                else if case .more(let libraries) = entry, id == "more" { MoreLibrariesView(libraries: libraries) }
-            }
-        }
+        PlacePage(id: id, plan: plan).equatable()
     }
 
     #if os(macOS)
-    /// The Mac's own shape: a sidebar list and the page beside it (the tab
-    /// view's adaptable sidebar didn't open there, and laid pages out wider
-    /// than the window).
+    /// The Mac: the places as a segmented control in the window toolbar,
+    /// and the page filling the window. Every place visited stays built,
+    /// shown or hidden, under one stack whose path is kept per place.
     private var macShell: some View {
-        NavigationSplitView(columnVisibility: $columns) {
-            List(selection: Binding<String?>(get: { selection }, set: { if let s = $0 { selection = s } })) {
-                ForEach(places) { place in
-                    Label(place.title, systemImage: place.icon).tag(place.id)
+        RoutedStack(path: Binding(get: { paths[selection] ?? [] }, set: { paths[selection] = $0 })) {
+            ZStack {
+                ForEach(places.filter { visited.contains($0.id) }) { place in
+                    let shown = place.id == selection
+                    page(for: place.id)
+                        .opacity(shown ? 1 : 0)
+                        .allowsHitTesting(shown)
+                        .accessibilityHidden(!shown)
+                        .zIndex(shown ? 1 : 0)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
-        } detail: {
-            RoutedStack(initial: selection == "home" ? app.launchRoute : []) { page(for: selection) }
-                .id(selection)
-                .frame(minWidth: 520, idealWidth: 960, maxWidth: .infinity)
-                .navigationSplitViewColumnWidth(min: 520, ideal: 960)
         }
-        .onChange(of: selection) { _, tab in recordOpen(tab) }
+        // Outside the stack, so pushed pages keep them; once for the window
+        // (per page, every switch rebuilt the toolbar).
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Go to", selection: $selection) {
+                    ForEach(places) { place in
+                        // Words for the libraries; icons for the fixed places.
+                        if ["downloads", "search", "settings"].contains(place.id) {
+                            Image(systemName: place.icon).accessibilityLabel(place.title).help(place.title).tag(place.id)
+                        } else {
+                            Text(place.title).tag(place.id)
+                        }
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityIdentifier("places")
+            }
+        }
+        .profileToolbar(app)
+        .frame(minWidth: 640, idealWidth: 1100, maxWidth: .infinity)
+        .onAppear {
+            visited.insert(selection)
+            if paths.isEmpty { paths["home"] = app.launchRoute }
+        }
+        .onChange(of: selection) { _, tab in
+            visited.insert(tab)
+            recordOpen(tab)
+        }
         .onChange(of: app.pendingTab) { _, tab in
             guard let tab else { return }
-            selection = tab
+            go(to: tab)
             app.pendingTab = nil
         }
         .task { await loadLibraries() }
-        .task {
-            // Tests: `-sidebarToggleTest` closes the sidebar and opens it again.
-            guard ProcessInfo.processInfo.arguments.contains("-sidebarToggleTest") else { return }
-            try? await Task.sleep(for: .seconds(2))
-            // Frames while the sidebar closes and opens (the page reflows with it).
-            Metrics.shared.reset()
-            HitchMonitor.shared.start()
-            HitchMonitor.shared.resetTotals()
-            for visibility in [NavigationSplitViewVisibility.detailOnly, .all, .detailOnly, .all] {
-                withAnimation { columns = visibility }
-                for _ in 0..<10 { HitchMonitor.shared.noteActivity(); try? await Task.sleep(for: .milliseconds(100)) }
-            }
-            Benchmark.traceFrames("sidebar")
-        }
+        .task { await tabSwitchTest() }
     }
     #endif
+
+    /// Asked to go to a place: its tab, or (one the iPhone keeps in the
+    /// profile menu) its page.
+    private func go(to tab: String) {
+        if places.contains(where: { $0.id == tab }) {
+            selection = tab
+        } else if tab == "downloads" {
+            app.pendingRoute = .downloads
+        } else if tab == "settings" {
+            app.pendingRoute = .settings("root")
+        }
+    }
+
 
     private func recordOpen(_ tab: String) {
         // Opening a library counts toward its place in the order.
@@ -284,56 +330,63 @@ struct MainTabView: View {
     }
 
     private var tabs: some View {
-        // One stack *around* the tabs, not one per tab: pushed pages cover
-        // the whole screen (like the TV app), and the sidebarAdaptable tab
-        // view can't clip their top edge — it does that to pages pushed
-        // inside a tab, leaving a strip of the root page showing through.
-        RoutedStack(initial: app.launchRoute) {
-            TabView(selection: $selection) {
-                Tab("Home", systemImage: "house", value: "home") {
-                    HomeView().tabPage()          // each tab its own area (the iPad's sidebar takes some)
-                }
-                // At most four library tabs: past seven entries the sidebar
-                // stops opening (see SidebarPlan).
-                ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
-                    if case .library(let view) = entry {
-                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { LibraryView(library: view).tabPage() }
-                    } else if case .audiobooks(let libraries) = entry {
-                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { AudiobookLibraryView(libraries: libraries).tabPage() }
-                    } else if case .more(let libraries) = entry {
-                        Tab("More", systemImage: "square.grid.2x2", value: "more") { MoreLibrariesView(libraries: libraries).tabPage() }
-                    }
-                }
-                if app.downloads != nil {
-                    Tab("Downloads", systemImage: "arrow.down.circle", value: "downloads") { DownloadsView().tabPage() }
-                }
-
-                Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
-                    SearchView().tabPage(corner: !Platform.isTV)   // the TV's search keyboard fills the top
-                }
-                Tab("Settings", systemImage: "gearshape", value: "settings") {
-                    SettingsView().tabPage()
+        TabView(selection: $selection) {
+            // Every page through `page(for:)`: switching tabs re-renders this
+            // view, and only an equatable page stops that reaching every page.
+            Tab("Home", systemImage: "house", value: "home") { tab("home") { page(for: "home") } }
+            ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
+                if case .library(let view) = entry {
+                    Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { tab(view.id) { page(for: view.id) } }
+                } else if case .audiobooks = entry {
+                    Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { tab("audiobooks") { page(for: "audiobooks") } }
+                } else if case .more = entry {
+                    Tab("More", systemImage: "square.grid.2x2", value: "more") { tab("more") { page(for: "more") } }
                 }
             }
-            .tabViewStyle(.sidebarAdaptable)
-            .onChange(of: selection) { _, tab in recordOpen(tab) }
-            .onChange(of: app.pendingTab) { _, tab in
-                guard let tab else { return }
-                selection = tab
-                app.pendingTab = nil
+            if app.downloads != nil && !Self.placesInMenu {
+                Tab("Downloads", systemImage: "arrow.down.circle", value: "downloads") { tab("downloads") { page(for: "downloads") } }
             }
-            .modifier(SidebarTitle())
-            .overlay(alignment: .top) {
-                if !Platform.isTV && !Platform.isMac {
-                    TopBand { ProfileCluster() }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, Layout.horizontalMargin)
-                        .padding(.top, 4)
+            Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
+                tab("search") { page(for: "search") }
+            }
+            if !Self.placesInMenu {
+                Tab("Settings", systemImage: "gearshape", value: "settings") { tab("settings") { page(for: "settings") } }
+            }
+            #if os(tvOS)
+            // You, at the end of the tab bar: your picture and name, a tab like
+            // the others (Left and Right move along to it — a corner beside
+            // the bar couldn't be reached sideways: tvOS won't move focus into
+            // its tab bar from the page).
+            Tab(value: "profile") {
+                tab("profile") { ProfileView() }
+            } label: {
+                Label {
+                    Text(session.account.userName)
+                } icon: {
+                    if let avatar = profileIcon { Image(uiImage: avatar).renderingMode(.original) } else { Image(systemName: "person.crop.circle") }
                 }
             }
-            .hidesNavigationBarEntirely()
+            .accessibilityIdentifier("profile.avatar")
+            #endif
         }
-        .task { await loadLibraries() }
+        .tabViewStyle(.tabBarOnly)
+        .onChange(of: selection) { _, tab in recordOpen(tab) }
+        .onChange(of: app.pendingTab) { _, tab in
+            guard let tab else { return }
+            go(to: tab)
+            app.pendingTab = nil
+        }
+    }
+
+    /// A tab's page: on the TV the page itself (the stack is around the
+    /// tabs), elsewhere in a stack of its own.
+    @ViewBuilder
+    private func tab<Page: View>(_ id: String, @ViewBuilder _ page: @escaping () -> Page) -> some View {
+        #if os(tvOS)
+        page().readsPageWidth()
+        #else
+        RoutedStack(initial: id == "home" ? app.launchRoute : [], active: selection == id) { page() }
+        #endif
     }
 
     private func loadLibraries() async {
@@ -363,7 +416,7 @@ struct MainTabView: View {
         // Most used first (Movies and TV Shows until there's history).
         let views = app.libraryUsage.ordered(views)
         app.libraries = views
-        let next = SidebarPlan(views: views, hasAudiobooks: hasAudiobooks)
+        let next = SidebarPlan(views: views, maxTabs: Self.libraryTabs, hasAudiobooks: hasAudiobooks)
         if next != plan { plan = next }
         app.collectionLibraries = next.collections
     }
@@ -381,52 +434,114 @@ struct MainTabView: View {
 }
 
 extension View {
-    /// A tab's page: its width, and on the TV the profile corner pinned at
-    /// its top — part of the page, so focus coming back from the sidebar
-    /// lands in the page, not on the corner first. (The iPhone and iPad pin
-    /// it over the tab view, in line with the iPad's floating tab bar; the
-    /// Mac puts it in its toolbar.)
-    func tabPage(corner: Bool = true) -> some View {
-        readsPageWidth()
-            .overlay(alignment: .top) {
-                if corner && Platform.isTV {
-                    TopBand { ProfileCluster() }
-                        .fixedSize(horizontal: false, vertical: true)   // the TV's focus guide would take the whole height
-                        .padding(.horizontal, Layout.horizontalMargin)
-                        .padding(.top, Platform.isTV ? 0 : 4)
-                        // The TV's pages run under its sideways safe area: line up with them.
-                        .ignoresSafeArea(.container, edges: Platform.isTV ? .horizontal : [])
-                }
+    /// The profile corner on every page's navigation bar (iPhone, iPad); the
+    /// Mac's window has one toolbar for all its pages, set around the tabs.
+    @ViewBuilder func pageToolbar(_ app: AppModel) -> some View {
+        #if os(macOS)
+        self
+        #else
+        profileToolbar(app)
+        #endif
+    }
+}
+
+#if os(tvOS)
+/// The tab bar's picture of you: your Jellyfin picture (else your initials),
+/// round, as an image the tab bar draws as it is (not as a template).
+@MainActor
+enum ProfileIcon {
+    static let size: CGFloat = 40
+
+    static func make(session: UserSession) async -> UIImage? {
+        let account = session.account
+        let scale: CGFloat = 2
+        var picture: CGImage?
+        if let tag = account.imageTag {
+            let px = Int(size * scale)
+            let request = ImageRequest(url: session.client.userImageURL(userId: account.userId, tag: tag, size: px), maxPixelSize: px)
+            picture = try? await ImagePipeline.shared.image(for: request)
+        }
+        let view = ZStack {
+            Monogram(account.userName, size: size)
+            if let picture { Image(decorative: picture, scale: scale).resizable().scaledToFill() }
+        }
+        .frame(width: size, height: size)
+        .clipShape(.circle)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = scale
+        return renderer.uiImage?.withRenderingMode(.alwaysOriginal)
+    }
+}
+#endif
+
+/// One place's page. Equatable (on what it shows), so a parent re-rendering
+/// — a tab switch — doesn't re-run its body: pages read the environment,
+/// which SwiftUI can't compare, so without this every page and everything
+/// in it was re-evaluated on every switch (~80 ms on the Mac).
+struct PlacePage: View, Equatable {
+    let id: String
+    let plan: SidebarPlan
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.plan == b.plan }
+
+    var body: some View {
+        switch id {
+        case "home": HomeView()
+        case "search": SearchView()
+        case "downloads": DownloadsView()
+        case "settings": SettingsView()
+        default:
+            ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
+                if case .library(let view) = entry, view.id == id { LibraryView(library: view) }
+                else if case .audiobooks(let libraries) = entry, id == "audiobooks" { AudiobookLibraryView(libraries: libraries) }
+                else if case .more(let libraries) = entry, id == "more" { MoreLibrariesView(libraries: libraries) }
             }
+        }
     }
 }
 
 /// A NavigationStack that owns its path and exposes `\.navigate` so any
 /// descendant (a card deep inside a shelf) can push a route.
 struct RoutedStack<Root: View>: View {
-    @State private var path: [Route]
+    @State private var ownPath: [Route]
+    /// A path kept by the caller instead (the Mac's, one per place).
+    private let external: Binding<[Route]>?
     @State private var lastPush: ContinuousClock.Instant?
+    /// The stack routes from outside any page (`app.pendingRoute`) land in:
+    /// with a stack per tab, the selected tab's.
+    let active: Bool
     let root: () -> Root
 
-    init(initial: [Route] = [], @ViewBuilder root: @escaping () -> Root) {
-        _path = State(initialValue: initial)
+    init(initial: [Route] = [], active: Bool = true, @ViewBuilder root: @escaping () -> Root) {
+        _ownPath = State(initialValue: initial)
+        external = nil
+        self.active = active
         self.root = root
     }
+
+    init(path: Binding<[Route]>, @ViewBuilder root: @escaping () -> Root) {
+        _ownPath = State(initialValue: [])
+        external = path
+        active = true
+        self.root = root
+    }
+
+    private var path: Binding<[Route]> { external ?? $ownPath }
 
     @Environment(AppModel.self) private var app
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: path) {
             root()
                 .readsPageWidth()
-                .profileToolbar(app)
+                .pageToolbar(app)
                 .navigationDestination(for: Route.self) { route in
-                    destination(route).readsPageWidth().profileToolbar(app)
+                    destination(route).readsPageWidth().pageToolbar(app)
                 }
         }
         .environment(\.navigate, NavigateAction { push($0) })
         .onChange(of: app.pendingRoute) { _, route in
-            guard let route else { return }
+            guard active, let route else { return }
             push(route)
             app.pendingRoute = nil
         }
@@ -436,10 +551,10 @@ struct RoutedStack<Root: View>: View {
     /// dropped — the same page twice in a row is never what was meant, and
     /// SwiftUI's navigation has crashed on a path changing under it.
     private func push(_ route: Route) {
-        if path.last == route { return }
+        if path.wrappedValue.last == route { return }
         if let last = lastPush, ContinuousClock.now - last < .milliseconds(450) { return }
         lastPush = .now
-        path.append(route)
+        path.wrappedValue.append(route)
     }
 
     @ViewBuilder private func destination(_ route: Route) -> some View {
@@ -466,3 +581,4 @@ struct RoutedStack<Root: View>: View {
         }
     }
 }
+

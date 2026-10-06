@@ -17,7 +17,7 @@ final class PhoneNavigationTests: XCTestCase {
             tiles.element(boundBy: i).tap()
             Thread.sleep(forTimeInterval: 1.5)
             XCTAssertEqual(app.state, .runningForeground, "View all #\(i) crashed the app")
-            let back = app.navigationBars.buttons.firstMatch
+            let back = app.navigationBars.buttons["BackButton"]    // (the bar also holds the TV, sleep and profile buttons)
             XCTAssertTrue(back.waitForExistence(timeout: 3), "View all #\(i): no way back")
             back.tap()
             Thread.sleep(forTimeInterval: 1)
@@ -37,7 +37,8 @@ final class PhoneNavigationTests: XCTestCase {
             tiles.element(boundBy: i).doubleTap()
             Thread.sleep(forTimeInterval: 1.5)
             XCTAssertEqual(app.state, .runningForeground, "double tap on View all #\(i) crashed the app")
-            while app.navigationBars.buttons.firstMatch.exists { app.navigationBars.buttons.firstMatch.tap(); Thread.sleep(forTimeInterval: 0.8) }
+            let back = app.navigationBars.buttons["BackButton"]
+            for _ in 0..<4 where back.exists { back.tap(); Thread.sleep(forTimeInterval: 0.8) }
         }
     }
 }

@@ -7,13 +7,18 @@ import Observation
 @MainActor
 @Observable
 final class SleepTimer {
-    enum Mode: Equatable {
+    enum Mode: Hashable {
         case off
         case minutes(Int)
         case endOfItem
     }
 
     static let presets = [15, 30, 45, 60, 90]
+
+    /// "15 Minutes", "1 Hour", "1 Hour 30 Minutes".
+    static func title(_ minutes: Int) -> String {
+        minutes < 60 ? "\(minutes) Minutes" : minutes == 60 ? "1 Hour" : "\(minutes / 60) Hour\(minutes >= 120 ? "s" : "") \(minutes % 60) Minutes"
+    }
     static let fadeLength: Duration = .seconds(8)
 
     private(set) var mode: Mode = .off

@@ -209,7 +209,7 @@ struct HomeView: View {
                         .font(.system(size: Layout.pageTitle, weight: .bold))
                         .foregroundStyle(theme.primaryText)
                     Text(page.copy.lede)
-                        .font(.title3)
+                        .font(.pageLede)
                         .foregroundStyle(theme.secondaryText)
                         .frame(maxWidth: 1200, alignment: .leading)
                 }
@@ -272,24 +272,23 @@ extension HomeView {
     }
 }
 
-/// Page opens on content, not the tab sidebar (like the TV app). Once only:
-/// never yank focus back after the user has moved. Retries because the card
-/// may not be in the focus tree on the first frame after data arrives.
+/// The app opens on content, not the tab bar (like the TV app). The first
+/// page only, once per launch: pages after it open as focus moves along the
+/// tab bar, and one claiming focus pulled it out of the tabs (and never
+/// yank focus back after the user has moved). Retries because the card may
+/// not be in the focus tree on the first frame after data arrives.
 private struct LaunchFocusClaim: ViewModifier {
     let binding: FocusState<Bool>.Binding
     let ready: Bool
     let key: String
-    /// Per app launch, not per view: tvOS can rebuild a tab's page (opening
-    /// the sidebar on tvOS 26.6 does), and a fresh page claiming focus again
-    /// pulled focus straight back out of the sidebar.
-    @MainActor static var claimed: Set<String> = []
+    @MainActor static var claimed = false
 
     func body(content: Content) -> some View {
         content
             .onAppear { TraceFile.write("focus", "page \(key) appeared") }
             .task(id: ready) {
-                guard ready, !Self.claimed.contains(key) else { return }
-                Self.claimed.insert(key)
+                guard ready, !Self.claimed else { return }
+                Self.claimed = true
                 TraceFile.write("focus", "page \(key) claims launch focus")
                 for _ in 0..<20 where !binding.wrappedValue {
                     binding.wrappedValue = true
@@ -398,7 +397,7 @@ struct MetadataLine: View {
     var body: some View {
         let parts = Self.parts(for: item)
         Text(parts.joined(separator: "  ·  "))
-            .font(.callout.weight(.medium))
+            .font(Layout.device == .phone ? .subheadline : .callout.weight(.medium))
             .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
     }
@@ -445,7 +444,7 @@ struct ItemContextMenu: View {
     var body: some View {
         Button(item.kind == .episode ? "Episode Details" : "See Details", systemImage: "info.circle") { navigate(.item(item)) }
         if [.series, .episode, .movie].contains(item.kind) {
-            Button("Background Noise", systemImage: "infinity") { app.playInBackground(item) }
+            Button("Background", systemImage: "infinity") { app.playInBackground(item) }
         }
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }
@@ -453,7 +452,7 @@ struct ItemContextMenu: View {
                 Button("Play from Beginning", systemImage: "gobackward") { app.play(item, resume: false) }
             }
             Button(app.queue.contains(item.id) ? "Remove from Queue" : "Add to Queue",
-                   systemImage: app.queue.contains(item.id) ? "text.badge.checkmark" : "text.badge.plus") { app.queue.toggle(item) }
+                   systemImage: app.queue.contains(item.id) ? "text.badge.checkmark" : "text.badge.plus") { app.toggleQueue(item) }
         }
         Button(item.isPlayed ? "Mark Unwatched" : "Mark Watched", systemImage: item.isPlayed ? "eye.slash" : "eye") {
             guard let client = app.session?.client else { return }

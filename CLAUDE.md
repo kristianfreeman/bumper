@@ -18,7 +18,7 @@ is made for all of them, in the same change:
 - Verify on every platform before calling it done: build TV, iPhone (and
   iPad) and Mac; screenshot the affected screens on each (TV and iPad/iPhone
   simulators, the Mac app); run the TV UI tiers that cover it
-  (`scripts/test.sh smoke|sidebar|settings|profile|player`). Playback and
+  (`scripts/test.sh smoke|tabs|settings|profile|player`). Playback and
   scrolling feel are checked on the real Apple TV (`scripts/device-*.sh`).
 - Tests use `-mock`, never a real Jellyfin sign-in.
 
