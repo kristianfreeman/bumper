@@ -116,6 +116,8 @@ public final class AppSettings {
     public var onlineThemeFallback: Bool { didSet { save(onlineThemeFallback, "detail.themeMusicOnline") } }
     /// Unwatched episodes: blurred stills, no descriptions.
     public var hideSpoilers: Bool { didSet { save(hideSpoilers, "browse.hideSpoilers") } }
+    /// Libraries left out of the app (Settings → Libraries), by id.
+    public var hiddenLibraries: Set<String> { didSet { save(Array(hiddenLibraries), "browse.hiddenLibraries") } }
     /// iPhone/iPad: downloads may use cellular data (off: Wi-Fi only).
     public var downloadsOverCellular: Bool { didSet { save(downloadsOverCellular, "downloads.cellular") } }
     /// What Download does without asking ("original", "high", "medium", "small").
@@ -143,6 +145,7 @@ public final class AppSettings {
         themeMusicForMovies = defaults.object(forKey: "detail.themeMusicMovies") as? Bool ?? false
         onlineThemeFallback = defaults.object(forKey: "detail.themeMusicOnline") as? Bool ?? true
         hideSpoilers = defaults.object(forKey: "browse.hideSpoilers") as? Bool ?? true
+        hiddenLibraries = Set(defaults.stringArray(forKey: "browse.hiddenLibraries") ?? [])
     }
 
     /// Bumper Dark, until someone picks another theme.

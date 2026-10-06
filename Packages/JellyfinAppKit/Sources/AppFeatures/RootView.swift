@@ -155,6 +155,8 @@ struct MainTabView: View {
     @Environment(\.castLink) private var cast
 
     @State private var plan = SidebarPlan(views: [], maxTabs: MainTabView.libraryTabs, hasAudiobooks: { _ in false })
+    /// Books libraries found to hold audiobooks (nil: not asked yet).
+    @State private var audiobookLibraries: Set<String>?
     @State private var selection = "home"
     #if os(tvOS)
     /// Your picture for the tab bar, round, drawn once it's loaded.
@@ -182,6 +184,7 @@ struct MainTabView: View {
         // tab bar and all, like the TV app's.
         RoutedStack(initial: app.launchRoute) { tabs.hidesNavigationBarEntirely() }
             .task { await loadLibraries() }
+            .onChange(of: app.settings.hiddenLibraries) { _, _ in reapply() }
             .task(id: session.account.imageTag) { profileIcon = await ProfileIcon.make(session: session) }
             .task { await tabSwitchTest() }
         #else
@@ -190,6 +193,7 @@ struct MainTabView: View {
         tabs
             .castBar(cast)
             .task { await loadLibraries() }
+            .onChange(of: app.settings.hiddenLibraries) { _, _ in reapply() }
             .task { await tabSwitchTest() }
         #endif
     }
@@ -273,14 +277,9 @@ struct MainTabView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Go to", selection: $selection) {
-                    ForEach(places) { place in
-                        // Words for the libraries; icons for the fixed places.
-                        if ["downloads", "search", "settings"].contains(place.id) {
-                            Image(systemName: place.icon).accessibilityLabel(place.title).help(place.title).tag(place.id)
-                        } else {
-                            Text(place.title).tag(place.id)
-                        }
-                    }
+                    // Words for every place: a segmented control mixing icon-only
+                    // and text segments drew icons beside the wrong words.
+                    ForEach(places) { place in Text(place.title).tag(place.id) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -303,6 +302,7 @@ struct MainTabView: View {
             app.pendingTab = nil
         }
         .task { await loadLibraries() }
+        .onChange(of: app.settings.hiddenLibraries) { _, _ in reapply() }
         .task { await tabSwitchTest() }
     }
     #endif
@@ -408,6 +408,7 @@ struct MainTabView: View {
             q.fields = []
             if let page = try? await session.client.items(q), page.totalRecordCount > 0 || !page.items.isEmpty { withAudiobooks.insert(lib.id) }
         }
+        audiobookLibraries = withAudiobooks
         apply(fresh) { withAudiobooks.contains($0.id) }
         await ContentCache.shared.store(fresh, for: key)
     }
@@ -416,9 +417,17 @@ struct MainTabView: View {
         // Most used first (Movies and TV Shows until there's history).
         let views = app.libraryUsage.ordered(views)
         app.libraries = views
-        let next = SidebarPlan(views: views, maxTabs: Self.libraryTabs, hasAudiobooks: hasAudiobooks)
+        let next = SidebarPlan(views: views, maxTabs: Self.libraryTabs, hidden: app.settings.hiddenLibraries, hasAudiobooks: hasAudiobooks)
         if next != plan { plan = next }
+        app.libraryPlan = next
         app.collectionLibraries = next.collections
+    }
+
+    /// A library shown or hidden in Settings: the tabs again, at once.
+    private func reapply() {
+        guard !app.libraries.isEmpty else { return }
+        let books = audiobookLibraries
+        apply(app.libraries) { books?.contains($0.id) ?? true }
     }
 
     private func icon(for view: BaseItem) -> String {

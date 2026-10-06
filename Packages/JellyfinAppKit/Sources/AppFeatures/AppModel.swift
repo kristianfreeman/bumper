@@ -156,6 +156,8 @@ final class AppModel {
     @ObservationIgnored var audiobooks: [String: Audiobook] = [:]
     /// Box-set libraries, shown as a Collections row on Movies (no tab).
     @ObservationIgnored var collectionLibraries: [BaseItem] = []
+    /// Every library and where it is in the app (Settings → Libraries).
+    var libraryPlan: SidebarPlan?
 
     @ObservationIgnored private var prewarmed: [String: (Task<PlaybackPlan, any Error>, ContinuousClock.Instant)] = [:]
     private static let log = Perf.logger("app")

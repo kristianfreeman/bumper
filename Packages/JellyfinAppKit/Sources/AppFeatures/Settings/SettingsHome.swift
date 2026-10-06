@@ -42,6 +42,7 @@ struct SettingsView: View {
                     AccountCard(confirmSignOut: $confirmSignOut)
                         .id("account")
                     section("watching", "Watching", "Around what you watch.", watchingTiles(settings))
+                    libraries(settings)
                     subtitles(settings)
                     section("picture", "Picture and Sound", "How things play.", pictureTiles(settings))
                     look
@@ -57,7 +58,7 @@ struct SettingsView: View {
                 guard let start else { return }
                 // Focus decides where a tvOS page sits: put it in the section
                 // (scrolling alone is undone by focus landing on Sign Out).
-                let first = ["watching": "autoplay", "subtitles": "subMode", "picture": "engine", "audiobooks": "rate", "about": "capabilities"][start]
+                let first = ["watching": "autoplay", "libraries": app.libraryPlan?.libraries.first(where: \.placement.canShow).map { "library.\($0.id)" } ?? "", "subtitles": "subMode", "picture": "engine", "audiobooks": "rate", "about": "capabilities"][start]
                 Task {
                     for _ in 0..<6 {
                         try? await Task.sleep(for: .milliseconds(80))
@@ -81,6 +82,80 @@ struct SettingsView: View {
             Text("Settings").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
             Text("Everything in one place. Switches flip where they are; choices open right here.")
                 .font(.title3).foregroundStyle(theme.secondaryText)
+        }
+    }
+
+    // MARK: Libraries
+
+    /// Every library on the server: a switch for each one the app can show
+    /// (and where it is), then the ones it can't, and why.
+    private func libraryTiles(_ settings: AppSettings) -> [SettingTile] {
+        (app.libraryPlan?.libraries ?? []).filter(\.placement.canShow).map { lib in
+            .toggle("library.\(lib.id)", lib.item.name ?? "Library", Self.symbol(for: lib.item), Self.whereItIs(lib.placement),
+                    Binding(get: { !settings.hiddenLibraries.contains(lib.id) },
+                            set: { shown in if shown { settings.hiddenLibraries.remove(lib.id) } else { settings.hiddenLibraries.insert(lib.id) } }))
+        }
+    }
+
+    private var unplayableLibraries: [SidebarPlan.Library] {
+        (app.libraryPlan?.libraries ?? []).filter { !$0.placement.canShow }
+    }
+
+    static func whereItIs(_ p: SidebarPlan.Placement) -> String {
+        switch p {
+        case .tab: "Its own tab"
+        case .more: "Under More"
+        case .audiobooks: "In Audiobooks"
+        case .collectionsRow: "A row on Movies"
+        case .hidden: "Hidden"
+        case .notPlayable(let why): why
+        }
+    }
+
+    static func symbol(for library: BaseItem) -> String {
+        switch library.collectionType {
+        case "movies": "film"
+        case "tvshows": "tv"
+        case "boxsets": "square.stack"
+        case "books": "headphones"
+        case "homevideos": "video"
+        case "musicvideos": "music.note.tv"
+        case "playlists": "music.note.list"
+        case "music": "music.note"
+        case "livetv": "antenna.radiowaves.left.and.right"
+        case "photos": "photo"
+        default: "folder"
+        }
+    }
+
+    /// The TV: a tile per library (a switch), then a quiet line for each
+    /// the app can't play.
+    @ViewBuilder
+    private func libraries(_ settings: AppSettings) -> some View {
+        let tiles = libraryTiles(settings)
+        if !tiles.isEmpty {
+            VStack(alignment: .leading, spacing: 24) {
+                SectionTitle(title: "Libraries", lede: "What's on your server, and where you'll find it.")
+                TileGrid(tiles: tiles, columns: columns) { tileView($0) }
+                if !unplayableLibraries.isEmpty {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(unplayableLibraries) { lib in
+                            Label {
+                                Text(lib.item.name ?? "Library").foregroundStyle(theme.primaryText.opacity(0.75))
+                                + Text("  ·  \(Self.whereItIs(lib.placement))").foregroundStyle(theme.secondaryText)
+                            } icon: {
+                                Image(systemName: Self.symbol(for: lib.item)).foregroundStyle(theme.secondaryText)
+                            }
+                            .font(.callout)
+                        }
+                    }
+                    .padding(.top, 6)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("settings.unplayableLibraries")
+                }
+            }
+            .tvFocusSection()
+            .id("libraries")
         }
     }
 
@@ -574,7 +649,11 @@ extension SettingsView {
     /// form: real switches and menus, the help under each.
     var formBody: some View {
         @Bindable var settings = app.settings
-        return Form {
+        return ScrollViewReader { proxy in formContent(settings, proxy) }
+    }
+
+    private func formContent(_ settings: AppSettings, _ proxy: ScrollViewProxy) -> some View {
+        Form {
             Section {
                 FormAccount(confirmSignOut: $confirmSignOut)
             } header: {
@@ -582,6 +661,7 @@ extension SettingsView {
                     .padding(.bottom, 8)
             }
             formSection("Watching", watchingTiles(settings))
+            formLibraries(settings)
             Section {
                 SubtitlePreview(style: settings.subtitleStyle, scale: settings.subtitleScale, font: settings.subtitleFont, width: min(560, max(240, width - 40)))
                     .frame(maxWidth: .infinity)
@@ -624,6 +704,10 @@ extension SettingsView {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            guard let start else { return }
+            Task { try? await Task.sleep(for: .milliseconds(300)); withAnimation { proxy.scrollTo(start, anchor: .top) } }
+        }
         .scrollContentBackground(.hidden)
         .background(theme.backgroundGradient.ignoresSafeArea())
         .tint(theme.accent)
@@ -631,6 +715,29 @@ extension SettingsView {
         .confirmationDialog("Sign out of \(app.session?.server.name ?? "this server")?", isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) { app.signOut() }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder private func formLibraries(_ settings: AppSettings) -> some View {
+        let tiles = libraryTiles(settings)
+        if !tiles.isEmpty {
+            Section {
+                ForEach(tiles) { row($0) }
+                ForEach(unplayableLibraries) { lib in
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(lib.item.name ?? "Library").foregroundStyle(theme.secondaryText)
+                            Text(Self.whereItIs(lib.placement)).font(.footnote).foregroundStyle(theme.secondaryText)
+                        }
+                    } icon: {
+                        Image(systemName: Self.symbol(for: lib.item)).foregroundStyle(theme.secondaryText)
+                    }
+                    .accessibilityIdentifier("settings.unplayable.\(lib.id)")
+                }
+            } header: { Text("Libraries") } footer: {
+                Text("Hiding a library only leaves it out of \(Brand.displayName); it stays on your server.")
+            }
+            .id("libraries")
         }
     }
 

@@ -1,15 +1,16 @@
 public import JellyfinAPI
 
-/// Which libraries get a tab of their own.
+/// Which libraries get a tab of their own — and, for Settings → Libraries,
+/// where every library on the server went and why.
 ///
-/// tvOS's sidebar (`.sidebarAdaptable`) stops opening from the content once
-/// it has more than seven entries — on tvOS 26.6 hardware the panel starts to
-/// grow and snaps shut (measured: 7 entries open, 8 don't). With Home, Search
-/// and Settings fixed, that leaves four library tabs, so libraries fold:
-/// - every *books* library becomes one Audiobooks tab (none if they hold no
-///   audiobooks — e-book libraries can't play);
+/// tvOS's sidebar stopped opening past seven entries, and an iPhone's tab bar
+/// holds five, so libraries fold:
+/// - every *books* library with audiobooks joins one Audiobooks tab (an
+///   e-book library has nothing that plays);
 /// - *Collections* (box sets) become a row on the Movies page;
-/// - past four, the rest go behind a "More" tab.
+/// - past the tab limit, the rest go behind a "More" tab;
+/// - kinds the app can't play yet (playlists, music, live TV) aren't shown;
+/// - and any library the person hid stays out.
 public struct SidebarPlan: Sendable, Equatable {
     public enum Entry: Sendable, Equatable {
         case library(BaseItem)
@@ -19,29 +20,74 @@ public struct SidebarPlan: Sendable, Equatable {
         case more([BaseItem])
     }
 
+    /// Where a library is in the app.
+    public enum Placement: Sendable, Equatable {
+        case tab
+        case more
+        /// In the Audiobooks tab, with any other books libraries.
+        case audiobooks
+        /// A row on the Movies page.
+        case collectionsRow
+        /// Left out in Settings.
+        case hidden
+        /// Nothing in it the app can play (yet), and why.
+        case notPlayable(String)
+
+        /// Whether it can be shown at all (a switch in Settings).
+        public var canShow: Bool { if case .notPlayable = self { false } else { true } }
+    }
+
+    public struct Library: Sendable, Equatable, Identifiable {
+        public var item: BaseItem
+        public var placement: Placement
+        public var id: String { item.id }
+    }
+
     public static let maxLibraryTabs = 4
     public var entries: [Entry]
     /// Folded into the Movies page as a row.
     public var collections: [BaseItem]
+    /// Every library on the server, in its order, and where it went.
+    public var libraries: [Library] = []
 
     public static let supported: Set<String> = ["movies", "tvshows", "boxsets", "homevideos", "musicvideos", "books"]
 
-    /// `views`: the server's libraries, in its order. `hasAudiobooks`: which
-    /// books libraries hold any (the rest are e-books).
-    /// - Parameter maxTabs: library tabs at most (an iPhone's tab bar has
-    ///   room for fewer).
-    public init(views: [BaseItem], maxTabs: Int = SidebarPlan.maxLibraryTabs, hasAudiobooks: (BaseItem) -> Bool) {
-        let shown = views.filter { $0.collectionType == nil || Self.supported.contains($0.collectionType!) }
-        let books = shown.filter { $0.collectionType == "books" && hasAudiobooks($0) }
+    /// "Playlists aren't supported yet" — what a kind the app can't play is.
+    static func unsupported(_ type: String?) -> String {
+        switch type {
+        case "playlists": "Playlists aren't supported yet"
+        case "music": "Music isn't supported yet"
+        case "livetv": "Live TV isn't supported yet"
+        case "photos": "Photos aren't supported"
+        default: "Not a kind of library \(Brand.displayName) plays"
+        }
+    }
+
+    /// - Parameters:
+    ///   - views: the server's libraries, in its order.
+    ///   - maxTabs: library tabs at most (an iPhone's tab bar has room for fewer).
+    ///   - hidden: libraries the person left out.
+    ///   - hasAudiobooks: which books libraries hold any (the rest are e-books).
+    public init(views: [BaseItem], maxTabs: Int = SidebarPlan.maxLibraryTabs, hidden: Set<String> = [], hasAudiobooks: (BaseItem) -> Bool) {
+        var placement: [String: Placement] = [:]
+        for view in views {
+            if let type = view.collectionType, !Self.supported.contains(type) { placement[view.id] = .notPlayable(Self.unsupported(type)) }
+            else if view.collectionType == "books", !hasAudiobooks(view) { placement[view.id] = .notPlayable("No audiobooks in it (e-books don't play)") }
+            else if hidden.contains(view.id) { placement[view.id] = .hidden }
+        }
+        let shown = views.filter { placement[$0.id] == nil }
+        let books = shown.filter { $0.collectionType == "books" }
         let hasMovies = shown.contains { $0.collectionType == "movies" }
         collections = hasMovies ? shown.filter { $0.collectionType == "boxsets" } : []
+        for c in collections { placement[c.id] = .collectionsRow }
 
         var tabs: [Entry] = []
         var addedBooks = false
         for view in shown {
             switch view.collectionType {
             case "books":
-                if !books.isEmpty, !addedBooks { tabs.append(.audiobooks(books)); addedBooks = true }
+                placement[view.id] = .audiobooks
+                if !addedBooks { tabs.append(.audiobooks(books)); addedBooks = true }
             case "boxsets" where hasMovies:
                 continue
             default:
@@ -57,7 +103,11 @@ public struct SidebarPlan: Sendable, Equatable {
                 }
             }
             tabs = Array(tabs.prefix(maxTabs - 1)) + [.more(overflow)]
+            for v in overflow { placement[v.id] = .more }
         }
+        for case .library(let v) in tabs { placement[v.id] = .tab }
         entries = tabs
+        libraries = views.map { Library(item: $0, placement: placement[$0.id] ?? .tab) }
     }
+
 }
