@@ -25,18 +25,18 @@ struct EditorialTests {
 
     @Test func writesForTheMoment() {
         let evening = Self.date(20)
-        let e = Editorial(now: evening, calendar: Self.calendar, userName: "Kristian Freeman",
+        let e = Editorial(now: evening, calendar: Self.calendar, userName: "Sam Rivera",
                           inProgress: [Self.item("The Top Ten", minutesLeft: 22, series: "Ancient Aliens", now: evening), Self.item("Baraka", minutesLeft: 50, now: evening)],
                           nextUp: [Self.item("e1", series: "Lost", now: evening)],
                           recentMovies: [Self.item("A", addedDaysAgo: 1, now: evening), Self.item("B", addedDaysAgo: 3, now: evening), Self.item("C", addedDaysAgo: 30, now: evening)],
                           recentShows: [Self.item("S", addedDaysAgo: 2, now: evening)])
-        #expect(e.greeting.hasSuffix(", Kristian."))
+        #expect(e.greeting.hasSuffix(", Sam."))
         #expect(e.lede == "You're 22 minutes from the end of Ancient Aliens. Two films and one show arrived this week.")
         #expect(e.resume.subtitle == "Two things on the go — about an hour and a quarter left between them.")
         #expect(e.recent(e.recentMovies, library: "Movies").title == "New this week")
         #expect(e.upNext.subtitle == "New episodes of Lost.")
 
-        #expect(Editorial(now: evening, calendar: Self.calendar, userName: "kristian").greeting.hasSuffix(", Kristian."))
+        #expect(Editorial(now: evening, calendar: Self.calendar, userName: "sam").greeting.hasSuffix(", Sam."))
         let late = Editorial(now: Self.date(1), calendar: Self.calendar, userName: nil)
         #expect(["Up late", "Still up", "Burning"].contains { late.greeting.hasPrefix($0) })
         #expect(late.lede == "Something short before bed?")
@@ -44,7 +44,7 @@ struct EditorialTests {
 
     @Test func greetsTheDay() {
         // Friday 2026-10-09 evening; Halloween; a Saturday morning.
-        #expect(Editorial(now: Self.date(20, day: 9), calendar: Self.calendar, userName: "kristian").greeting == "Friday night, Kristian.")
+        #expect(Editorial(now: Self.date(20, day: 9), calendar: Self.calendar, userName: "sam").greeting == "Friday night, Sam.")
         #expect(Editorial(now: Self.date(20, day: 31), calendar: Self.calendar, userName: nil).greeting == "Happy Halloween.")
         #expect(Editorial(now: Self.date(9, day: 10), calendar: Self.calendar, userName: nil).greeting == "A slow Saturday morning.")
     }

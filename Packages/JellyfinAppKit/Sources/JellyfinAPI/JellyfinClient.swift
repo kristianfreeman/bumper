@@ -19,7 +19,7 @@ public struct ClientInfo: Sendable, Hashable, Codable {
     }
 
     func authorizationHeader(token: String?) -> String {
-        /// Plain ASCII: header values can't carry "Kristian’s MacBook Pro"'s
+        /// Plain ASCII: header values can't carry "Sam’s MacBook Pro"'s
         /// curly apostrophe (the server answered 400 to every request).
         func esc(_ s: String) -> String {
             let folded = s.replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'")

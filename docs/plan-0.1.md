@@ -4,7 +4,7 @@
 `wip/v0.1`), plus smart search (`services/search`: a Cloudflare Worker that reads requests
 with Jev and caches them in Workers KV; the app falls back to its own word parser) and a
 redesigned onboarding. Still to do: deploy the search Worker (needs a Cloudflare login and a
-Typesafe API key), and feedback from using it all on the Living Room TV.
+Typesafe API key), and feedback from using it all on an Apple TV 4K (2017).
 
 The last product changes before 0.1, in the order they'll land. Each phase ships on its own
 (tests + device check), so we can stop and release at the end of any of them.
@@ -34,7 +34,7 @@ The last product changes before 0.1, in the order they'll land. Each phase ships
 **Collections replace rows.** Each one is a grid preview — four across, two rows on a TV — with
 a written title and a line of copy, and a "View all" pill that opens the full collection.
 
-**The copy is written, not labelled.** "Good evening, Kristian." "22 minutes left in Ancient
+**The copy is written, not labelled.** "Good evening, Sam." "22 minutes left in Ancient
 Aliens — finish it tonight?" "Added this week: three films and a season of Lost." On the TV this
 comes from templates fed by what we know (time of day, weekday, what's in progress, what's new,
 genres you watch). Apple's on-device language model doesn't exist on tvOS; the phone (phase 4)

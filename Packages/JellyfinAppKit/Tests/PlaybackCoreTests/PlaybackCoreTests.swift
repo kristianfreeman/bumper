@@ -30,7 +30,8 @@ struct PlannerTests {
         Case(audio: "dts", expect: .vlc),
         Case(audio: "truehd", expect: .vlc),
         Case(video: "av1", expect: .vlc),
-        Case(subtitle: "subrip", expect: .vlc),                             // anything but WebVTT
+        Case(subtitle: "subrip", expect: .native),                          // text: WebVTT from the server
+        Case(subtitle: "mov_text", expect: .native),
         Case(subtitle: "ass", expect: .vlc),
         Case(subtitle: "pgssub", expect: .vlc),
         Case(interlaced: true, expect: .vlc),

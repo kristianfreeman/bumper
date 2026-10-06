@@ -6,8 +6,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 OUT="perf-results/companion-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$OUT"
-TV="${TV_SIM:-936FC8D0-431D-4F91-B80F-12BC89DDEFFA}"        # Apple TV 4K (3rd gen), tvOS 27
-PHONE="${PHONE_SIM:-1A0FD3DB-4719-4459-9EC9-C0B989A6FFA1}"  # iPhone 17 Pro
+# The newest available simulator with this name (no machine's ids in here).
+sim_id() { xcrun simctl list devices available | grep -E "^    $1 \([0-9A-F-]{36}\)" | tail -1 | grep -oE '[0-9A-F-]{36}'; }
+TV="${TV_SIM:-$(sim_id "Apple TV 4K \(3rd generation\)")}"
+PHONE="${PHONE_SIM:-$(sim_id "iPhone 17 Pro")}"
 BID=com.kristianfreeman.bumper
 for d in "$TV" "$PHONE"; do xcrun simctl boot "$d" 2>/dev/null; done
 echo "building…"

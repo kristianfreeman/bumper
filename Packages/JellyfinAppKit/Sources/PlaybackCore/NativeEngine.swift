@@ -145,12 +145,20 @@ public final class NativeEngine: PlayerEngine {
 
         statsTask?.cancel()
         statsTask = Task { [weak self] in
+            var tick = 0
+            var last = (dropped: 0, stalls: 0)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 let (dropped, bitrate) = await Self.accessLogStats(item)
                 guard let self else { return }
                 self.stats.droppedFrames = dropped
                 if bitrate > 0 { self.stats.bitrateMbps = bitrate / 1e6 }
+                // Every 10 s in the trace, like VLCKit's (the playback matrix reads both).
+                tick += 1
+                if tick % 5 == 0 {
+                    TraceFile.write("native", "10 s: \(dropped - last.dropped) dropped, \(self.stats.stalls - last.stalls) stalls; \(String(format: "%.1f", bitrate / 1e6)) Mb/s; rate \(self.player.rate)")
+                    last = (dropped, self.stats.stalls)
+                }
             }
         }
 

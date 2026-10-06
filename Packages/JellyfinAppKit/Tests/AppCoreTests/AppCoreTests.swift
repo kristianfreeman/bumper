@@ -140,9 +140,9 @@ struct PerfRecorderTests {
 
 @Suite struct AuthorizationHeaderTests {
     @Test func deviceNamesBecomePlainASCII() {
-        let info = ClientInfo(client: "Bumper", device: "Kristian’s MacBook Pro · Café", deviceId: "abc", version: "0.1.0")
+        let info = ClientInfo(client: "Bumper", device: "Sam’s MacBook Pro · Café", deviceId: "abc", version: "0.1.0")
         let header = info.authorizationHeader(token: nil)
-        #expect(header.contains(#"Device="Kristian's MacBook Pro  Cafe""#))
+        #expect(header.contains(#"Device="Sam's MacBook Pro  Cafe""#))
         #expect(header.unicodeScalars.allSatisfy { $0.isASCII })
     }
 }

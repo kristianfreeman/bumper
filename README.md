@@ -95,6 +95,7 @@ scripts/test.sh device           # playback and seeking on a real Apple TV
 scripts/device-scroll-check.sh   # frame timing while scrolling, on a real Apple TV
 scripts/phone-scroll-check.sh    # the same on a real iPhone
 scripts/companion-check.sh       # the iPhone's TV button against the TV app, both in simulators
+scripts/device-matrix.sh         # 31 kinds of file on a real Apple TV: what plays them, frames dropped (docs/playback-matrix.md)
 ```
 
 UI tests run against the mock server; nothing signs in to a real Jellyfin.

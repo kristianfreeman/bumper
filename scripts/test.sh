@@ -128,7 +128,9 @@ build_for_testing() {
     -destination "$DEST" -derivedDataPath "$DD/app" -quiet
 }
 
-PHONE_DEST="id=${PHONE_SIM:-1A0FD3DB-4719-4459-9EC9-C0B989A6FFA1}"   # iPhone 17 Pro
+# The newest available simulator with this name (no machine's ids in here).
+sim_id() { xcrun simctl list devices available | grep -E "^    $1 \([0-9A-F-]{36}\)" | tail -1 | grep -oE '[0-9A-F-]{36}'; }
+PHONE_DEST="id=${PHONE_SIM:-$(sim_id "${PHONE_SIM_NAME:-iPhone 17 Pro}")}"
 
 build_for_testing_phone() {
   need_vlckit; need_project

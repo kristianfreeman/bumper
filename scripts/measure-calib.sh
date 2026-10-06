@@ -3,7 +3,9 @@
 # rendered pixels (expected: gray 128, dark 32, light 224 for correct SDR BT.709).
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
-U="${UDID:-936FC8D0-431D-4F91-B80F-12BC89DDEFFA}"
+# The newest available simulator with this name (no machine's ids in here).
+sim_id() { xcrun simctl list devices available | grep -E "^    $1 \([0-9A-F-]{36}\)" | tail -1 | grep -oE '[0-9A-F-]{36}'; }
+U="${UDID:-$(sim_id "Apple TV 4K \(3rd generation\)")}"
 FF="${FF:-$(command -v ffmpeg)}"
 sample() { $FF -hide_banner -loglevel error -i "$1" -vf "crop=4:4:$2:$3,scale=1:1" -f rawvideo -pix_fmt rgb24 - | od -An -tu1 | tr -s ' ' | sed 's/^ //'; }
 for idx in $(python3 -c "import json;m=json.load(open('TestMedia/manifest.json'));print(' '.join(str(i) for i,x in enumerate(m) if x['file'].startswith('calib-')))"); do

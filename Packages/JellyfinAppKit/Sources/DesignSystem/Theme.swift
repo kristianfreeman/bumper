@@ -162,7 +162,7 @@ public enum Layout {
     public static let landscapeWidth = pick(tv: 400, mac: 300, pad: 300, phone: 260)       // TV: 4 per row
     public static let castWidth = pick(tv: 160, mac: 110, pad: 110, phone: 84)
     public static let squareWidth = pick(tv: 300, mac: 200, pad: 200, phone: 150)          // audiobook covers
-    /// Page titles ("Good evening, Kristian.", "Settings") and smaller ones (collection pages).
+    /// Page titles ("Good evening, Sam.", "Settings") and smaller ones (collection pages).
     public static let pageTitle = pick(tv: 64, mac: 40, pad: 44, phone: 28)
     public static let pageTitleSmall = pick(tv: 56, mac: 34, pad: 38, phone: 26)
     public static let sectionTitle = pick(tv: 44, mac: 28, pad: 30, phone: 20)

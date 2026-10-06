@@ -47,11 +47,11 @@ public struct Editorial: Sendable {
     }
 
     private var weekend: Bool { calendar.isDateInWeekend(now) }
-    /// Account names are often lower-case ("kristian"); greet a person.
+    /// Account names are often lower-case ("sam"); greet a person.
     private var firstName: String? { userName?.split(separator: " ").first.map { String($0).capitalizedFirst } }
 
-    /// "Good evening, Kristian." — with the weekday where it colours the
-    /// moment ("Friday night, Kristian."), and the odd holiday.
+    /// "Good evening, Sam." — with the weekday where it colours the
+    /// moment ("Friday night, Sam."), and the odd holiday.
     public var greeting: String {
         let name = firstName.map { ", \($0)" } ?? ""
         let month = calendar.component(.month, from: now), day = calendar.component(.day, from: now)

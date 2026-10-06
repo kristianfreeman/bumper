@@ -437,8 +437,8 @@ final class PlayerController {
         subtitleText = nil
         guard let plan, let engine else { return }
         let stream = index.flatMap { i in plan.mediaSource.subtitleStreams.first { $0.index == i } }
-        // AVPlayer's rule is "no subtitles or WebVTT": any other track hands
-        // this item to VLCKit, from where it is.
+        // AVPlayer takes text subtitles (as WebVTT from the server); ASS and
+        // bitmaps hand this item to VLCKit, from where it is.
         if engine.kind == .native, let stream, !Codecs.avPlayerSubtitles.contains((stream.codec ?? "").lowercased()) {
             await switchToVLC(reason: "Subtitles \(stream.codec ?? "?")")
         }
@@ -546,7 +546,9 @@ final class PlayerController {
     private func switchToVLC(reason: String) async {
         guard let old = engine, old.kind == .native, var next = plan else { return }
         let position = max(old.currentTime, old.playheadNow)
-        let wasPaused = old.status == .paused
+        // Paused by the person, not "not moving yet": a hand-off at the very
+        // start (AVPlayer not yet playing) left VLCKit paused on frame one.
+        let wasPaused = old.status == .paused && phase == .playing && position > .seconds(1) && !transport.isScrubbing && !isPlaying
         Self.log.notice("AVPlayer → VLCKit at \(position.seconds, privacy: .public)s: \(reason, privacy: .public)")
         TraceFile.write("player", "AVPlayer → VLCKit at \(position.seconds)s: \(reason)")
         old.stop()

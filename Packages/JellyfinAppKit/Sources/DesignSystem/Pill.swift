@@ -5,7 +5,7 @@ public import SwiftUI
 ///
 ///     Pill("Sleep Timer", systemImage: "moon.zzz", active: timer.isActive) { … }
 ///     Pill("Play", systemImage: "play.fill", prominent: true, size: .large) { … }
-///     Pill("Kristian") { Avatar() } action: { … }        // an image instead of an icon
+///     Pill("Sam") { Avatar() } action: { … }        // an image instead of an icon
 ///
 /// States: **active** (on — an accent ring and tint), **prominent** (the
 /// page's main action — accent fill), **disabled** (dimmed, not focusable),

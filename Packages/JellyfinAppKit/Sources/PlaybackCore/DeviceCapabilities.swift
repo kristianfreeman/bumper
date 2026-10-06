@@ -52,7 +52,10 @@ public enum Codecs {
 
     public static let avPlayerContainers: Set<String> = ["mp4", "m4v", "mov"]
     public static let avPlayerAudio: Set<String> = ["aac", "ac3", "eac3"]
-    public static let avPlayerSubtitles: Set<String> = ["vtt", "webvtt"]
+    /// Text subtitles AVPlayer shows: the app asks the server for them as
+    /// WebVTT (Jellyfin converts any text format) and draws them itself.
+    /// ASS keeps its styling only in VLCKit; bitmaps (PGS, VobSub) are VLCKit's.
+    public static let avPlayerSubtitles: Set<String> = ["vtt", "webvtt", "subrip", "srt", "mov_text", "tx3g", "text"]
 
     public static func avPlayerVideo(_ caps: DeviceCapabilities) -> Set<String> {
         caps.hevc ? ["h264", "hevc"] : ["h264"]
