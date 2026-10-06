@@ -26,8 +26,8 @@ for i in clips:
     first = re.search(r"^\s*([\d.]+) \[(?:vlc|player)\] (?:First frame|Tap → playing)", trace, re.M)
     t0 = float(first.group(1)) if first else 0
     end = t0 + m["duration"] - 0.5
-    vlc = [(float(t), *map(int, v)) for t, *v in re.findall(r"^\s*([\d.]+) \[vlc\] 10 s: (\d+) decoded, (\d+) shown, (\d+) dropped, (\d+) late", trace, re.M)]
-    native = [(float(t), int(d), int(st)) for t, d, st in re.findall(r"^\s*([\d.]+) \[native\] 10 s: (\d+) dropped, (\d+) stalls", trace, re.M)]
+    vlc = [(float(t), *map(int, v)) for t, *v in re.findall(r"^\s*([\d.]+) \[vlc\] \d+ s: (\d+) decoded, (\d+) shown, (\d+) dropped, (\d+) late", trace, re.M)]
+    native = [(float(t), int(d), int(st)) for t, d, st in re.findall(r"^\s*([\d.]+) \[native\] \d+ s: (\d+) dropped, (\d+) stalls", trace, re.M)]
     shown = dropped = late = seconds = 0.0
     for (pt, *_), (t, dec, s, dr, l) in zip(vlc, vlc[1:]):
         if t > end: break

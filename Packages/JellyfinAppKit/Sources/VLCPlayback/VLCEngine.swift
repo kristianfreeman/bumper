@@ -410,11 +410,11 @@ public final class VLCEngine: PlayerEngine {
                 guard let self, let media = self.player.media else { return }
                 let s = media.statistics
                 tick += 1
-                // Every 10 s in the trace: frames decoded, shown, dropped and late
+                // Every few seconds in the trace (10 by default): frames decoded, shown, dropped and late
                 // over that time ("laggy" on a real TV is one of these).
-                if tick % 10 == 0 {
+                if tick % TraceFile.statsWindow == 0 {
                     let now = (decoded: Int(s.decodedVideo), lost: Int(s.lostPictures), late: Int(s.latePictures), shown: Int(s.displayedPictures))
-                    TraceFile.write("vlc", "10 s: \(now.decoded - last.decoded) decoded, \(now.shown - last.shown) shown, \(now.lost - last.lost) dropped, \(now.late - last.late) late; \(String(format: "%.1f", Double(s.demuxBitrate) * 8)) Mb/s; rate \(self.player.rate)")
+                    TraceFile.write("vlc", "\(TraceFile.statsWindow) s: \(now.decoded - last.decoded) decoded, \(now.shown - last.shown) shown, \(now.lost - last.lost) dropped, \(now.late - last.late) late; \(String(format: "%.1f", Double(s.demuxBitrate) * 8)) Mb/s; rate \(self.player.rate)")
                     last = now
                 }
                 self.stats.droppedFrames = Int(s.lostPictures)

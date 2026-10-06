@@ -58,6 +58,15 @@ nonisolated struct LaunchOptions: Sendable {
     var mockBooksURL: URL?
     /// Item id to start playing immediately (perf tests / engine validation).
     var autoplay: String?
+    /// `-autoplayBackground`: autoplay as Background — the server is told
+    /// nothing (no progress, nothing marked watched): measuring a real library.
+    var autoplayBackground = false
+    /// `-autoplaySubtitles ass|bitmap|text`: autoplay with a subtitle of that kind on.
+    var autoplaySubtitles: String?
+    /// `-libraryMatrix`: one item for each kind of file in the library
+    /// (container, codecs, size, scan, range, audio, subtitles), written to
+    /// Library/Caches/perf/library-matrix.json for scripts/device-library-matrix.sh.
+    var libraryMatrix = false
     /// Self-driven scroll benchmark (no XCUITest overhead in the numbers).
     var benchmark = false
     /// Deep link for tests: `item:<id>` or `grid:<libraryId>`.
@@ -109,6 +118,9 @@ nonisolated struct LaunchOptions: Sendable {
         if let i = arguments.firstIndex(of: "-benchTag"), i + 1 < arguments.count { benchTag = arguments[i + 1] }
         if let i = arguments.firstIndex(of: "-mediaLatency"), i + 1 < arguments.count { mediaLatencyMs = Int(arguments[i + 1]) }
         if let i = arguments.firstIndex(of: "-autoplay"), i + 1 < arguments.count { autoplay = arguments[i + 1] }
+        autoplayBackground = arguments.contains("-autoplayBackground")
+        if let i = arguments.firstIndex(of: "-autoplaySubtitles"), i + 1 < arguments.count { autoplaySubtitles = arguments[i + 1] }
+        libraryMatrix = arguments.contains("-libraryMatrix")
     }
 }
 
@@ -240,6 +252,7 @@ final class AppModel {
         if let s = options.sleepAfterSeconds { sleepTimer.set(seconds: s) }
         if let ms = options.mediaLatencyMs { MockMedia.latency.withLock { $0 = .milliseconds(ms) } }
         if let session { reportCapabilities(session) }
+        if options.libraryMatrix, let client = session?.client { Task { await LibraryMatrix.pick(client: client) } }
         if let id = options.autoplay {
             TraceFile.write("app", "autoplay \(id): session \(session.map { $0.server.url.absoluteString } ?? "none")")
             if let client = session?.client {
@@ -254,6 +267,18 @@ final class AppModel {
                         if let start = options.startAtSeconds {
                             if item.userData == nil { item.userData = UserItemData() }
                             item.userData?.playbackPositionTicks = Duration.seconds(start).ticks
+                        }
+                        if options.autoplayBackground {
+                            // A subtitle of the asked kind on (the matrix measures drawing them).
+                            let subtitle = options.autoplaySubtitles.flatMap { want in
+                                item.mediaSources?.first?.subtitleStreams.first { s in
+                                    let c = (s.codec ?? "").lowercased()
+                                    let kind = ["pgssub", "dvdsub", "dvd_subtitle", "hdmv_pgs_subtitle", "dvbsub"].contains(c) ? "bitmap" : ["ass", "ssa"].contains(c) ? "ass" : "text"
+                                    return kind == want
+                                }?.index
+                            }
+                            self.playback = PlaybackRequest(item: item, resume: true, subtitleIndex: subtitle ?? -1, background: true)
+                            return
                         }
                         // Delayed autoplay stands in for pressing the Play button (which resumes).
                         self.play(item, resume: options.autoplayAfterSeconds != nil || options.startAtSeconds != nil)

@@ -13,6 +13,10 @@ public enum TraceFile {
     public static let directory: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appending(path: "perf", directoryHint: .isDirectory)
 
+    /// Seconds per playback-stats line (`-statsWindow <s>`; the matrix uses
+    /// short ones to measure a file in seconds, not half a minute).
+    public static let statsWindow: Int = max(1, UserDefaults.standard.integer(forKey: "statsWindow").nonZero ?? 10)
+
     private static let handle = Mutex<FileHandle?>(nil)
     private static let start = ContinuousClock.now
 
@@ -31,4 +35,8 @@ public enum TraceFile {
             try? h?.write(contentsOf: Data(line.utf8))
         }
     }
+}
+
+private extension Int {
+    var nonZero: Int? { self == 0 ? nil : self }
 }

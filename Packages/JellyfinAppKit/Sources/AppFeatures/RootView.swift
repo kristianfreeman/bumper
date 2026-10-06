@@ -430,14 +430,17 @@ struct MainTabView: View {
         apply(app.libraries) { books?.contains($0.id) ?? true }
     }
 
+    /// Icons of a weight: tab bars fill them, and a filled TV or folder is a
+    /// solid slab beside an open film strip (TV Shows looked lit).
     private func icon(for view: BaseItem) -> String {
         switch view.collectionType {
         case "movies": "film"
-        case "tvshows": "tv"
+        case "tvshows": "play.tv"
         case "boxsets": "square.stack"
         case "music": "music.note"
         case "books": "books.vertical"
-        default: "folder"
+        case "homevideos": "video"
+        default: "film.stack"
         }
     }
 }

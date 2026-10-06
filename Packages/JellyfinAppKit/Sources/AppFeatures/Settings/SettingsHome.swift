@@ -115,7 +115,7 @@ struct SettingsView: View {
     static func symbol(for library: BaseItem) -> String {
         switch library.collectionType {
         case "movies": "film"
-        case "tvshows": "tv"
+        case "tvshows": "play.tv"
         case "boxsets": "square.stack"
         case "books": "headphones"
         case "homevideos": "video"
