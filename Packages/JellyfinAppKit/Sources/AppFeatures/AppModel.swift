@@ -246,6 +246,7 @@ final class AppModel {
             session = accounts.signIn(server: server, result: MockJellyfinProtocol.authenticationResult)
         }
         if !options.mock, session != nil { Task { await self.checkCloudSignIn() } }
+        if Platform.isMac && !options.mock { LocalNetworkAccess.ask() }        // the Mac only asks when the app goes looking
         Self.configureAudioSession()
         InputTrace.install()
         if let session { queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults); startQueueSync(session) }

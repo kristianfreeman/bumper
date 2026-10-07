@@ -51,6 +51,9 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
 final class HomeModel {
     private(set) var sections: [BrowseSection] = []
     private(set) var error: String?
+    /// The server is on this network and couldn't be reached: most likely
+    /// Local Network access is off for the app (the Mac never asked).
+    private(set) var localNetworkBlocked = false
     private(set) var loadedOnce = false
 
     func load(_ session: UserSession, usage: [String: Double] = [:], hidden: Set<String> = []) async {
@@ -66,10 +69,12 @@ final class HomeModel {
             if fresh != sections { sections = fresh }
             TopShelfWriter.update(fresh, client: session.client, usage: usage)
             error = nil
+            localNetworkBlocked = false
             LaunchClock.markFirstContent()
             await ContentCache.shared.store(fresh, for: key)
         } catch {
             if sections.isEmpty { self.error = error.localizedDescription }
+            if case .transport = error as? JellyfinError, !Platform.isTV, LocalNetworkAccess.isLocal(session.server.url) { localNetworkBlocked = true }
         }
         loadedOnce = true
     }
@@ -220,6 +225,7 @@ struct TrackedHero: View {
 struct HomeView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
+    @Environment(\.openURL) private var openURL
     @State private var model = HomeModel()
     @State private var tracker = FocusTracker()
     @FocusState private var firstCardFocused: Bool
@@ -240,7 +246,16 @@ struct HomeView: View {
                 }
                 .padding(.top, 10)
             }
-            if let error = model.error {
+            if model.localNetworkBlocked {
+                ContentUnavailableView {
+                    Label("Can’t Reach Your Server", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text("\(Brand.displayName) needs Local Network access to reach \(app.session?.server.name ?? "your server"). Turn it on in \(Platform.isMac ? "System Settings → Privacy & Security → Local Network" : "Settings → Privacy & Security → Local Network"), then try again.")
+                } actions: {
+                    if let url = LocalNetworkAccess.settingsURL { Button("Open Settings") { openURL(url) }.buttonStyle(.borderedProminent) }
+                    Button("Try Again") { Task { if let s = app.session { await model.load(s, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) } } }
+                }
+            } else if let error = model.error {
                 ContentUnavailableView("Can’t Reach Your Server", systemImage: "wifi.exclamationmark", description: Text(error))
             } else if model.sections.isEmpty && model.loadedOnce {
                 ContentUnavailableView("Your Libraries Are Empty", systemImage: "film.stack")
