@@ -460,6 +460,7 @@ struct MainTabView: View {
         case "music": "music.note"
         case "books": "books.vertical"
         case "homevideos": "video"
+        case "playlists": "list.and.film"
         default: "film.stack"
         }
     }
@@ -591,9 +592,12 @@ struct RoutedStack<Root: View>: View {
 
     @ViewBuilder private func destination(_ route: Route) -> some View {
         switch route {
-        case .item(let item): ItemDetailView(item: item)
+        case .item(let item):
+            if item.kind == .playlist { PlaylistPage(playlist: item) } else { ItemDetailView(item: item) }
         case .library(let library):
-            if library.collectionType == "books" { AudiobookLibraryView(libraries: [library]) } else { LibraryView(library: library) }
+            if library.collectionType == "books" { AudiobookLibraryView(libraries: [library]) }
+            else if library.collectionType == "playlists" { PlaylistsPage(library: library) }
+            else { LibraryView(library: library) }
         case .grid(let spec): CollectionPage(spec: spec)
         case .arrivals(let spec): ArrivalsPage(spec: spec)
         case .profile: ProfileView()

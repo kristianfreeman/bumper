@@ -138,7 +138,9 @@ struct CollectionSection: View {
                                         .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
                                 } else if more {
                                     ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) {
-                                        if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) } else { navigate(.grid(section.seeAllSpec)) }
+                                        if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) }
+                                        else if let lib = section.playlistsLibrary { navigate(.library(lib)) }
+                                        else { navigate(.grid(section.seeAllSpec)) }
                                     }
                                 }
                             }
@@ -165,6 +167,8 @@ struct CollectionSection: View {
         case .landscape:
             if let arrival = section.arrivals?.first(where: { $0.id == item.id }) {
                 ArrivalCard(arrival: arrival, width: width)
+            } else if item.kind == .playlist {
+                PlaylistCard(playlist: item, width: width)
             } else {
                 LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
                     .contextMenu { ItemContextMenu(item: item) }

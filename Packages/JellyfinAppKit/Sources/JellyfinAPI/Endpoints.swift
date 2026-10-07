@@ -201,6 +201,11 @@ extension JellyfinClient {
         ] + cardQuery(ItemField.hero)))
     }
 
+    /// A playlist's items, in its order.
+    public func playlistItems(id: String) async throws -> ItemsPage {
+        try await send(Request(.get, "/Playlists/\(id)/Items", query: [.init(name: "userId", value: userId)] + cardQuery([.overview])))
+    }
+
     public func seasons(seriesId: String) async throws -> ItemsPage {
         try await send(Request(.get, "/Shows/\(seriesId)/Seasons", query: [.init(name: "userId", value: userId)] + cardQuery([.childCount])))
     }

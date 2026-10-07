@@ -129,8 +129,13 @@ struct ItemDetailView: View {
     private static var phone: Bool { Layout.device == .phone }
 
     var body: some View {
+        // A stub of unknown kind (a deep link) that turns out to be a playlist.
+        if model.item.kind == .playlist { PlaylistPage(playlist: model.item) } else { details }
+    }
+
+    private var details: some View {
         let item = model.item
-        ZStack(alignment: .topLeading) {
+        return ZStack(alignment: .topLeading) {
             if Self.phone { theme.backgroundGradient.ignoresSafeArea() } else { FocusBackdrop(item) }
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: Layout.shelfSpacing) {

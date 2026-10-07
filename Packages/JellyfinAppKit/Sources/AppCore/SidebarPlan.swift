@@ -7,9 +7,10 @@ public import JellyfinAPI
 /// holds five, so libraries fold:
 /// - every *books* library with audiobooks joins one Audiobooks tab (an
 ///   e-book library has nothing that plays);
-/// - *Collections* (box sets) become a row on the Movies page;
+/// - *Collections* (box sets) become a row on the Movies page, and
+///   *Playlists* a row on Home;
 /// - past the tab limit, the rest go behind a "More" tab;
-/// - kinds the app can't play yet (playlists, music, live TV) aren't shown;
+/// - kinds the app can't play yet (music, live TV) aren't shown;
 /// - and any library the person hid stays out.
 public struct SidebarPlan: Sendable, Equatable {
     public enum Entry: Sendable, Equatable {
@@ -28,6 +29,8 @@ public struct SidebarPlan: Sendable, Equatable {
         case audiobooks
         /// A row on the Movies page.
         case collectionsRow
+        /// Playlists: a row on Home (a tab of their own pushed Videos behind More).
+        case homeRow
         /// Left out in Settings.
         case hidden
         /// Nothing in it the app can play (yet), and why.
@@ -47,15 +50,16 @@ public struct SidebarPlan: Sendable, Equatable {
     public var entries: [Entry]
     /// Folded into the Movies page as a row.
     public var collections: [BaseItem]
+    /// Playlists libraries, folded into Home as a row.
+    public var playlists: [BaseItem] = []
     /// Every library on the server, in its order, and where it went.
     public var libraries: [Library] = []
 
-    public static let supported: Set<String> = ["movies", "tvshows", "boxsets", "homevideos", "musicvideos", "books"]
+    public static let supported: Set<String> = ["movies", "tvshows", "boxsets", "homevideos", "musicvideos", "books", "playlists"]
 
     /// "Playlists aren't supported yet" — what a kind the app can't play is.
     static func unsupported(_ type: String?) -> String {
         switch type {
-        case "playlists": "Playlists aren't supported yet"
         case "music": "Music isn't supported yet"
         case "livetv": "Live TV isn't supported yet"
         case "photos": "Photos aren't supported"
@@ -80,6 +84,8 @@ public struct SidebarPlan: Sendable, Equatable {
         let hasMovies = shown.contains { $0.collectionType == "movies" }
         collections = hasMovies ? shown.filter { $0.collectionType == "boxsets" } : []
         for c in collections { placement[c.id] = .collectionsRow }
+        playlists = shown.filter { $0.collectionType == "playlists" }
+        for p in playlists { placement[p.id] = .homeRow }
 
         var tabs: [Entry] = []
         var addedBooks = false
@@ -89,6 +95,8 @@ public struct SidebarPlan: Sendable, Equatable {
                 placement[view.id] = .audiobooks
                 if !addedBooks { tabs.append(.audiobooks(books)); addedBooks = true }
             case "boxsets" where hasMovies:
+                continue
+            case "playlists":
                 continue
             default:
                 tabs.append(.library(view))

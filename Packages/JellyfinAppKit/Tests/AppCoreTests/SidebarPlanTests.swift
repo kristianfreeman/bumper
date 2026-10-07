@@ -25,7 +25,8 @@ struct SidebarPlanTests {
         #expect(placements["Collections"] == .collectionsRow)
         #expect(placements["Movies"] == .tab)
         if case .notPlayable = placements["Books"] {} else { Issue.record("e-books shown: \(String(describing: placements["Books"]))") }
-        if case .notPlayable = placements["Playlists"] {} else { Issue.record("playlists shown") }
+        #expect(placements["Playlists"] == .homeRow)                     // a row on Home, not a fifth tab
+        #expect(plan.playlists == [views[4]])
 
         // Hidden in Settings: out of the tabs, and said so.
         let hidden = SidebarPlan(views: views, hidden: ["videos"]) { $0.name == "Audiobooks" }

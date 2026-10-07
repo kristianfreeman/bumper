@@ -38,6 +38,8 @@ nonisolated struct PlaybackRequest: Identifiable, Sendable {
     /// and tells the server nothing — nothing marked watched, no
     /// resume points, Continue Watching and Next Up untouched.
     var background = false
+    /// A playlist's items after this one, played in turn.
+    var sequence: [BaseItem] = []
 }
 
 /// Launch configuration, parsed once from the process arguments.
@@ -635,7 +637,9 @@ final class AppModel {
     /// Connected to a TV: what's played goes there (books stay on the phone).
     private var casting: CastLink? { cast?.isConnected == true ? cast : nil }
 
-    func play(_ item: BaseItem, resume: Bool = true, mediaSourceId: String? = nil, audioIndex: Int? = nil, subtitleIndex: Int? = nil) {
+    /// `sequence`: what plays after it, in turn (a playlist's rest).
+    func play(_ item: BaseItem, resume: Bool = true, mediaSourceId: String? = nil, audioIndex: Int? = nil, subtitleIndex: Int? = nil,
+              sequence: [BaseItem] = []) {
         if let cast = casting {
             TraceFile.write("cast", "play \(item.name ?? item.id) on \(cast.connectedTo ?? "?")")
             libraryUsage.recordPlay(item, libraries: libraries)
@@ -644,7 +648,8 @@ final class AppModel {
         }
         if audiobook != nil { stopAudiobook() }             // one thing plays at a time
         libraryUsage.recordPlay(item, libraries: libraries)
-        playback = PlaybackRequest(item: item, resume: resume, mediaSourceId: mediaSourceId, audioIndex: audioIndex, subtitleIndex: subtitleIndex)
+        playback = PlaybackRequest(item: item, resume: resume, mediaSourceId: mediaSourceId, audioIndex: audioIndex, subtitleIndex: subtitleIndex,
+                                   sequence: sequence)
     }
 
     /// Fires PlaybackInfo as soon as a Play button *gets focus*, so by the time

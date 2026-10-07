@@ -29,6 +29,8 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     /// here, and the page "View all" opens.
     var arrivals: [Arrival]? = nil
     var arrivalsSpec: ArrivalsSpec? = nil
+    /// A Playlists row: the library "View all" opens.
+    var playlistsLibrary: BaseItem? = nil
 
     /// What "View all" opens: the narrowed query, or (a row with no query
     /// behind it, like Next Up) the whole row it was cut from.
@@ -51,7 +53,7 @@ final class HomeModel {
     private(set) var error: String?
     private(set) var loadedOnce = false
 
-    func load(_ session: UserSession, usage: [String: Double] = [:]) async {
+    func load(_ session: UserSession, usage: [String: Double] = [:], hidden: Set<String> = []) async {
         let key = "home-\(session.id)"
         if sections.isEmpty, let cached = await ContentCache.shared.value([BrowseSection].self, for: key), !cached.isEmpty {
             BlurHashCache.shared.prewarm(cached.flatMap(\.items))
@@ -59,7 +61,7 @@ final class HomeModel {
             LaunchClock.markFirstContent()
         }
         do {
-            let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client, usage: usage) }
+            let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client, usage: usage, hidden: hidden) }
             BlurHashCache.shared.prewarm(fresh.flatMap(\.items))
             if fresh != sections { sections = fresh }
             TopShelfWriter.update(fresh, client: session.client, usage: usage)
@@ -73,7 +75,7 @@ final class HomeModel {
     }
 
     /// All home rows in parallel: total latency ≈ the slowest single request.
-    nonisolated static func fetch(_ client: JellyfinClient, usage: [String: Double] = [:]) async throws -> [BrowseSection] {
+    nonisolated static func fetch(_ client: JellyfinClient, usage: [String: Double] = [:], hidden: Set<String> = []) async throws -> [BrowseSection] {
         // More than a row shows: the rest is behind "View all".
         async let resume = client.resumeItems(limit: 50)
         async let nextUp = client.nextUp(limit: 50)
@@ -110,6 +112,15 @@ final class HomeModel {
         let nextItems = (try? await nextUp.items) ?? []
         if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .landscape, total: nextItems.count)) }
         sections += latest.filter { !$0.items.isEmpty }
+        // Playlists (video ones: music doesn't play here), after what's new.
+        for lib in (try await views.items).filter({ $0.collectionType == "playlists" && !hidden.contains($0.id) }) {
+            let list = (try? await Playlists.list(library: lib.id, client: client)) ?? []
+            guard !list.isEmpty else { continue }
+            var s = BrowseSection(id: "playlists-\(lib.id)", title: lib.name ?? "Playlists", items: list, style: .landscape, total: list.count, library: lib.name)
+            s.subtitle = Playlists.lede(list)
+            s.playlistsLibrary = lib
+            sections.append(s)
+        }
         return sections
     }
 }
@@ -238,7 +249,7 @@ struct HomeView: View {
         .environment(\.focusTracker, tracker)
         .task {
             tracker.onDwell = { [app] item in Self.prefetch(item, app: app) }
-            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores) }
+            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) }
             app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(model.sections.first?.items.first)
         }
@@ -266,6 +277,7 @@ struct EditorialHome {
             switch section.id {
             case "resume": words = copy.resume
             case "nextup": words = copy.upNext
+            case let id where id.hasPrefix("playlists-"): words = Editorial.Copy(title: section.title, subtitle: section.subtitle)
             default:
                 if let arrivals = section.arrivals, let spec = section.arrivalsSpec {
                     words = Editorial.Copy(title: section.title, subtitle: Arrivals.lede(spec.kind, arrivals, now: now))

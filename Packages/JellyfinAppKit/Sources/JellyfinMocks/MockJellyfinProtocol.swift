@@ -124,6 +124,7 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             return json(MockAuth.quickConnect(authenticated: polls >= 2))
         case (_, "/UserViews"):
             var views = (MockMedia.isConfigured ? [MockMedia.view] : []) + catalog.views + (MockBooks.isConfigured ? [MockBooks.view] : [])
+                + (MockPlaylists.isConfigured ? [MockPlaylists.view] : [])
             // `-mockLibraries "Books:books,Videos:homevideos"`: extra (empty) libraries, to mirror a real server's sidebar.
             for spec in (UserDefaults.standard.string(forKey: "mockLibraries") ?? "").split(separator: ",") {
                 let parts = spec.split(separator: ":").map(String.init)
@@ -206,8 +207,12 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             if parts.count == 3, parts[2] == "PlaybackInfo" {
                 return json(MockMedia.playbackInfo(itemId: id) ?? MockAuth.playbackInfo(itemId: id))
             }
-            if let item = MockMedia.item(id: id) ?? MockBooks.item(id: id) ?? catalog.item(id: id) { return json(item) }
+            if let item = MockMedia.item(id: id) ?? MockBooks.item(id: id) ?? catalog.item(id: id)
+                ?? MockPlaylists.playlists(catalog).first(where: { $0.id == id }) { return json(item) }
             return (404, Data(), "text/plain")
+        }
+        if parts.count == 3, parts[0] == "Playlists", parts[2] == "Items" {
+            return page(MockPlaylists.entries(catalog, parts[1]))
         }
         if parts.count == 3, parts[0] == "Shows", parts[2] == "Seasons" {
             return page(catalog.seasons[parts[1]] ?? [])
@@ -231,6 +236,7 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         switch q["parentid"] {
         case MockCatalog.moviesViewId: items = catalog.movies
         case MockCatalog.showsViewId: items = types == ["Episode"] ? catalog.episodes.values.flatMap { $0 } : catalog.series
+        case MockPlaylists.viewId: items = MockPlaylists.playlists(catalog)
         default:
             if types == ["Episode"] {
                 items = catalog.episodes.values.flatMap { $0 }

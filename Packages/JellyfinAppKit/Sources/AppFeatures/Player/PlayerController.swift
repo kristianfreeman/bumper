@@ -58,6 +58,7 @@ final class PlayerController {
     /// next in the queue, else the next episode (with Play Next Episode on);
     /// in Background, round to the first episode again.
     var upNext: BaseItem? {
+        if let next = request.sequence.first { return next }                 // a playlist: its next
         if isBackground { return nextEpisode ?? firstEpisode.flatMap { $0.id == item.id ? nil : $0 } }
         if app.queue.contains(item.id), let next = app.queue.next(after: item.id) { return next }
         return app.settings.autoplayNextEpisode ? nextEpisode : nil
@@ -327,6 +328,12 @@ final class PlayerController {
             Self.log.info("Sleep timer: end of item")
             app.sleepTimer.reset()
             app.playback = nil
+            return
+        }
+        // A playlist: its next item, from the start, and the rest after it.
+        if let next = request.sequence.first {
+            TraceFile.write("playlist", "next: \(next.name ?? next.id)")
+            app.playback = PlaybackRequest(item: next, resume: false, background: isBackground, sequence: Array(request.sequence.dropFirst()))
             return
         }
         // Background: on to the next (round to the first; a film again),

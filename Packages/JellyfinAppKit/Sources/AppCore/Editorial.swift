@@ -201,7 +201,7 @@ public struct Editorial: Sendable {
 
     /// To the nearest quarter hour, in words: "an hour and a quarter", "nearly three hours".
     /// "about an hour and a quarter", "nearly three hours", "over 29 hours".
-    func roughly(_ m: Int) -> String {
+    public func roughly(_ m: Int) -> String {
         if m < 50 { return "about " + minutes(Int((Double(m) / 5).rounded()) * 5) }
         if m >= 4 * 60 { return "over \(number(m / 60)) hours" }
         let quarters = Int((Double(m) / 15).rounded())

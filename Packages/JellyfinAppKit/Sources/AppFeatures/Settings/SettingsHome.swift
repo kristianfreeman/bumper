@@ -107,6 +107,7 @@ struct SettingsView: View {
         case .more: "under More"
         case .audiobooks: "in Audiobooks"
         case .collectionsRow: "on the Movies page"
+        case .homeRow: "on Home"
         default: nil
         }
         let line = [count, place].compactMap { $0 }.joined(separator: " · ")
@@ -132,7 +133,7 @@ struct SettingsView: View {
         case "books": "headphones"
         case "homevideos": "video"
         case "musicvideos": "music.note.tv"
-        case "playlists": "music.note.list"
+        case "playlists": "list.and.film"
         case "music": "music.note"
         case "livetv": "antenna.radiowaves.left.and.right"
         case "photos": "photo"
