@@ -311,11 +311,18 @@ struct PlayerView: View {
 
     // MARK: Chrome
 
+    /// Another ±10 s on the same side while its badge is up: the same badge
+    /// counts up (and bounces), held a little longer; anything else replaces it.
     private func show(_ f: Flash) {
-        flash = f
+        if let current = flash, current.symbol == f.symbol, f.edge != .center {
+            flash?.count += 1
+        } else {
+            flash = f
+        }
+        guard let shown = flash else { return }
         Task {
-            try? await Task.sleep(for: .milliseconds(650))
-            if flash?.id == f.id { flash = nil }
+            try? await Task.sleep(for: .milliseconds(shown.count > 1 ? 900 : 650))
+            if flash?.id == shown.id, flash?.count == shown.count { flash = nil }
         }
     }
 

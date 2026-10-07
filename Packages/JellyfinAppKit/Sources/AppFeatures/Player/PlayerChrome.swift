@@ -36,6 +36,8 @@ struct Flash: Equatable {
     let id = UUID()
     let symbol: String
     let edge: Edge
+    /// Presses in a row on the same side ("−30 s" after three).
+    var count = 1
 }
 
 extension Flash {
@@ -49,28 +51,49 @@ extension Flash {
     }
 }
 
+/// One badge per side, fixed in place: it fades in and out, and another
+/// press on the same side bounces it (and counts up) instead of replacing
+/// it. (One badge moved between sides slid across the screen, and each press
+/// scaled a new one in over the old.)
 struct FlashView: View {
     let flash: Flash?
+    private let scale: CGFloat = Platform.isTV ? 1 : 0.6
 
     var body: some View {
         ZStack {
-            if let flash {
-                let scale = Platform.isTV ? 1 : 0.6
-                Image(systemName: flash.symbol)
-                    .font(.system(size: (flash.edge == .center ? 64 : 48) * scale, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 150 * scale, height: 150 * scale)
-                    .background(Color.black.opacity(0.55), in: .circle)
-                    .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 2))
-                    .frame(maxWidth: .infinity, alignment: alignment(flash.edge))
-                    .padding(.horizontal, Platform.isTV ? 220 : 48)
-                    .transition(.scale(scale: 0.7).combined(with: .opacity))
-                    .id(flash.id)
+            ForEach([Flash.Edge.leading, .center, .trailing], id: \.self) { edge in
+                Group {
+                    if let flash, flash.edge == edge {
+                        badge(flash).transition(.scale(scale: 0.7).combined(with: .opacity))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: alignment(edge))
             }
         }
+        .padding(.horizontal, Platform.isTV ? 220 : 48)
         .frame(maxHeight: .infinity)
-        .animation(.spring(duration: 0.25), value: flash)
+        .animation(.spring(duration: 0.25), value: flash?.edge)
         .allowsHitTesting(false)
+    }
+
+    private func badge(_ flash: Flash) -> some View {
+        VStack(spacing: 12 * scale) {
+            Image(systemName: flash.symbol)
+                .font(.system(size: (flash.edge == .center ? 64 : 48) * scale, weight: .semibold))
+                .symbolEffect(.bounce, value: flash.count)
+                .foregroundStyle(.white)
+                .frame(width: 150 * scale, height: 150 * scale)
+                .background(Color.black.opacity(0.55), in: .circle)
+                .overlay(Circle().stroke(.white.opacity(0.22), lineWidth: 2))
+            if flash.count > 1, flash.edge != .center {
+                Text("\(flash.edge == .leading ? "−" : "+")\(flash.count * 10) s")
+                    .font(.system(size: 28 * scale, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .shadow(color: .black.opacity(0.6), radius: 6)
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: flash.count)
     }
 
     private func alignment(_ edge: Flash.Edge) -> Alignment {
