@@ -199,7 +199,7 @@ struct ItemDetailView: View {
                 MetadataLine(item: episodeMetadata(episode))
                 Text(episode.overview ?? "")
                     .font(.callout).foregroundStyle(theme.secondaryText).lineLimit(3)
-                    .spoilerBlur(episode.spoils(hidingSpoilers: app.settings.hideSpoilers))
+                    .spoilerBlur(episode.spoils(hidingSpoilers: app.settings.hideSpoilers), revealable: true)
                     .frame(maxWidth: 1100, minHeight: Self.phone ? 0 : 90, alignment: .topLeading)   // fixed height: focus moves don't shift the buttons
             }
             .id(episode.id)
@@ -233,7 +233,7 @@ struct ItemDetailView: View {
             }
             if let overview = item.overview {
                 Text(overview).font(.callout).foregroundStyle(theme.secondaryText).lineLimit(Self.phone ? 3 : 4).frame(maxWidth: 1100, alignment: .leading)
-                    .spoilerBlur(item.spoils(hidingSpoilers: app.settings.hideSpoilers))
+                    .spoilerBlur(item.spoils(hidingSpoilers: app.settings.hideSpoilers), revealable: true)
             }
             actionButtons(item)
         }

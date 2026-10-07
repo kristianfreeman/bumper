@@ -24,10 +24,62 @@ extension BaseItem {
 extension View {
     /// An unwatched episode's description: the real words, blurred past
     /// reading — the shape of a description is there, not what happens.
-    public func spoilerBlur(_ hidden: Bool) -> some View {
-        blur(radius: hidden ? (Platform.isTV ? 14 : 8) : 0)
-            .accessibilityHidden(hidden)
-            .overlay { if hidden { Color.clear.accessibilityElement().accessibilityLabel("Description hidden until you've watched it") } }
+    /// `revealable`: select it (tap, click, or focus and press) to read it;
+    /// it stays shown until the view goes (another episode, leaving the page).
+    public func spoilerBlur(_ hidden: Bool, revealable: Bool = false) -> some View {
+        modifier(SpoilerBlur(hidden: hidden, revealable: revealable))
+    }
+}
+
+private struct SpoilerBlur: ViewModifier {
+    let hidden: Bool
+    let revealable: Bool
+    @State private var revealed = false
+
+    func body(content: Content) -> some View {
+        let blurred = hidden && !revealed
+        content
+            .blur(radius: blurred ? (Platform.isTV ? 14 : 8) : 0)
+            .accessibilityHidden(blurred)
+            .overlay {
+                if blurred {
+                    if revealable {
+                        Button { withAnimation(.easeOut(duration: 0.3)) { revealed = true } } label: { RevealHint() }
+                            .buttonStyle(RevealStyle())
+                            .accessibilityLabel("Show the description")
+                            .accessibilityHint("It may give away what happens")
+                            .accessibilityIdentifier("spoiler.reveal")
+                    } else {
+                        Color.clear.accessibilityElement().accessibilityLabel("Description hidden until you've watched it")
+                    }
+                }
+            }
+    }
+}
+
+/// Over the blur: nothing at rest; focused (the TV) or pressed, a soft
+/// highlight and "Show".
+private struct RevealHint: View {
+    @Environment(\.isFocused) private var focused
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: Platform.isTV ? 16 : 10, style: .continuous)
+            .fill(.white.opacity(focused ? 0.14 : 0.001))
+            .overlay {
+                if focused {
+                    Label("Show", systemImage: "eye").font(.callout.weight(.semibold)).foregroundStyle(.white)
+                        .transition(.opacity)
+                }
+            }
+            .padding(Platform.isTV ? -10 : -4)
+            .animation(.easeOut(duration: 0.2), value: focused)
+            .contentShape(.rect)
+    }
+}
+
+private struct RevealStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

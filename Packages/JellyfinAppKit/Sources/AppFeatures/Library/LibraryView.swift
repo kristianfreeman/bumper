@@ -261,6 +261,11 @@ final class CollectionPageModel {
     private(set) var genres: [String] = []
     private var exhausted = false
     private var loading = false
+    /// A new filter or sort on its way: what's shown stays (dimmed) until
+    /// the new first page replaces it — no "nothing matches" in between.
+    private(set) var refreshing = false
+    /// The first page for this filter has come back.
+    private(set) var settled = false
     private var nextIndex = 0
     private var generation = 0
 
@@ -269,21 +274,39 @@ final class CollectionPageModel {
         items = list
         total = list.count
         exhausted = true
+        settled = true
         generation += 1
     }
 
-    func reset() {
-        items = []
-        total = nil
-        exhausted = false
-        nextIndex = 0
+    /// The first page for a new filter, replacing what's shown when it lands.
+    func reload(_ filter: CollectionFilter, client: JellyfinClient) async {
         generation += 1
+        let generation = generation
+        refreshing = true
+        var q = filter.query
+        q.startIndex = 0
+        q.limit = 100
+        guard let page = try? await client.items(q), generation == self.generation else {
+            if generation == self.generation { refreshing = false; settled = true }
+            return
+        }
+        let kept = page.items.filter { filter.matches($0) }
+        BlurHashCache.shared.prewarm(kept)
+        items = kept
+        nextIndex = page.items.count
+        let clientSide = filter.added != .any || filter.maxMinutes != nil
+        total = clientSide ? nil : page.totalRecordCount
+        let pastCutoff = filter.addedCutoff().map { cutoff in page.items.last.map { ($0.dateCreated ?? .distantPast) < cutoff } ?? true } ?? false
+        exhausted = page.items.isEmpty || nextIndex >= page.totalRecordCount || pastCutoff
+        loading = false
+        refreshing = false
+        settled = true
     }
 
     /// Next page: the server filters what it can; when added and length are
     /// checked here, and "added within" stops at the first item older than it.
     func loadMore(_ filter: CollectionFilter, client: JellyfinClient) async {
-        guard !loading, !exhausted else { return }
+        guard !loading, !exhausted, !refreshing else { return }
         loading = true
         defer { loading = false }
         let generation = generation
@@ -366,8 +389,11 @@ struct CollectionPage: View {
                     }
                 }
                 .tvFocusSection()
-                if model.items.isEmpty, model.total == 0 || model.total == nil {
-                    Text("Nothing matches — try removing a part of the sentence.").font(.callout).foregroundStyle(theme.secondaryText)
+                .opacity(model.refreshing ? 0.5 : 1)
+                .animation(.easeOut(duration: 0.15), value: model.refreshing)
+                if model.settled, !model.refreshing, model.items.isEmpty {
+                    Text("Nothing matches. Try removing a filter.")
+                        .font(.callout).foregroundStyle(theme.secondaryText)
                 }
             }
             .padding(.horizontal, Layout.horizontalMargin)
@@ -379,8 +405,8 @@ struct CollectionPage: View {
         .hidesNavigationBar()
         .task(id: filter) {
             if let items = spec.items { model.show(items); return }
-            model.reset()
-            loadMore()
+            guard let client = app.session?.client else { return }
+            await model.reload(filter, client: client)
         }
         .task {
             guard let client = app.session?.client else { return }
@@ -429,7 +455,7 @@ struct CollectionPage: View {
     }
 }
 
-/// "Movies · added this week · unwatched · Add · Sorted by name · Ask" —
+/// "Movies · added this week · unwatched · Filter · Sort: A–Z" —
 /// every part a pill that always shows its words. Selecting one opens a
 /// row of choices beneath (no menus: focus stays on the page, nothing
 /// collapses); picking a choice applies it and closes the row.
@@ -444,6 +470,73 @@ struct FilterSentence: View {
     enum Focus: Hashable { case part(CollectionFilter.Part), add, sort, option(String) }
 
     var body: some View {
+        if Platform.isTV { sentence } else { menus }
+    }
+
+    /// iPhone, iPad and Mac: Filter and Sort as menus, then each filter in
+    /// use as a chip (its values, and Remove).
+    private var menus: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(CollectionFilter.Part.allCases.filter { $0 != .search }, id: \.self) { part in
+                        Menu { partMenu(part) } label: { Label(title(part), systemImage: symbol(part)) }
+                    }
+                } label: {
+                    Label("Filter", systemImage: "line.3.horizontal.decrease")
+                }
+                .accessibilityIdentifier("filter.add")
+                Menu {
+                    Picker("Sort", selection: $filter.sort) {
+                        ForEach(CollectionFilter.Sort.allCases, id: \.self) { sort in Text(sortTitle(sort)).tag(sort) }
+                    }
+                } label: {
+                    Label("Sort: \(sortShort)", systemImage: "arrow.up.arrow.down")
+                }
+                .accessibilityIdentifier("filter.sort")
+                ForEach(filter.parts, id: \.self) { part in
+                    Menu { partMenu(part) } label: {
+                        HStack(spacing: 6) {
+                            Text(filter.text(part))
+                            Image(systemName: "xmark").font(.caption2.weight(.bold)).opacity(0.7)
+                        }
+                    }
+                    .tint(theme.accent)
+                    .accessibilityIdentifier("filter.\(part.rawValue)")
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .tint(theme.primaryText)
+    }
+
+    @ViewBuilder private func partMenu(_ part: CollectionFilter.Part) -> some View {
+        ForEach(options(for: part)) { choice in
+            Button { apply(choice.id, to: part) } label: {
+                if choice.current { Label(choice.title, systemImage: "checkmark") } else { Text(choice.title) }
+            }
+        }
+        if filter.parts.contains(part) {
+            Divider()
+            Button("Remove", systemImage: "xmark", role: .destructive) { filter.clear(part) }
+        }
+    }
+
+    private func sortTitle(_ sort: CollectionFilter.Sort) -> String {
+        var copy = filter
+        copy.sort = sort
+        return copy.sortTitle
+    }
+
+    /// "A–Z", "Date added".
+    private var sortShort: String { filter.sort == .name ? "A–Z" : filter.sortTitle }
+
+    /// The TV: "Movies · unwatched · Filter · Sort" — pills that open a row
+    /// of choices beneath.
+    private var sentence: some View {
         VStack(alignment: .leading, spacing: 18) {
             FlowLayout(spacing: 14) {
                 Text(filter.libraryName)
@@ -455,10 +548,10 @@ struct FilterSentence: View {
                         .focused($focus, equals: .part(part))
                         .accessibilityIdentifier("filter.\(part.rawValue)")
                 }
-                Pill("Add", systemImage: "plus", size: .small, active: editing == .add, alwaysShowsTitle: true) { toggle(.add) }
+                Pill("Filter", systemImage: "line.3.horizontal.decrease", size: .small, active: editing == .add, alwaysShowsTitle: true) { toggle(.add) }
                     .focused($focus, equals: .add)
                     .accessibilityIdentifier("filter.add")
-                Pill(filter.sort == .name ? "Sorted A–Z" : "Sorted by \(filter.sortTitle.lowercased())", systemImage: "arrow.up.arrow.down", size: .small, active: editing == .sort, alwaysShowsTitle: true) { toggle(.sort) }
+                Pill("Sort: \(sortShort)", systemImage: "arrow.up.arrow.down", size: .small, active: editing == .sort, alwaysShowsTitle: true) { toggle(.sort) }
                     .focused($focus, equals: .sort)
                     .accessibilityIdentifier("filter.sort")
             }
@@ -542,18 +635,23 @@ struct FilterSentence: View {
                 close(focusing: .add)
                 return
             }
-            let value = choice.id.split(separator: ".", maxSplits: 1).last.map(String.init) ?? ""
-            switch part {
-            case .search: break
-            case .added: filter.added = CollectionFilter.Added(rawValue: value) ?? .any
-            case .watched: filter.watched = CollectionFilter.Watched(rawValue: value) ?? .any
-            case .favourites: filter.favourites = true
-            case .genre: filter.genre = value
-            case .decade: filter.decade = Int(value)
-            case .length: filter.maxMinutes = Int(value)
-            case .rating: filter.minRating = Double(value)
-            }
+            apply(choice.id, to: part)
             close(focusing: .part(part))
+        }
+    }
+
+    /// "genre.Comedy" → the filter's genre is Comedy.
+    private func apply(_ id: String, to part: CollectionFilter.Part) {
+        let value = id.split(separator: ".", maxSplits: 1).last.map(String.init) ?? ""
+        switch part {
+        case .search: break
+        case .added: filter.added = CollectionFilter.Added(rawValue: value) ?? .any
+        case .watched: filter.watched = CollectionFilter.Watched(rawValue: value) ?? .any
+        case .favourites: filter.favourites = true
+        case .genre: filter.genre = value
+        case .decade: filter.decade = Int(value)
+        case .length: filter.maxMinutes = Int(value)
+        case .rating: filter.minRating = Double(value)
         }
     }
 

@@ -1,7 +1,7 @@
 import XCTest
 
-/// Settings → Libraries: every library on the server, where it is, and a
-/// switch that takes one out of the app.
+/// Settings → Libraries: every library it can play, where it is, and a
+/// switch that takes one out of the app (the ones it can't aren't listed).
 @MainActor
 final class PhoneLibrariesTests: XCTestCase {
     func testHidingALibraryTakesItsTabAway() {
@@ -11,7 +11,8 @@ final class PhoneLibrariesTests: XCTestCase {
         app.launch()
         let videosTab = app.tabBars.buttons["Videos"]
         XCTAssertTrue(videosTab.waitForExistence(timeout: 10), "no Videos tab to begin with")
-        XCTAssertTrue(app.staticTexts["Playlists aren't supported yet"].waitForExistence(timeout: 3), "the libraries it can't play aren't listed")
+        XCTAssertTrue(app.switches["setting.library.view-extra-videos"].waitForExistence(timeout: 3), "the libraries aren't listed")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'supported'")).firstMatch.exists, "a library it can't play is listed")
         let toggle = app.switches["setting.library.view-extra-videos"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 3), "no switch for Videos")
         toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
