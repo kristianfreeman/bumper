@@ -16,7 +16,7 @@ require_device() { [[ -n "$DEVICE" ]] || { echo "no Apple TV found (devicectl li
 build_and_install() {
   echo "Building Release for ${MODEL:-$DEVICE}…"
   scripts/with-timeout.sh 900 xcodebuild -project Bumper.xcodeproj -scheme Bumper -configuration Release \
-    -destination "id=$DEVICE" -derivedDataPath build/device -allowProvisioningUpdates build -quiet >"$OUT/build.log" 2>&1 \
+    -destination "id=$DEVICE" -derivedDataPath build/device -allowProvisioningUpdates -allowProvisioningDeviceRegistration build -quiet >"$OUT/build.log" 2>&1 \
     || { echo "BUILD FAILED (see $OUT/build.log)"; grep -m5 "error:" "$OUT/build.log"; exit 1; }
   for attempt in 1 2 3; do
     dc device install app --device "$DEVICE" build/device/Build/Products/Release-appletvos/Bumper.app >/dev/null 2>&1 && return 0

@@ -209,7 +209,17 @@ final class AppModel {
                 MockMedia.configure(directory: URL(filePath: dir))
             }
         }
+        // Your preferences from your other devices (iCloud), before they're read.
+        let sync = options.mock ? nil : SettingsSync(defaults: defaults)
+        sync?.pull()
         settings = AppSettings(defaults: defaults)
+        settings.sync = sync
+        sync?.seed()
+        sync?.onChange = { [settings] in
+            TraceFile.write("settings", "changed on another device")
+            settings.reloadSynced()
+        }
+        sync?.start()
         downloads?.allowsCellular = settings.downloadsOverCellular
         libraryUsage = LibraryUsage(defaults: defaults)
         accounts = AccountStore(defaults: defaults, keychain: Keychain(service: Brand.bundleIdentifier + (options.mock ? ".mock" : "")), protocolClasses: protocols)

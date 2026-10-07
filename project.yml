@@ -56,6 +56,7 @@ targets:
       path: App/Bumper.entitlements
       properties:
         com.apple.security.application-groups: [group.com.kristianfreeman.bumper]
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
     settings:
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
@@ -137,6 +138,10 @@ targets:
         product: AppFeatures
       - package: JellyfinAppKit
         product: Companion
+    entitlements:
+      path: iPhone/Bumper.entitlements
+      properties:
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
     settings:
       base:
         PRODUCT_NAME: Bumper
@@ -185,6 +190,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.network.server: true      # the companion link (Bonjour)
+        # Settings sync needs com.apple.developer.ubiquity-kvstore-identifier here too,
+        # which needs this Mac registered with the developer account first.
     settings:
       base:
         PRODUCT_NAME: Bumper

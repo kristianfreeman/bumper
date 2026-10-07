@@ -89,6 +89,10 @@ public enum SubtitleSize {
 @Observable
 public final class AppSettings {
     @ObservationIgnored private let defaults: UserDefaults
+    /// iCloud: your preferences on your other devices (nil in tests, -mock).
+    @ObservationIgnored public var sync: SettingsSync?
+    /// Applying another device's change: don't send it back.
+    @ObservationIgnored private var applyingRemote = false
 
     public var enginePreference: EnginePreference { didSet { save(enginePreference.rawValue, "playback.engine") } }
     /// Bits per second; nil = unlimited (LAN).
@@ -158,5 +162,31 @@ public final class AppSettings {
     /// Bumper Dark, until someone picks another theme.
     public static let defaultTheme = "bumper"
 
-    private func save(_ value: Any, _ key: String) { defaults.set(value, forKey: key) }
+    private func save(_ value: Any, _ key: String) {
+        defaults.set(value, forKey: key)
+        if !applyingRemote { sync?.push(value, forKey: key) }
+    }
+
+    /// Another device changed something: what syncs, read again (only what
+    /// differs is set, so nothing re-renders for no reason).
+    public func reloadSynced() {
+        applyingRemote = true
+        defer { applyingRemote = false }
+        func set<T: Equatable>(_ path: ReferenceWritableKeyPath<AppSettings, T>, _ value: T) { if self[keyPath: path] != value { self[keyPath: path] = value } }
+        set(\.subtitleMode, SubtitleMode(rawValue: defaults.string(forKey: "subtitles.mode") ?? "") ?? .always)
+        set(\.subtitleScale, defaults.object(forKey: "subtitles.scale") as? Double ?? 1.0)
+        set(\.subtitleStyle, SubtitleStyle(rawValue: defaults.string(forKey: "subtitles.style") ?? "") ?? .classic)
+        set(\.subtitleFont, SubtitleFont(rawValue: defaults.string(forKey: "subtitles.font") ?? "") ?? .system)
+        set(\.audiobookRate, defaults.object(forKey: "audiobooks.rate") as? Double ?? 1.0)
+        set(\.smartSpeed, defaults.object(forKey: "audiobooks.smartSpeed") as? Bool ?? false)
+        set(\.autoplayNextEpisode, defaults.object(forKey: "playback.autoplayNext") as? Bool ?? true)
+        set(\.skipIntrosAutomatically, defaults.object(forKey: "playback.autoSkipIntro") as? Bool ?? false)
+        set(\.themeId, defaults.string(forKey: "appearance.theme") ?? Self.defaultTheme)
+        set(\.playThemeMusic, defaults.object(forKey: "detail.themeMusic") as? Bool ?? true)
+        set(\.themeMusicForMovies, defaults.object(forKey: "detail.themeMusicMovies") as? Bool ?? false)
+        set(\.onlineThemeFallback, defaults.object(forKey: "detail.themeMusicOnline") as? Bool ?? true)
+        set(\.hideSpoilers, defaults.object(forKey: "browse.hideSpoilers") as? Bool ?? true)
+        set(\.hiddenLibraries, Set(defaults.stringArray(forKey: "browse.hiddenLibraries") ?? []))
+        set(\.disableTranscoding, defaults.object(forKey: "playback.disableTranscoding") as? Bool ?? false)
+    }
 }
