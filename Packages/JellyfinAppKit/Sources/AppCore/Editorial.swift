@@ -12,6 +12,10 @@ public struct Editorial: Sendable {
     public struct Copy: Sendable, Equatable {
         public var title: String
         public var subtitle: String?
+        public init(title: String, subtitle: String?) {
+            self.title = title
+            self.subtitle = subtitle
+        }
     }
 
     public var now: Date
@@ -128,7 +132,7 @@ public struct Editorial: Sendable {
         let shows = unique(nextUp.map(seriesOrName))
         let named = shows.count > 3 ? "\(shows.prefix(2).joined(separator: ", ")) and \(number(shows.count - 2)) more" : list(shows)
         return Copy(title: pick(["What's next", "Next in your shows", "The next episode"], "nextup"),
-                    subtitle: shows.isEmpty ? nil : "New episodes of \(named).")
+                    subtitle: shows.isEmpty ? nil : "Next in \(named).")         // not "new episodes": that's its own row
     }
 
     /// A library's newest arrivals: "New this week" or "Recently added to Movies".
@@ -211,7 +215,7 @@ public struct Editorial: Sendable {
         }
     }
 
-    func number(_ n: Int) -> String {
+    public func number(_ n: Int) -> String {
         let words = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
         return n < words.count ? words[n] : String(n)
     }

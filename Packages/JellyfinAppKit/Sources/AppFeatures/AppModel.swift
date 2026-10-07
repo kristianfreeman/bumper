@@ -409,6 +409,10 @@ final class AppModel {
         case "queue": return [.queue]
         case "settings": return [.settings(parts[1])]
         case "profile": return [.profile]
+        case "new":                                       // new:episodes:<library id>
+            let rest = parts[1].split(separator: ":", maxSplits: 1).map(String.init)
+            guard rest.count == 2, let kind = ArrivalKind(rawValue: rest[0]) else { return [] }
+            return [.arrivals(ArrivalsSpec(kind: kind, libraryId: rest[1], title: kind.title))]
         case "grid":
             var q = ItemQuery(parentId: parts[1], includeItemTypes: [.movie])
             q.limit = 100

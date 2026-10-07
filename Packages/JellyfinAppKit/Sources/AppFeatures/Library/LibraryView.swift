@@ -372,6 +372,7 @@ struct CollectionPage: View {
                     }
                     if spec.items == nil {
                         FilterSentence(filter: $filter, genres: model.genres)
+                            .padding(.top, Platform.isTV ? 14 : 8)          // apart from the line above it
                     }
                 }
                 .tvFocusSection()
@@ -491,7 +492,7 @@ struct FilterSentence: View {
                         ForEach(CollectionFilter.Sort.allCases, id: \.self) { sort in Text(sortTitle(sort)).tag(sort) }
                     }
                 } label: {
-                    Label("Sort: \(sortShort)", systemImage: "arrow.up.arrow.down")
+                    Label(filter.sortTitle, systemImage: "arrow.up.arrow.down")
                 }
                 .accessibilityIdentifier("filter.sort")
                 ForEach(filter.parts, id: \.self) { part in
@@ -531,9 +532,6 @@ struct FilterSentence: View {
         return copy.sortTitle
     }
 
-    /// "A–Z", "Date added".
-    private var sortShort: String { filter.sort == .name ? "A–Z" : filter.sortTitle }
-
     /// The TV: "Movies · unwatched · Filter · Sort" — pills that open a row
     /// of choices beneath.
     private var sentence: some View {
@@ -551,7 +549,7 @@ struct FilterSentence: View {
                 Pill("Filter", systemImage: "line.3.horizontal.decrease", size: .small, active: editing == .add, alwaysShowsTitle: true) { toggle(.add) }
                     .focused($focus, equals: .add)
                     .accessibilityIdentifier("filter.add")
-                Pill("Sort: \(sortShort)", systemImage: "arrow.up.arrow.down", size: .small, active: editing == .sort, alwaysShowsTitle: true) { toggle(.sort) }
+                Pill(filter.sortTitle, systemImage: "arrow.up.arrow.down", size: .small, active: editing == .sort, alwaysShowsTitle: true) { toggle(.sort) }
                     .focused($focus, equals: .sort)
                     .accessibilityIdentifier("filter.sort")
             }
@@ -562,10 +560,15 @@ struct FilterSentence: View {
                 }
                 .tvFocusSection()
                 .id(editing)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        // On every change of row (one row replacing another doesn't "appear").
-        .onChange(of: editing) { _, now in if let now { focusFirstChoice(in: now) } }
+        // Opening a row leaves focus on its pill (Down goes into it); only
+        // when one row replaces another under focus (Filter → a part's
+        // values) does focus follow into the new row.
+        .onChange(of: editing) { _, now in
+            if let now, case .option = focus { focusFirstChoice(in: now) }
+        }
         .tvExitCommand(perform: editing == nil ? nil : { close() })
     }
 
@@ -622,7 +625,7 @@ struct FilterSentence: View {
         switch editing {
         case .add:
             if let part = CollectionFilter.Part(rawValue: String(choice.id.dropFirst(4))) {
-                self.editing = .part(part)                       // now pick its value
+                withAnimation(.spring(duration: 0.3, bounce: 0.1)) { self.editing = .part(part) }   // now pick its value
             }
             return
         case .sort:
@@ -655,7 +658,9 @@ struct FilterSentence: View {
         }
     }
 
-    private func toggle(_ e: Editing) { editing = editing == e ? nil : e }
+    private func toggle(_ e: Editing) {
+        withAnimation(.spring(duration: 0.3, bounce: 0.1)) { editing = editing == e ? nil : e }
+    }
 
     private func close(focusing target: Focus? = nil) {
         let fallback: Focus? = switch editing {
@@ -664,7 +669,7 @@ struct FilterSentence: View {
         case .sort: .sort
         case nil: nil
         }
-        editing = nil
+        withAnimation(.spring(duration: 0.3, bounce: 0.1)) { editing = nil }
         let wanted = target ?? fallback
         Task {
             // The pill may only exist after this render (a part just added),

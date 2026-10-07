@@ -130,13 +130,20 @@ public struct LandscapeCard: View {
     let item: BaseItem
     let width: CGFloat
     let kind: ArtworkKind
+    /// In place of the usual second line ("Season 2 · Monday").
+    var caption: String? = nil
+    /// On the art, bottom left ("+3 episodes").
+    var badge: String? = nil
     let action: () -> Void
     @Environment(\.theme) private var theme
 
-    public init(_ item: BaseItem, width: CGFloat = Layout.landscapeWidth, kind: ArtworkKind = .landscape, action: @escaping () -> Void) {
+    public init(_ item: BaseItem, width: CGFloat = Layout.landscapeWidth, kind: ArtworkKind = .landscape,
+                caption: String? = nil, badge: String? = nil, action: @escaping () -> Void) {
         self.item = item
         self.width = width
         self.kind = kind
+        self.caption = caption
+        self.badge = badge
         self.action = action
     }
 
@@ -145,6 +152,7 @@ public struct LandscapeCard: View {
     }
 
     private var subtitle: String? {
+        if let caption { return caption }
         if item.kind == .episode {
             return [item.episodeLabel, item.name].compactMap { $0 }.joined(separator: " · ")
         }
@@ -163,6 +171,14 @@ public struct LandscapeCard: View {
                     }
                     .overlay(alignment: .topTrailing) { WatchedBadge(item: item).padding(10) }
                     .overlay(alignment: .topLeading) { DownloadedBadge(item: item).padding(10) }
+                    .overlay(alignment: .bottomLeading) {
+                        if let badge {
+                            Text(badge).font(.caption2.weight(.semibold)).foregroundStyle(theme.colorScheme == .light ? .white : .black)
+                                .padding(.horizontal, Platform.isTV ? 12 : 8).padding(.vertical, Platform.isTV ? 5 : 3)
+                                .background(theme.accent, in: .capsule)
+                                .padding(Platform.isTV ? 12 : 8)
+                        }
+                    }
                     .cardFocus()
                 // Always two lines (an empty one if there's no subtitle): every
                 // card is the same height, so grids never re-measure as they scroll.

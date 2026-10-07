@@ -34,7 +34,7 @@ struct EditorialTests {
         #expect(e.lede == "You're 22 minutes from the end of Ancient Aliens. Two films and one show arrived this week.")
         #expect(e.resume.subtitle == "Two things on the go — about an hour and a quarter left between them.")
         #expect(e.recent(e.recentMovies, library: "Movies").title == "New this week")
-        #expect(e.upNext.subtitle == "New episodes of Lost.")
+        #expect(e.upNext.subtitle == "Next in Lost.")
 
         #expect(Editorial(now: evening, calendar: Self.calendar, userName: "sam").greeting.hasSuffix(", Sam."))
         let late = Editorial(now: Self.date(1), calendar: Self.calendar, userName: nil)

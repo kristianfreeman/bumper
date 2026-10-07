@@ -106,6 +106,7 @@ nonisolated enum Route: Hashable, Sendable {
     case item(BaseItem)
     case library(BaseItem)
     case grid(GridSpec)
+    case arrivals(ArrivalsSpec)
     case settings(String)          // deep links / screenshots: "root", "subtitles", …
     case profile
     case audiobook(String)
@@ -594,6 +595,7 @@ struct RoutedStack<Root: View>: View {
         case .library(let library):
             if library.collectionType == "books" { AudiobookLibraryView(libraries: [library]) } else { LibraryView(library: library) }
         case .grid(let spec): CollectionPage(spec: spec)
+        case .arrivals(let spec): ArrivalsPage(spec: spec)
         case .profile: ProfileView()
         case .audiobook(let id): AudiobookDetailView(bookId: id)
         case .queue: QueuePage()

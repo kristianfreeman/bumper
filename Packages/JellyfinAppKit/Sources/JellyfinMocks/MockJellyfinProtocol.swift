@@ -213,8 +213,9 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             return page(catalog.seasons[parts[1]] ?? [])
         }
         if parts.count == 3, parts[0] == "Shows", parts[2] == "Episodes" {
-            let season = q["seasonid"] ?? catalog.seasons[parts[1]]?.first?.id ?? ""
-            return page(catalog.episodes[season] ?? [])
+            // A season's, or (no season asked for) the whole show's, in order.
+            if let season = q["seasonid"] { return page(catalog.episodes[season] ?? []) }
+            return page((catalog.seasons[parts[1]] ?? []).flatMap { catalog.episodes[$0.id] ?? [] })
         }
         if parts.count == 2, parts[0] == "MediaSegments" {
             let seg = MediaSegment(id: "seg-intro", itemId: parts[1], type: .intro, startTicks: 5 * BaseItem.ticksPerSecond, endTicks: 35 * BaseItem.ticksPerSecond)
@@ -229,7 +230,7 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         let types = Set((q["includeitemtypes"] ?? "").split(separator: ",").map(String.init))
         switch q["parentid"] {
         case MockCatalog.moviesViewId: items = catalog.movies
-        case MockCatalog.showsViewId: items = catalog.series
+        case MockCatalog.showsViewId: items = types == ["Episode"] ? catalog.episodes.values.flatMap { $0 } : catalog.series
         default:
             if types == ["Episode"] {
                 items = catalog.episodes.values.flatMap { $0 }
@@ -255,7 +256,7 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         if filters.contains("IsResumable") { items = items.filter { $0.progress != nil && !$0.isPlayed } }
         if filters.contains("IsFavorite") { items = items.filter { $0.isFavorite } }
         switch q["sortby"] ?? "" {
-        case let s where s.contains("DateCreated"): items.sort { ($0.premiereDate ?? .distantPast) > ($1.premiereDate ?? .distantPast) }
+        case let s where s.contains("DateCreated"): items.sort { ($0.dateCreated ?? $0.premiereDate ?? .distantPast) > ($1.dateCreated ?? $1.premiereDate ?? .distantPast) }
         case let s where s.contains("CommunityRating"): items.sort { ($0.communityRating ?? 0) > ($1.communityRating ?? 0) }
         case let s where s.contains("Random"): items = items.shuffledDeterministic(seed: 42)
         case let s where s.contains("SortName"): items.sort { ($0.name ?? "") < ($1.name ?? "") }

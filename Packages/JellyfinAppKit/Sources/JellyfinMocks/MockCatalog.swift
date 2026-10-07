@@ -68,6 +68,9 @@ public struct MockCatalog: Sendable {
             s.imageBlurHashes = ["Primary": ["sp\(i)": MockCatalog.blurHashes[(i + 5) % MockCatalog.blurHashes.count]]]
             s.parentId = Self.showsViewId
             s.status = i % 3 == 0 ? "Continuing" : "Ended"
+            // Added every few days, the newest first; the oldest a year back.
+            let added = Date.now.addingTimeInterval(-Double(i * 9 + 2) * 86_400)
+            s.dateCreated = added
             s.providerIds = ["Tvdb": "76568"]                 // a real id: online theme fallback works
             let seasonCount = 1 + i % 4
             var unplayed = 0
@@ -88,6 +91,11 @@ public struct MockCatalog: Sendable {
                     ep.seriesName = s.name
                     ep.seasonId = seasonId
                     ep.overview = overview
+                    // The last season arriving an episode a few days apart, recently
+                    // for some shows; the rest when the show was added.
+                    ep.dateCreated = sn == seasonCount && i % 4 == 1
+                        ? Date.now.addingTimeInterval(-Double(((7 + (i + sn) % 7) - e) * 2 + i % 3) * 86_400)
+                        : added.addingTimeInterval(Double(sn * 10 + e) * 3_600)
                     ep.runTimeTicks = Int64(22 + (e * 7) % 40) * 60 * BaseItem.ticksPerSecond
                     ep.imageTags = ["Primary": "ep\(i)-\(sn)-\(e)"]
                     ep.imageBlurHashes = ["Primary": ["ep\(i)-\(sn)-\(e)": MockCatalog.blurHashes[(i + sn + e) % MockCatalog.blurHashes.count]]]

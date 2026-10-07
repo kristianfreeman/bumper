@@ -122,7 +122,7 @@ struct CollectionSection: View {
                 }
             } else {
                 // Two rows at most; with more behind it, the last place is "View all".
-                let more = section.seeAll != nil || section.items.count > columns * Self.rows
+                let more = section.seeAll != nil || section.arrivalsSpec != nil || section.items.count > columns * Self.rows
                 let shown = Array(section.items.prefix(columns * Self.rows - (more ? 1 : 0)))
                 let tiles = shown.count + (more ? 1 : 0)
                 // A plain grid (two rows at most): laid out exactly, nothing estimated.
@@ -138,7 +138,7 @@ struct CollectionSection: View {
                                         .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
                                 } else if more {
                                     ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) {
-                                        navigate(.grid(section.seeAllSpec))
+                                        if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) } else { navigate(.grid(section.seeAllSpec)) }
                                     }
                                 }
                             }
@@ -163,8 +163,12 @@ struct CollectionSection: View {
     private func card(_ item: BaseItem) -> some View {
         switch section.style {
         case .landscape:
-            LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
-            .contextMenu { ItemContextMenu(item: item) }
+            if let arrival = section.arrivals?.first(where: { $0.id == item.id }) {
+                ArrivalCard(arrival: arrival, width: width)
+            } else {
+                LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
+                    .contextMenu { ItemContextMenu(item: item) }
+            }
         case .poster:
             PosterCard(item, width: width) { app.select(item, navigate: navigate) }
                 .contextMenu { ItemContextMenu(item: item) }

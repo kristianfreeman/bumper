@@ -26,6 +26,9 @@ final class HomeShots: XCTestCase {
         Thread.sleep(forTimeInterval: 2); shot("home-1")
         XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 1); shot("home-2")
         XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 1); shot("home-3")
+        XCUIRemote.shared.press(.down); XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 1); shot("home-4")
+        XCUIRemote.shared.press(.down); XCUIRemote.shared.press(.down); Thread.sleep(forTimeInterval: 1); shot("home-5")
+        for _ in 0..<4 { XCUIRemote.shared.press(.up) }
         XCUIRemote.shared.press(.up); XCUIRemote.shared.press(.up)
         for _ in 0..<3 { XCUIRemote.shared.press(.right) }
         XCUIRemote.shared.press(.up); Thread.sleep(forTimeInterval: 0.8); shot("home-corner")

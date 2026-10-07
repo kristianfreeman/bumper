@@ -34,8 +34,8 @@ final class CollectionTests: XCTestCase {
         }
     }
 
-    /// Add → When added → This week: a pill appears, with no menus, and
-    /// focus comes back to it.
+    /// Filter → When added → This week: a pill appears, with no menus, and
+    /// focus comes back to it. Opening the row leaves focus on Filter.
     func testAddingAFilterInline() {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset", "-route", "grid:view-movies"]
@@ -45,10 +45,12 @@ final class CollectionTests: XCTestCase {
         let remote = XCUIRemote.shared
         for _ in 0..<4 where !add.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.3) }
         for _ in 0..<4 where !add.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
-        XCTAssertTrue(add.hasFocus, "couldn't reach Add")
+        XCTAssertTrue(add.hasFocus, "couldn't reach Filter")
         remote.press(.select)
         let whenAdded = app.buttons["filter.option.add.added"]
-        XCTAssertTrue(whenAdded.waitForExistence(timeout: 2), "Add didn't open its row")
+        XCTAssertTrue(whenAdded.waitForExistence(timeout: 2), "Filter didn't open its row")
+        XCTAssertTrue(add.hasFocus, "opening the row took focus off Filter")
+        remote.press(.down); Thread.sleep(forTimeInterval: 0.4)        // into the row
         for _ in 0..<6 where !whenAdded.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
         remote.press(.select)
         let week = app.buttons["filter.option.added.week"]
@@ -57,7 +59,6 @@ final class CollectionTests: XCTestCase {
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/filter-week.png"))
         }
-        print("FILTER-DEBUG week focused: \(week.hasFocus)")
         remote.press(.select)
         let pill = app.buttons["filter.added"]
         XCTAssertTrue(pill.waitForExistence(timeout: 2), "no 'added this week' pill")

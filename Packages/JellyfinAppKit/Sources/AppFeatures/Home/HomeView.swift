@@ -25,6 +25,10 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     var added: CollectionFilter.Added = .any
     var minRating: Double? = nil
     var decade: Int? = nil
+    /// New Episodes / New Shows / New Movies: each card's reason for being
+    /// here, and the page "View all" opens.
+    var arrivals: [Arrival]? = nil
+    var arrivalsSpec: ArrivalsSpec? = nil
 
     /// What "View all" opens: the narrowed query, or (a row with no query
     /// behind it, like Next Up) the whole row it was cut from.
@@ -76,13 +80,23 @@ final class HomeModel {
         async let views = client.userViews()
 
         let libraries = LibraryOrder.ordered(try await views.items, scores: usage).filter { $0.collectionType == "movies" || $0.collectionType == "tvshows" }
+        // What's new, by what it is: New Episodes and New Shows from each
+        // shows library, New Movies from each films one. With two libraries
+        // of a kind, the row says which ("New Shows · Anime").
+        let rows: [(lib: BaseItem, kind: ArrivalKind)] = libraries.flatMap { lib in
+            lib.collectionType == "tvshows" ? [(lib, ArrivalKind.episodes), (lib, .shows)] : [(lib, .movies)]
+        }
         let latest = try await withThrowingTaskGroup(of: (Int, BrowseSection).self) { group in
-            for (i, lib) in libraries.enumerated() {
+            for (i, row) in rows.enumerated() {
                 group.addTask {
-                    let items = try await client.latest(parentId: lib.id, limit: 20)
-                    var q = ItemQuery(parentId: lib.id, includeItemTypes: lib.collectionType == "tvshows" ? [.series] : [.movie], sortBy: ["DateCreated", "SortName"], sortOrder: .descending)
-                    q.limit = 100
-                    return (i, BrowseSection(id: "latest-\(lib.collectionType ?? "x")-\(lib.id)", title: lib.name ?? "Library", items: items, style: .landscape, seeAll: q, library: lib.name))
+                    let arrivals = (try? await Arrivals.fetch(row.kind, library: row.lib.id, client: client, limit: 20)) ?? []
+                    let sameKind = libraries.filter { $0.collectionType == row.lib.collectionType }.count > 1
+                    let title = row.kind.title + (sameKind ? " · \(row.lib.name ?? "")" : "")
+                    let id = "latest-\(row.kind == .movies ? "movies" : row.kind == .shows ? "tvshows" : "episodes")-\(row.lib.id)"
+                    var s = BrowseSection(id: id, title: title, items: arrivals.map(\.card), style: .landscape, library: row.lib.name)
+                    s.arrivals = arrivals
+                    s.arrivalsSpec = ArrivalsSpec(kind: row.kind, libraryId: row.lib.id, title: title)
+                    return (i, s)
                 }
             }
             var out: [(Int, BrowseSection)] = []
@@ -252,7 +266,12 @@ struct EditorialHome {
             switch section.id {
             case "resume": words = copy.resume
             case "nextup": words = copy.upNext
-            default: words = copy.recent(section.items, library: section.title)
+            default:
+                if let arrivals = section.arrivals, let spec = section.arrivalsSpec {
+                    words = Editorial.Copy(title: section.title, subtitle: Arrivals.lede(spec.kind, arrivals, now: now))
+                } else {
+                    words = copy.recent(section.items, library: section.title)
+                }
             }
             s.title = words.title
             s.subtitle = words.subtitle

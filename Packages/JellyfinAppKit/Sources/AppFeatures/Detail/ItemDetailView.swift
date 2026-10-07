@@ -44,6 +44,16 @@ final class DetailModel {
                 DetailPrefetcher.shared.store(full)
             }
             if !knownSeries && item.kind == .series { await loadSeries(client: client) }
+            // An episode opens in its show: that season, that episode in the
+            // header — not a page of its own, out of context.
+            if item.kind == .episode, let seriesId = item.seriesId, let series = try? await client.item(id: seriesId) {
+                let episode = item
+                TraceFile.write("detail", "episode \(episode.id) opens in \(seriesId), season \(episode.seasonId ?? "?")")
+                selectedSeason = episode.seasonId
+                selectedEpisode = episode
+                item = series
+                await loadSeries(client: client)
+            }
             self.similar = await similar?.items ?? []
         }
     }
@@ -53,16 +63,20 @@ final class DetailModel {
         async let next = try? client.nextUp(limit: 1, seriesId: item.id)
         self.seasons = await seasons?.items ?? []
         nextUp = await next?.items.first
-        selectedSeason = nextUp?.seasonId ?? self.seasons.first?.id
+        if selectedSeason == nil { selectedSeason = nextUp?.seasonId ?? self.seasons.first?.id }
         await loadEpisodes(client: client)
     }
 
+    /// Every season's episodes, in one row: the season bar follows along.
     func loadEpisodes(client: JellyfinClient) async {
-        guard let season = selectedSeason else { return }
-        episodes = (try? await client.episodes(seriesId: item.id, seasonId: season).items) ?? []
+        episodes = (try? await client.episodes(seriesId: item.id, seasonId: nil).items) ?? []
         if let selectedEpisode, episodes.contains(where: { $0.id == selectedEpisode.id }) { return }
-        selectedEpisode = episodes.first { $0.id == nextUp?.id } ?? episodes.first { !$0.isPlayed } ?? episodes.first
+        let inSeason = episodes.filter { $0.seasonId == selectedSeason }
+        selectedEpisode = episodes.first { $0.id == nextUp?.id } ?? inSeason.first { !$0.isPlayed } ?? inSeason.first ?? episodes.first
+        if let season = selectedEpisode?.seasonId { selectedSeason = season }
     }
+
+    func episodes(in season: String) -> [BaseItem] { episodes.filter { $0.seasonId == season } }
 
     /// What the big button plays: the item itself, or for a series the next
     /// unwatched episode.
@@ -101,6 +115,10 @@ struct ItemDetailView: View {
     /// pill opens to show its name (each pill only animates itself, and its
     /// neighbours jumped aside in a single frame).
     @FocusState private var actionFocus: String?
+    /// The episode row's scroll position (a season picked jumps it).
+    @State private var episodeScroll: String?
+    /// A season jumped to: the row passing other seasons on its way doesn't move the bar.
+    @State private var jumping: String?
 
     init(item: BaseItem) { _model = State(initialValue: DetailModel(item: item)) }
 
@@ -125,12 +143,7 @@ struct ItemDetailView: View {
                     .tvFocusSection()
 
                     if item.kind == .series && !model.seasons.isEmpty {
-                        seasonPicker
-                        Shelf("Episodes", items: model.episodes, style: .landscape) { ep in
-                            LandscapeCard(ep, kind: .still) { app.play(ep) }
-                                .contextMenu { ItemContextMenu(item: ep) }
-                                .onFocused { model.selectedEpisode = ep }
-                        }
+                        episodesRow
                     }
                     if let people = item.people, !people.isEmpty {
                         CastShelf(people: Array(people.prefix(24)))
@@ -297,7 +310,7 @@ struct ItemDetailView: View {
                     .focused($actionFocus, equals: "download")
             } else if item.kind == .series, let season = model.selectedSeason {
                 SeasonDownloadPill(seriesId: item.id, seasonId: season,
-                                   seasonName: model.seasons.first { $0.id == season }?.name ?? "Season", episodes: model.episodes, size: size)
+                                   seasonName: model.seasons.first { $0.id == season }?.name ?? "Season", episodes: model.episodes(in: season), size: size)
                     .focused($actionFocus, equals: "download")
             }
             moreMenu(item, size: size)
@@ -335,24 +348,46 @@ struct ItemDetailView: View {
         return prefix
     }
 
-    private var seasonPicker: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 20) {
-                ForEach(model.seasons) { season in
-                    Button(season.name ?? "Season") {
-                        model.selectedSeason = season.id
-                        guard let client = app.session?.client else { return }
-                        Task { await model.loadEpisodes(client: client) }
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(model.selectedSeason == season.id ? theme.accent : nil)
+    /// The season bar (like the top nav) over one row of every episode:
+    /// moving along the row moves the bar; picking a season jumps the row.
+    private var episodesRow: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SeasonBar(seasons: model.seasons, selected: model.selectedSeason) { season in
+                model.selectedSeason = season.id
+                if let first = model.episodes(in: season.id).first {
+                    jumping = season.id
+                    withAnimation(.smooth(duration: 0.4)) { episodeScroll = first.id }
                 }
             }
             .padding(.horizontal, Layout.horizontalMargin)
-            .padding(.vertical, 12)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
+                    ForEach(model.episodes) { ep in
+                        LandscapeCard(ep, kind: .still) { app.play(ep) }
+                            .contextMenu { ItemContextMenu(item: ep) }
+                            .onFocused {
+                                model.selectedEpisode = ep
+                                if let season = ep.seasonId, season != model.selectedSeason { model.selectedSeason = season }
+                            }
+                    }
+                }
+                .scrollTargetLayout()
+                .padding(.vertical, 28)
+            }
+            .contentMargins(.horizontal, Layout.horizontalMargin, for: .scrollContent)   // a jump lands inside the margin
+            .scrollPosition(id: $episodeScroll, anchor: .leading)
+            .scrollIndicators(.hidden)
+            .tvScrollClipDisabled()
+            // Touch and the Mac: the first episode in view says which season
+            // you're in (the TV says it by focus). A jump's passing seasons don't.
+            .onScrollTargetVisibilityChange(idType: BaseItem.ID.self, threshold: 0.6) { visible in
+                guard !Platform.isTV, let first = visible.first, let ep = model.episodes.first(where: { $0.id == first }), let season = ep.seasonId else { return }
+                if let target = jumping { if season == target { jumping = nil }; return }
+                if season != model.selectedSeason { model.selectedSeason = season }
+            }
+            .onChange(of: model.episodes.map(\.id)) { _, _ in episodeScroll = model.selectedEpisode?.id }
+            .tvFocusSection()
         }
-        .tvScrollClipDisabled()
-        .tvFocusSection()
     }
 
     private func toggleWatched() {
@@ -531,5 +566,56 @@ private struct WidePlayButton: View {
                     .accessibilityIdentifier("detail.onTV")
             }
         }
+    }
+}
+
+/// The seasons, as the top nav shows its tabs: the season you're in lit,
+/// focus (the TV) white.
+struct SeasonBar: View {
+    let seasons: [BaseItem]
+    let selected: String?
+    let pick: (BaseItem) -> Void
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Platform.isTV ? 6 : 2) {
+                ForEach(seasons) { season in
+                    Button { pick(season) } label: { SeasonTab(title: season.name ?? "Season", selected: selected == season.id) }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("season.\(season.indexNumber ?? 0)")
+                        .accessibilityAddTraits(selected == season.id ? .isSelected : [])
+                }
+            }
+            .padding(Platform.isTV ? 8 : 4)
+            .background(theme.primaryText.opacity(0.08), in: .capsule)
+            .padding(.vertical, Platform.isTV ? 12 : 4)
+        }
+        .scrollIndicators(.hidden)
+        .tvScrollClipDisabled()
+        .tvFocusSection()
+        .animation(.spring(duration: 0.3, bounce: 0.12), value: selected)
+    }
+}
+
+private struct SeasonTab: View {
+    let title: String
+    let selected: Bool
+    @Environment(\.isFocused) private var focused
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        Text(title)
+            .font(Platform.isTV ? .callout.weight(.semibold) : .subheadline.weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, Platform.isTV ? 28 : 14)
+            .padding(.vertical, Platform.isTV ? 12 : 7)
+            .foregroundStyle(focused ? Color.black : selected ? theme.primaryText : theme.secondaryText)
+            .background {
+                if focused { Capsule().fill(.white) } else if selected { Capsule().fill(theme.primaryText.opacity(0.16)) }
+            }
+            .scaleEffect(focused ? 1.06 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.15), value: focused)
+            .contentShape(.capsule)
     }
 }
