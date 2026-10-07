@@ -204,9 +204,16 @@ struct ItemDetailView: View {
             // Programmatic focus is ignored until the view has joined the focus
             // hierarchy (after the push transition), and how long that takes
             // varies — so request it until it actually lands, up to ~1 s.
-            for _ in 0..<20 where !playFocused {
+            // Off the TV a button only takes focus with keyboard navigation
+            // on: ask once (it never landed, and the page waited that second
+            // before loading).
+            if Platform.isTV {
+                for _ in 0..<20 where !playFocused {
+                    playFocused = true
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+            } else {
                 playFocused = true
-                try? await Task.sleep(for: .milliseconds(50))
             }
             guard let client = app.session?.client else { return }
             await model.load(client: client)

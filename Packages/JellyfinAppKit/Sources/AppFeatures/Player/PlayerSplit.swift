@@ -116,6 +116,9 @@ struct PlayerPanel: View {
         .animation(.easeInOut(duration: 0.2), value: findingSubtitles)
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+        // A container of its own: on its own, the panel's name went to every
+        // control in it (Close, Play, the menus all read "player.panel").
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")
     }
 }
