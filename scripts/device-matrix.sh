@@ -23,15 +23,15 @@ echo "$COUNT clips streamed from $MEDIA_URL → $OUT"
 for i in $CLIPS; do
   name=$(python3 -c "import json;print(json.load(open('$MEDIA/manifest.json'))[$i]['name'])")
   printf '▶ %-3s %-60s' "$i" "$name"
-  launch_app 75 -mock -mockHTTP -mockMediaURL "$MEDIA_URL" -autoplay "media-$i" -statsWindow 4
+  launch_app 75 -mock -mockHTTP -mockMediaURL "$MEDIA_URL" -autoplay "media-$i" -statsWindow 4 -traceStderr
   trace="$OUT/trace-$i.log"; result=TIMEOUT
   for _ in $(seq 1 40); do
     sleep 1
-    if pull Library/Caches/perf/trace.log "$trace" && grep -q -- "-autoplay media-$i\b" "$trace"; then
-      grep -qE "Playback failed|could not play" "$trace" && { result=FAILED; break; }
-      [[ $(grep -cE "\[(vlc|native)\] [0-9]+ s:" "$trace") -ge 3 ]] && { result=MEASURED; break; }
-      grep -q "Finished item" "$trace" && { result=ENDED; break; }
-    fi
+    # The trace streams back through the launch's console (copying files
+    # off the TV hangs while it's busy decoding).
+    cp "$OUT/console.log" "$trace" 2>/dev/null
+    grep -qE "Playback failed|could not play" "$trace" && { result=FAILED; break; }
+    [[ $(grep -cE "\[(vlc|native)\] [0-9]+ s:" "$trace") -ge 3 ]] && { result=MEASURED; break; }
     kill -0 "$LAUNCHER" 2>/dev/null || { result=EXITED; break; }
   done
   kill "$LAUNCHER" 2>/dev/null; wait "$LAUNCHER" 2>/dev/null

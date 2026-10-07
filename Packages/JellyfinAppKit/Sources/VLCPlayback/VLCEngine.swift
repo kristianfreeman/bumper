@@ -53,6 +53,9 @@ public final class VLCEngine: PlayerEngine {
     /// Resume point the opening seek is heading for (nil once reached).
     @ObservationIgnored private var startTarget: Duration?
     @ObservationIgnored private var statsTask: Task<Void, Never>?
+    /// The hardware decoder gave nothing for this item: decode it in software
+    /// from here on (see `watchDecoder`).
+    @ObservationIgnored private var softwareDecode = false
 
     private static let log = Perf.logger("vlc-engine")
 
@@ -64,7 +67,9 @@ public final class VLCEngine: PlayerEngine {
         player = VLCMediaPlayer(options: subtitleStyle.options + extra)
         if !extra.isEmpty { TraceFile.write("vlc", "player options: \(extra.joined(separator: " "))") }
         if ProcessInfo.processInfo.arguments.contains("-vlcLog") {   // VLC's own log (diagnostics)
-            if TraceFile.enabled {                                       // on device: a file we can pull
+            // `-traceStderr` too: to the console (streams back through a device
+            // launch; copying files off a busy TV hangs). Else a file to pull.
+            if TraceFile.enabled && !ProcessInfo.processInfo.arguments.contains("-traceStderr") {
                 let url = TraceFile.directory.appending(path: "vlc.log")
                 try? FileManager.default.createDirectory(at: TraceFile.directory, withIntermediateDirectories: true)
                 FileManager.default.createFile(atPath: url.path, contents: nil)
@@ -138,6 +143,16 @@ public final class VLCEngine: PlayerEngine {
         // late", and over half the frames dropped (an SD sitcom at 15 fps on
         // an Apple TV 4K). FFmpeg's unpacks them: every frame, none late.
         if Self.isAVI(plan.mediaSource.container) { media.addOption(":demux=avformat") }
+        // MPEG-4 Part 2 (DivX, Xvid, DivX 3, H.263): VLC's software decoder.
+        // VLCKit hands it to VideoToolbox, which rejected real DivX/Xvid files
+        // ("bad data", the session restarted over and over) and showed
+        // nothing; FFmpeg decodes SD MPEG-4 with room to spare.
+        // Interlaced H.264 too: VideoToolbox hands field-coded streams over a
+        // field at a time, twice the frame rate, and most were dropped (a
+        // 1080i25 film at 20 fps); in software, every frame.
+        let video = plan.mediaSource.videoStream
+        let interlacedH264 = video?.isInterlaced == true && (video?.codec ?? "").lowercased() == "h264"
+        if Self.isMPEG4Part2(video?.codec) || interlacedH264 || softwareDecode { media.addOption(":codec=avcodec") }
         // Diagnostics: `-vlcMediaOptions ":opt1 :opt2"` (A/B-testing VLC options on a device).
         for option in (UserDefaults.standard.string(forKey: "vlcMediaOptions") ?? "").split(separator: " ") {
             media.addOption(String(option))
@@ -163,6 +178,10 @@ public final class VLCEngine: PlayerEngine {
             }
         }
         startStats()
+    }
+
+    nonisolated static func isMPEG4Part2(_ codec: String?) -> Bool {
+        ["mpeg4", "msmpeg4", "msmpeg4v1", "msmpeg4v2", "msmpeg4v3", "h263", "divx", "xvid", "mp4v"].contains((codec ?? "").lowercased())
     }
 
     nonisolated static func isAVI(_ container: String?) -> Bool {
@@ -291,7 +310,17 @@ public final class VLCEngine: PlayerEngine {
         // older AVIs) they come out a frame or two early — "picture is too
         // late", and over half the frames dropped (an SD sitcom at 15 fps on
         // an Apple TV 4K). FFmpeg's unpacks them: every frame, none late.
-        if Self.isAVI(plan.mediaSource.container) { media.addOption(":demux=avformat") }   // see load()
+        if Self.isAVI(plan.mediaSource.container) { media.addOption(":demux=avformat") }
+        // MPEG-4 Part 2 (DivX, Xvid, DivX 3, H.263): VLC's software decoder.
+        // VLCKit hands it to VideoToolbox, which rejected real DivX/Xvid files
+        // ("bad data", the session restarted over and over) and showed
+        // nothing; FFmpeg decodes SD MPEG-4 with room to spare.
+        // Interlaced H.264 too: VideoToolbox hands field-coded streams over a
+        // field at a time, twice the frame rate, and most were dropped (a
+        // 1080i25 film at 20 fps); in software, every frame.
+        let video = plan.mediaSource.videoStream
+        let interlacedH264 = video?.isInterlaced == true && (video?.codec ?? "").lowercased() == "h264"
+        if Self.isMPEG4Part2(video?.codec) || interlacedH264 || softwareDecode { media.addOption(":codec=avcodec") }   // see load()
         media.addOption(":no-audio")
         thumbnailer?.cancel()
         thumbnailWaiter?.resume(returning: nil)
@@ -417,12 +446,35 @@ public final class VLCEngine: PlayerEngine {
                     TraceFile.write("vlc", "\(TraceFile.statsWindow) s: \(now.decoded - last.decoded) decoded, \(now.shown - last.shown) shown, \(now.lost - last.lost) dropped, \(now.late - last.late) late; \(String(format: "%.1f", Double(s.demuxBitrate) * 8)) Mb/s; rate \(self.player.rate)")
                     last = now
                 }
+                self.watchDecoder(decoded: Int(s.decodedVideo), bitrate: Double(s.demuxBitrate) * 8)
                 self.stats.droppedFrames = Int(s.lostPictures)
                 Metrics.shared.record(.droppedFrames, value: Double(s.lostPictures))
                 self.stats.decodedFrames = Int(s.decodedVideo)
                 if s.demuxBitrate > 0 { self.stats.bitrateMbps = Double(s.demuxBitrate) * 8 }     // bytes/µs → Mb/s
             }
         }
+    }
+
+    @ObservationIgnored private var decoderStall: (decoded: Int, seconds: Int) = (0, 0)
+
+    /// VideoToolbox can turn a stream down — real DivX, some broadcast H.264:
+    /// "bad data", the session restarted again and again, and nothing shown
+    /// while the file kept arriving. Playing, data coming in, and not one
+    /// frame decoded in 4 s: the item again from where it is, decoded in
+    /// software (once; FFmpeg managed every such file on an Apple TV 4K).
+    private func watchDecoder(decoded: Int, bitrate: Double) {
+        guard !softwareDecode, status == .playing, plan?.mediaSource.videoStream != nil else { decoderStall = (decoded, 0); return }
+        if decoded != decoderStall.decoded || bitrate < 0.2 { decoderStall = (decoded, 0); return }
+        decoderStall.seconds += 1
+        guard decoderStall.seconds >= 4, var next = plan else { return }
+        softwareDecode = true
+        let at = max(currentTime, startTarget ?? .zero)
+        TraceFile.write("vlc", "no frames decoded in 4 s with data arriving: the hardware decoder turned it down — again in software from \(Int(at.seconds)) s")
+        Self.log.notice("VideoToolbox decoded nothing in 4 s: software decode from \(at.seconds, privacy: .public) s")
+        next.startPosition = at
+        statsTask?.cancel()
+        player.stop()
+        Task { [weak self] in try? await self?.load(next, autoplay: true) }
     }
 
     /// What VLC draws into (diagnostics): its views and layers and their
