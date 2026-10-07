@@ -206,6 +206,65 @@ final class PlayerTests: XCTestCase {
         }
     }
 
+    /// Chapters (the mock's: 0:30 "The Harbour at Night", 1:00 "Chapter 03",
+    /// 1:30 "Landfall"): marked on the timeline; the card from the icon row
+    /// starts on the one playing, and choosing another goes there.
+    func testChaptersCardGoesToAChapter() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]   // 2 min MP4 → AVPlayer
+        app.launch()
+        let time = app.staticTexts["player.time"]
+        XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 500 }, timeout: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        remote.press(.playPause)                                     // before the mock's intro (0:05) offers Skip
+        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].waitForExistence(timeout: 2), "didn't pause")
+        XCTAssertTrue(app.descendants(matching: .any)["timeline.chapters"].waitForExistence(timeout: 3), "no chapter marks on the timeline")
+        remote.press(.up)
+        let pill = app.buttons["control.chapters"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 3), "no Chapters in the player")
+        for _ in 0..<6 where !pill.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(pill.hasFocus, "couldn't reach Chapters")
+        remote.press(.select)
+        let first = app.buttons["option.chapter-0"], third = app.buttons["option.chapter-2"]
+        XCTAssertTrue(first.waitForExistence(timeout: 2), "the Chapters card didn't open")
+        XCTAssertTrue(waitForFocus(first, timeout: 2), "focus should start on the chapter playing")
+        XCTAssertEqual(first.value as? String, "selected", "the chapter playing isn't marked")
+        XCTAssertTrue(third.label.contains("Chapter 3"), "an unnamed chapter should read \"Chapter 3\" (\(third.label))")
+        for _ in 0..<4 where !third.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(third.hasFocus, "couldn't reach the third chapter")
+        remote.press(.select)
+        XCTAssertTrue(waitFor(time, label: { abs((Int($0) ?? 0) - 60_000) < 1_500 }, timeout: 4), "didn't go to 1:00 (at \(time.label) ms)")
+        XCTAssertTrue(waitForFocus(pill, timeout: 2), "focus didn't return to the Chapters pill")
+    }
+
+    /// Scrubbing names the chapter under the head, under the thumbnail.
+    func testScrubbingNamesTheChapter() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]
+        app.launch()
+        let time = app.staticTexts["player.time"]
+        XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 500 }, timeout: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        remote.press(.playPause)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].waitForExistence(timeout: 2), "didn't pause")
+        let chapter = app.staticTexts["scrub.chapter"]
+        for _ in 0..<3 { remote.press(.right) }                       // the head at ~0:31
+        XCTAssertTrue(waitFor(chapter, label: { $0 == "The Harbour at Night" }, timeout: 2), "scrub shows \(chapter.exists ? chapter.label : "no chapter")")
+        for _ in 0..<6 { remote.press(.right) }                       // ~1:31
+        XCTAssertTrue(waitFor(chapter, label: { $0 == "Landfall" }, timeout: 2), "scrub shows \(chapter.exists ? chapter.label : "no chapter")")
+        remote.press(.menu)                                          // cancel the scrub
+    }
+
+    /// A slow start (every media request 1.5 s late) says where it's going.
+    func testSlowStartSaysWhereItsGoing() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-mediaLatency", "1500",
+                               "-autoplay", "media-2", "-startAt", "42"]
+        app.launch()
+        let message = app.staticTexts["player.startMessage"]
+        XCTAssertTrue(waitFor(message, label: { $0 == "Getting to 0:42…" }, timeout: 12), "no message (\(message.exists ? message.label : "none"))")
+    }
+
     private func waitForFocus(_ element: XCUIElement, timeout: TimeInterval = 1) -> Bool {
         waitFor(element, label: { _ in element.hasFocus }, timeout: timeout)
     }

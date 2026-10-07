@@ -7,9 +7,9 @@ import SwiftUI
 
 /// The menus the icon row above the timeline opens. Playback holds
 /// Background and the sleep timer (which live only here: they're about
-/// what's playing).
+/// what's playing). Chapters is last, and only there for an item with some.
 enum PlayerMenu: String, CaseIterable, Hashable {
-    case subtitles, audio, playback, info
+    case subtitles, audio, playback, info, chapters
 
     var symbol: String {
         switch self {
@@ -17,6 +17,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         case .audio: "speaker.wave.2"
         case .playback: "gearshape"
         case .info: "info.circle"
+        case .chapters: "list.bullet"
         }
     }
 
@@ -26,6 +27,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         case .audio: "Audio"
         case .playback: "Playback"
         case .info: "Info"
+        case .chapters: "Chapters"
         }
     }
 }
@@ -142,7 +144,7 @@ struct TransportBar: View {
                     .animation(.easeOut(duration: 0.2), value: openMenu)
                 Spacer(minLength: 0)
                 HStack(spacing: 18) {
-                    ForEach(PlayerMenu.allCases, id: \.self) { menu in
+                    ForEach(menus, id: \.self) { menu in
                         // On (subtitles, Background, a sleep timer): a filled glyph,
                         // not a ring — a ring read as focus.
                         Pill(menu.title, systemImage: menu.symbol + (lit(menu) ? ".fill" : ""),
@@ -164,7 +166,7 @@ struct TransportBar: View {
             .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
             .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
             Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                     scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused,
+                     scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused, chapters: controller.chapters,
                      seek: { t in Task { await controller.seek(to: t) } })
         }
         .padding(.horizontal, 90)
@@ -172,6 +174,11 @@ struct TransportBar: View {
         .padding(.bottom, 64)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
+    }
+
+    /// Chapters only for an item with more than one.
+    private var menus: [PlayerMenu] {
+        PlayerMenu.allCases.filter { $0 != .chapters || controller.chapters.count > 1 }
     }
 
     /// Lit: subtitles on; Background or a sleep timer on.
@@ -244,6 +251,8 @@ struct Timeline: View {
     let scrubTime: Duration?
     let scrubThumb: CGImage?
     let paused: Bool
+    /// Marked along the bar; while scrubbing, the one under the head is named.
+    var chapters: [PlayerChapter] = []
     /// Touch and the pointer: drag along the bar, let go to seek there.
     var seek: (Duration) -> Void = { _ in }
     @State private var dragging: Duration?
@@ -260,12 +269,16 @@ struct Timeline: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.25))
                     Capsule().fill(.white.opacity(shown == nil ? 1 : 0.45)).frame(width: max(8, played))
+                    marks(width)
                     if shown != nil {
                         Capsule().fill(.white).frame(width: 4, height: 34).offset(x: head - 2)
                     }
                     if let shown, scrubTime != nil || !Platform.isTV {
-                        preview(shown)
-                            .position(x: min(max(head, Self.thumbSize.width / 2), width - Self.thumbSize.width / 2), y: -Self.thumbSize.height / 2 - 54)
+                        // Hung from its foot, so a chapter name under the
+                        // thumbnail grows it upwards, clear of the bar.
+                        Color.clear.frame(width: 0, height: 0)
+                            .overlay(alignment: .bottom) { preview(shown).fixedSize() }
+                            .position(x: min(max(head, Self.thumbSize.width / 2), width - Self.thumbSize.width / 2), y: -34)
                     }
                 }
                 .frame(height: shown == nil ? 8 : 12)
@@ -310,6 +323,15 @@ struct Timeline: View {
             .clipShape(.rect(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white, lineWidth: 3))
             .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
+            if let chapter = PlayerChapter.current(in: chapters, at: at), chapters.count > 1 {
+                Text(chapter.name)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .frame(width: Self.thumbSize.width)
+                    .shadow(color: .black.opacity(0.7), radius: 6)
+                    .accessibilityIdentifier("scrub.chapter")
+            }
             Text(at.clockString)
                 .font(.headline.monospacedDigit())
                 .foregroundStyle(.black)
@@ -318,6 +340,24 @@ struct Timeline: View {
                 .background(.white, in: .capsule)
         }
         .accessibilityIdentifier("scrub.preview")
+    }
+
+    /// Small, quiet notches where chapters start (not at the very ends,
+    /// and never crowded: see `PlayerChapter.marks`).
+    private func marks(_ width: CGFloat) -> some View {
+        let marks = PlayerChapter.marks(chapters, duration: duration)
+        let notch: CGFloat = Platform.isTV ? 3 : 2
+        return ZStack(alignment: .leading) {
+            ForEach(marks, id: \.self) { at in
+                Rectangle().fill(.black.opacity(0.5)).frame(width: notch).offset(x: at * width - notch / 2)
+            }
+        }
+        .frame(width: width, alignment: .leading)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(marks.count) chapters")
+        .accessibilityIdentifier("timeline.chapters")
+        .accessibilityHidden(marks.isEmpty)
     }
 
     private func at(_ x: CGFloat, _ width: CGFloat) -> Duration {
@@ -536,6 +576,25 @@ struct MenuCard: View {
                 .padding(.horizontal, 26)
                 .focusable()
                 .focused(focus, equals: .option("info"))
+        case .chapters:
+            // Each with its picture and where it starts; the one playing checked.
+            let current = controller.currentChapter
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(controller.chapters) { chapter in
+                        OptionRow(title: chapter.name, detail: chapter.start.clockString, selected: chapter.id == current?.id,
+                                  id: "chapter-\(chapter.index)", focus: focus,
+                                  thumbnail: AnyView(ChapterThumb(chapter: chapter, controller: controller, width: 144))) {
+                            Task { await controller.seek(to: chapter.start) }
+                            close()
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .tvScrollClipDisabled()
+            .frame(maxHeight: min(600, CGFloat(controller.chapters.count) * 112 + 12))
         }
     }
 
@@ -576,6 +635,8 @@ struct MenuCard: View {
             case .minutes(let m): .option(SleepTimer.presets.contains(m) ? "sleep-\(m)" : "sleep-off")
             }
         case .info: .option("info")
+        // The one playing, so Up and Down go to the ones either side.
+        case .chapters: .option((controller.currentChapter ?? controller.chapters.first).map { "chapter-\($0.index)" } ?? "chapters-none")
         }
     }
 }
@@ -596,11 +657,14 @@ private struct OptionRow: View {
     var trailing: String? = nil
     /// The detail explains the row: shown only on it, not over the whole card.
     var detailWhenFocused = false
+    /// A picture after the check (a chapter's).
+    var thumbnail: AnyView? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Face(title: title, detail: detail, selected: selected, highlighted: highlighted, symbol: symbol, trailing: trailing, detailWhenFocused: detailWhenFocused)
+            Face(title: title, detail: detail, selected: selected, highlighted: highlighted, symbol: symbol, trailing: trailing,
+                 detailWhenFocused: detailWhenFocused, thumbnail: thumbnail)
         }
             .buttonStyle(BareButtonStyle())
             .focused(focus, equals: .option(id))
@@ -616,6 +680,7 @@ private struct OptionRow: View {
         let symbol: String?
         let trailing: String?
         let detailWhenFocused: Bool
+        let thumbnail: AnyView?
         @Environment(\.isFocused) private var focused
         @Environment(\.theme) private var theme
         /// A focus-only detail, changed in an animation: tvOS moves focus
@@ -631,6 +696,7 @@ private struct OptionRow: View {
                 .font(.body.weight(.bold))
                 .foregroundStyle(focused ? Color.black : selected || highlighted ? theme.accent : .white.opacity(0.8))
                 .frame(width: 30)
+                if let thumbnail { thumbnail }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1).truncationMode(.middle)
                     if let detail, showsDetail {

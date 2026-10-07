@@ -108,7 +108,7 @@ struct TouchControls: View {
     private var bottom: some View {
         VStack(alignment: .leading, spacing: short ? 4 : 8) {
             Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                     scrubTime: nil, scrubThumb: nil, paused: engine.status == .paused,
+                     scrubTime: nil, scrubThumb: nil, paused: engine.status == .paused, chapters: controller.chapters,
                      seek: { t in Task { await controller.seek(to: t) }; poke() })
             HStack(spacing: 10) {
                 Text(facts)
@@ -123,6 +123,8 @@ struct TouchControls: View {
                 if !docked {
                     glassButton("info.circle", "Info", size: 15) { showsInfo = true }
                         .accessibilityIdentifier("control.info")
+                    // Docked, they're a row of pictures in the panel below.
+                    if controller.chapters.count > 1 { chaptersMenu }
                 }
             }
         }
@@ -212,6 +214,35 @@ struct TouchControls: View {
         .bareMenu()
         .accessibilityLabel("Playback")
         .accessibilityIdentifier("control.playback")
+        .simultaneousGesture(TapGesture().onEnded { poke() })
+    }
+
+    /// Chapters: each by name and where it starts, the one playing checked.
+    /// Choosing one goes there (the one playing: back to its start).
+    private var chaptersMenu: some View {
+        let current = controller.currentChapter
+        return Menu {
+            ForEach(controller.chapters) { chapter in
+                Button {
+                    Task { await controller.seek(to: chapter.start) }
+                    poke()
+                } label: {
+                    if chapter.id == current?.id {
+                        Label { Text(chapter.name); Text(chapter.start.clockString) } icon: { Image(systemName: "checkmark") }
+                    } else {
+                        Text(chapter.name)
+                        Text(chapter.start.clockString)
+                    }
+                }
+                .accessibilityIdentifier("chapter.\(chapter.index)")
+            }
+        } label: {
+            glassFace("list.bullet", size: 15)
+        }
+        .bareMenu()
+        .accessibilityLabel("Chapters")
+        .accessibilityValue(current?.name ?? "")
+        .accessibilityIdentifier("control.chapters")
         .simultaneousGesture(TapGesture().onEnded { poke() })
     }
 

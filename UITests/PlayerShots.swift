@@ -21,6 +21,7 @@ final class PlayerShots: XCTestCase {
         remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("6-audio")
         remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("7-playback")
         remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("8-info")
+        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.8); shot("9-chapters")
     }
 
     /// The About band on an episode (with the next episode beside it).

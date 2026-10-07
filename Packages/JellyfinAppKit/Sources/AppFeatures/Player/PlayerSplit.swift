@@ -102,6 +102,7 @@ struct PlayerPanel: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) {
                         ItemAbout(controller: controller, showsName: false)
+                        if controller.chapters.count > 1 { ChapterStrip(controller: controller, poke: poke) }
                         PanelQueue(current: controller.item.id)
                     }
                     .padding(.horizontal, Layout.device == .phone ? 16 : 28)     // in line with the controls
