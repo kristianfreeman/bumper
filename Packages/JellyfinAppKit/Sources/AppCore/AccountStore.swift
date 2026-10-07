@@ -65,6 +65,8 @@ public final class AccountStore {
     @ObservationIgnored private let keychain: Keychain
     @ObservationIgnored private let protocolClasses: [AnyClass]
     @ObservationIgnored private var sessions: [String: URLSession] = [:]
+    /// Your sign-ins on your other devices (iCloud Keychain); nil in tests.
+    @ObservationIgnored public var cloud: CloudSignIns?
 
     private enum Keys {
         static let servers = "accounts.servers"
@@ -151,8 +153,45 @@ public final class AccountStore {
         keychain.set(result.accessToken, for: tokenKey(account.id))
         activeAccountId = account.id
         persist()
+        cloud?.upsert(CloudSignIn(server: server, account: account, token: result.accessToken))
+        markSeenInCloud(account.id)
         return session(for: account, token: result.accessToken, server: server)
     }
+
+    /// Signed in with another device's token (its server has Quick Connect
+    /// off): the same sign-in, shared.
+    @discardableResult
+    public func adopt(_ entry: CloudSignIn) -> UserSession {
+        upsert(server: entry.server)
+        var account = entry.account
+        account.lastUsed = .now
+        accounts.removeAll { $0.id == account.id }
+        accounts.insert(account, at: 0)
+        keychain.set(entry.token, for: tokenKey(account.id))
+        activeAccountId = account.id
+        persist()
+        markSeenInCloud(account.id)
+        return session(for: account, token: entry.token, server: entry.server)
+    }
+
+    /// Signed out on another device: the account was in iCloud, and isn't now.
+    public var signedOutElsewhere: Bool {
+        guard let cloud, let id = activeAccountId, let account = accounts.first(where: { $0.id == id }),
+              defaults.bool(forKey: "cloud.seen.\(id)") else { return false }
+        return !cloud.load().contains { $0.server.id == account.serverId && $0.account.userId == account.userId }
+    }
+
+    /// Signed in before iCloud sign-in existed: put it there for the others.
+    public func shareActive() {
+        guard let cloud, let id = activeAccountId, let account = accounts.first(where: { $0.id == id }),
+              let server = servers.first(where: { $0.id == account.serverId }), let token = keychain.get(tokenKey(id)) else { return }
+        if !cloud.load().contains(where: { $0.server.id == server.id && $0.account.userId == account.userId }) {
+            cloud.upsert(CloudSignIn(server: server, account: account, token: token))
+        }
+        markSeenInCloud(id)
+    }
+
+    private func markSeenInCloud(_ accountId: String) { defaults.set(cloud != nil, forKey: "cloud.seen.\(accountId)") }
 
     /// The server's current name and picture for an account (they change
     /// there: a new profile picture has a new tag). Returns whether it changed.
@@ -168,6 +207,10 @@ public final class AccountStore {
     }
 
     public func signOut(_ accountId: String) {
+        if let account = accounts.first(where: { $0.id == accountId }) {
+            cloud?.remove(serverId: account.serverId, userId: account.userId)          // everywhere
+        }
+        defaults.removeObject(forKey: "cloud.seen.\(accountId)")
         accounts.removeAll { $0.id == accountId }
         keychain.remove(tokenKey(accountId))
         if activeAccountId == accountId { activeAccountId = nil }

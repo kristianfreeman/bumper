@@ -226,6 +226,7 @@ final class AppModel {
         themes = ThemeStore(settings: settings)
         capabilities = Perf.measureSync("capabilities.probe", "launch.capabilities") { DeviceCapabilities.probe() }
 
+        if !options.mock { accounts.cloud = CloudSignIns() }               // your sign-in on your other devices
         session = accounts.restoreActiveSession()
         if options.mockHTTP, let url = Self.startMockServer() {
             // Fresh session every launch: the loopback URL is what AVPlayer sees.
@@ -239,6 +240,9 @@ final class AppModel {
             // server died with that process.
             let server = ServerRecord(id: "mock-server", name: "Mock Jellyfin", url: MockJellyfinProtocol.baseURL, version: "10.11.11")
             session = accounts.signIn(server: server, result: MockJellyfinProtocol.authenticationResult)
+        }
+        if !options.mock, session != nil {
+            if accounts.signedOutElsewhere { signOutHere(reason: "signed out on another device") } else { accounts.shareActive() }
         }
         Self.configureAudioSession()
         InputTrace.install()
@@ -358,6 +362,52 @@ final class AppModel {
     private func sessionChanged() {
         guard let session else { return }
         downloads?.use(session.client, for: session.account.id)
+    }
+
+    /// Signing in from iCloud: who, while it happens (the first screen says so).
+    private(set) var cloudSignIn: String?
+
+    /// No sign-in on this device, but one on another (iCloud Keychain): sign
+    /// in as that person with a sign-in of this device's own — its Quick
+    /// Connect code approved with the shared one — or, with Quick Connect
+    /// off on the server, the shared sign-in itself.
+    func signInFromCloud() async {
+        guard session == nil, cloudSignIn == nil, let entry = accounts.cloud?.load().first else { return }
+        cloudSignIn = "\(entry.account.userName) on \(entry.server.name)"
+        defer { cloudSignIn = nil }
+        TraceFile.write("accounts", "signing in from iCloud as \(entry.account.userName) on \(entry.server.name)")
+        let mine = accounts.client(for: entry.server, userId: entry.account.userId)
+        let theirs = accounts.client(for: entry.server, userId: entry.account.userId).authenticated(token: entry.token, userId: entry.account.userId)
+        do {
+            guard try await mine.quickConnectEnabled() else { throw JellyfinError.unauthorized }
+            let state = try await mine.quickConnectInitiate()
+            try await theirs.quickConnectAuthorize(code: state.code)
+            for _ in 0..<10 {
+                if (try? await mine.quickConnectState(secret: state.secret))?.authenticated == true { break }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            let result = try await mine.authenticate(quickConnectSecret: state.secret)
+            TraceFile.write("accounts", "signed in from iCloud with this device's own sign-in")
+            didSignIn(accounts.signIn(server: entry.server, result: result))
+        } catch {
+            // Quick Connect off (or refused): the shared sign-in, if it still works.
+            guard (try? await theirs.currentUser()) != nil else {
+                TraceFile.write("accounts", "iCloud sign-in no longer works: \(error)")
+                return
+            }
+            TraceFile.write("accounts", "signed in from iCloud with the shared sign-in (\(error))")
+            didSignIn(accounts.adopt(entry))
+        }
+    }
+
+    /// Signed out on another device: here too.
+    private func signOutHere(reason: String) {
+        guard let session else { return }
+        TraceFile.write("accounts", reason)
+        let client = session.client
+        Task { try? await client.logout() }
+        accounts.signOut(session.account.id)
+        self.session = nil
     }
 
     func didSignIn(_ session: UserSession) {
@@ -554,6 +604,8 @@ final class AppModel {
     #endif
 
     func refreshFromOtherDevices() {
+        if !options.mock, session != nil, accounts.signedOutElsewhere { signOutHere(reason: "signed out on another device"); return }
+        if session == nil { Task { await signInFromCloud() } }
         Task { await queueSync?.pull() }
         if let outbox, let client = session?.client { Task { await outbox.deliver(with: client) } }
         Task { await refreshProfile() }

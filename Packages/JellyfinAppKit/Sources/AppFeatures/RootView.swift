@@ -79,8 +79,17 @@ struct RootView: View {
                                 .environment(\.jellyfin, app.session?.client)
                         }
                     }
+            } else if let who = app.cloudSignIn {
+                // Signed in on another of your devices: this one follows.
+                VStack(spacing: 18) {
+                    ProgressView()
+                    Text("Signing in as \(who)…").font(.headline).foregroundStyle(theme.primaryText)
+                    Text("From your other devices.").font(.callout).foregroundStyle(theme.secondaryText)
+                }
+                .accessibilityIdentifier("onboarding.cloudSignIn")
             } else {
                 OnboardingView()
+                    .task { await app.signInFromCloud() }
             }
         }
         .overlay(alignment: .topTrailing) {

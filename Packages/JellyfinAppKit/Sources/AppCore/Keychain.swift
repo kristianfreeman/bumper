@@ -6,9 +6,13 @@ import Security
 /// Support when space is low.
 public struct Keychain: Sendable {
     public let service: String
+    /// iCloud Keychain: the item goes to this person's other devices
+    /// (end-to-end encrypted; the same app on each reads it).
+    public let synchronizable: Bool
 
-    public init(service: String = Brand.bundleIdentifier) {
+    public init(service: String = Brand.bundleIdentifier, synchronizable: Bool = false) {
         self.service = service
+        self.synchronizable = synchronizable
     }
 
     public func set(_ value: String, for account: String) {
@@ -38,6 +42,8 @@ public struct Keychain: Sendable {
     }
 
     private func baseQuery(_ account: String) -> [CFString: Any] {
-        [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account]
+        var q: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account]
+        if synchronizable { q[kSecAttrSynchronizable] = kCFBooleanTrue }
+        return q
     }
 }
