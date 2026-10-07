@@ -9,9 +9,10 @@ import XCTest
 final class PlayerTests: XCTestCase {
     static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia").path
 
-    func launchPlaying(_ clip: Int, extra: [String] = []) -> XCUIApplication {
+    /// `clip` of TestMedia/ (5 s each), or of TestMedia/seek (two minutes).
+    func launchPlaying(_ clip: Int, from folder: String = "", extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "media-\(clip)"] + extra
+        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media + folder, "-autoplay", "media-\(clip)"] + extra
         app.launch()
         return app
     }
@@ -111,47 +112,50 @@ final class PlayerTests: XCTestCase {
     }
 
     /// Select with the controls down brings them up and the video plays on;
-    /// on the icons, Left from the first goes nowhere; Play/Pause there
-    /// still pauses and plays.
+    /// on the icons, Play/Pause still pauses and plays, and Left from the
+    /// first goes nowhere.
     func testSelectShowsTheControlsAndPlayPauseWorksFromTheIcons() {
-        let app = launchPlaying(6)
+        let app = launchPlaying(2, from: "/seek", extra: ["-startAt", "40"])     // past the intro; too long to end mid-test
         XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
-        Thread.sleep(forTimeInterval: 5)                              // the controls hide
+        Thread.sleep(forTimeInterval: 1.2)                            // the controls hide (in 0.8 s: -quickTimers)
         let remote = XCUIRemote.shared
         let subtitles = app.buttons["control.subtitles"]
         XCTAssertFalse(subtitles.exists, "the controls didn't hide")
         remote.press(.select)
-        XCTAssertTrue(subtitles.waitForExistence(timeout: 2), "Select didn't bring the controls up")
+        XCTAssertTrue(subtitles.exists(within: 2), "Select didn't bring the controls up")      // (they go again in 0.8 s)
         XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists, "Select paused instead of only showing the controls")
         remote.press(.up)
         XCTAssertTrue(waitForFocus(subtitles, timeout: 2), "Up didn't reach the icons")
+        remote.press(.playPause)                                     // paused, the controls stay up
+        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].exists(within: 2), "Play/Pause on the icons didn't pause")
         remote.press(.left)
         Thread.sleep(forTimeInterval: 0.5)
         XCTAssertTrue(subtitles.hasFocus, "Left from the first icon left the icons")
         remote.press(.playPause)
-        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].waitForExistence(timeout: 2), "Play/Pause on the icons didn't pause")
-        Thread.sleep(forTimeInterval: 0.6)
-        remote.press(.playPause)
-        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].waitForExistence(timeout: 2), "Play/Pause on the icons didn't resume")
+        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists(within: 2), "Play/Pause on the icons didn't resume")
     }
 
-    /// Left alone on the icons while it plays, the controls go (8 s).
+    /// Left alone on the icons while it plays, the controls go: 8 s, 1.6 at
+    /// -quickTimers' pace (from the video, 0.8).
     func testIdleControlsHideFromTheIcons() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "series-001-s1-e2", "-startAt", "300"]   // 10 minutes, past its intro
+        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "series-001-s1-e2", "-startAt", "300"]   // 10 minutes, past its intro
         app.launch()
         XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
         let remote = XCUIRemote.shared
         let subtitles = app.buttons["control.subtitles"]
-        Thread.sleep(forTimeInterval: 5)                              // up at the start; gone (Select now shows, not pauses)
+        Thread.sleep(forTimeInterval: 1.2)                            // up at the start; gone (Select now shows, not pauses)
         remote.press(.select)
-        XCTAssertTrue(subtitles.waitForExistence(timeout: 2), "Select didn't bring the controls up")
+        XCTAssertTrue(subtitles.exists(within: 2), "Select didn't bring the controls up")      // (they go again in 0.8 s)
         remote.press(.up)
-        XCTAssertTrue(waitForFocus(subtitles, timeout: 2), "Up didn't reach the icons")
-        Thread.sleep(forTimeInterval: 6)
-        XCTAssertTrue(subtitles.exists, "the controls went too soon")
-        Thread.sleep(forTimeInterval: 3.5)
-        XCTAssertFalse(subtitles.exists, "the controls stayed up, left alone")
+        XCTAssertTrue(subtitles.waitForFocus(), "Up didn't reach the icons")
+        let onIcons = Date()
+        XCTAssertTrue(subtitles.gone(within: 4), "the controls stayed up, left alone")
+        // From when focus was seen there (a little after it landed): the
+        // video's 0.8 s would be well under a second.
+        let stayed = Date().timeIntervalSince(onIcons)
+        print("IDLE-HIDE stayed \(stayed) s")
+        XCTAssertGreaterThan(stayed, 1.2, "the controls went too soon (after \(stayed) s)")
     }
 
     /// One press of Play/Pause pauses — and stays paused. (It could arrive
@@ -173,7 +177,7 @@ final class PlayerTests: XCTestCase {
         let seekMedia = Self.media + "/seek"
         for clip in [0, 2] {                                  // MKV → VLCKit, MP4 → AVPlayer
             let app = XCUIApplication()
-            app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", seekMedia, "-autoplay", "media-\(clip)"]
+            app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", seekMedia, "-autoplay", "media-\(clip)"]
             app.launch()
             let time = app.staticTexts["player.time"], head = app.staticTexts["player.head"]
             XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 1000 }, timeout: 8), "clip \(clip) didn't start")
@@ -199,7 +203,7 @@ final class PlayerTests: XCTestCase {
     /// starts on the one playing, and choosing another goes there.
     func testChaptersCardGoesToAChapter() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]   // 2 min MP4 → AVPlayer
+        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]   // 2 min MP4 → AVPlayer
         app.launch()
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 500 }, timeout: 8), "it didn't play")
@@ -228,7 +232,7 @@ final class PlayerTests: XCTestCase {
     /// Scrubbing names the chapter under the head, under the thumbnail.
     func testScrubbingNamesTheChapter() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]
+        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]
         app.launch()
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 500 }, timeout: 8), "it didn't play")

@@ -101,6 +101,9 @@ nonisolated struct LaunchOptions: Sendable {
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         mock = arguments.contains("-mock")
         Silence.on = mock && !arguments.contains("-sound")
+        // `-quickTimers` (UI tests): the app's deliberate waits at a fifth.
+        // Set every launch, so an in-process test's can't carry into the next.
+        Pace.scale = arguments.contains("-quickTimers") ? 0.2 : 1
         perfHUD = arguments.contains("-perfHUD")
         reset = arguments.contains("-reset")
         benchmark = arguments.contains("-benchmark")

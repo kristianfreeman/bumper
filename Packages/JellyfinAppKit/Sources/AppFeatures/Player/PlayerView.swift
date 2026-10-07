@@ -386,7 +386,7 @@ struct PlayerView: View {
         }
         guard let shown = flash else { return }
         Task {
-            try? await Task.sleep(for: .milliseconds(shown.count > 1 ? 900 : 650))
+            try? await Task.sleep(for: Pace.of(.milliseconds(shown.count > 1 ? 900 : 650)))
             if flash?.id == shown.id, flash?.count == shown.count { flash = nil }
         }
     }
@@ -398,9 +398,10 @@ struct PlayerView: View {
 
     /// Left alone while it plays, the controls go: 4 s from the video, 8 s
     /// on the icons, 20 s in an open card (time to read it). Paused, they stay.
+    /// (A fifth of that under UI tests: `Pace`.)
     private func scheduleHide() {
         hideTask?.cancel()
-        let wait: Duration = openMenu != nil ? .seconds(20) : onControls ? .seconds(8) : .seconds(4)
+        let wait = Pace.of(openMenu != nil ? .seconds(20) : onControls ? .seconds(8) : .seconds(4))
         hideTask = Task {
             try? await Task.sleep(for: wait)
             guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, !findingSubtitles, !showsInfo, controller.isPlaying else { return }

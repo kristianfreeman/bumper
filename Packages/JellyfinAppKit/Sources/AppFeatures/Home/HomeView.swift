@@ -153,11 +153,11 @@ final class FocusTracker {
         if let row, row != self.row { self.row = row }
         pending?.cancel()
         pending = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(160))
+            try? await Task.sleep(for: Pace.of(.milliseconds(160)))
             guard !Task.isCancelled else { return }
             if self?.featured?.id != item.id { self?.featured = item }
             FocusTracker.onFeatured?(item)
-            try? await Task.sleep(for: .milliseconds(190))
+            try? await Task.sleep(for: Pace.of(.milliseconds(190)))
             guard !Task.isCancelled else { return }
             self?.onDwell?(item)
         }

@@ -53,7 +53,7 @@ final class SmokeTests: XCTestCase {
     /// Resting on a card prefetches its details, so the page opens fully drawn.
     func testFocusedCardIsPrefetchedBeforeOpening() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-reset", "-perfHUD"]
+        app.launchArguments = ["-mock", "-quickTimers", "-reset", "-perfHUD"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
         let remote = XCUIRemote.shared
@@ -63,7 +63,7 @@ final class SmokeTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.4)
         }
         XCTAssertTrue(focused.identifier.hasPrefix("card.latest-movies"), "never reached the films (focus: \(focused.identifier))")
-        Thread.sleep(forTimeInterval: 0.8)   // rest on the card (dwell = 350 ms)
+        Thread.sleep(forTimeInterval: 0.3)   // rest on the card (dwell: 350 ms, 70 at -quickTimers' pace)
         remote.press(.select)
         let play = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play' OR label BEGINSWITH 'Resume'")).firstMatch
         XCTAssertTrue(play.waitForExistence(timeout: 5))
