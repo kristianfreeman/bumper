@@ -27,7 +27,11 @@ final class PeopleTests: XCTestCase {
         let remote = XCUIRemote.shared
         let focus = focused(app)
         // Past the actions and the extras to the cast.
-        remote.press(.down, in: app, atMost: 6) { focus.identifier.hasPrefix("person.") }
+        app.focusSettles()
+        for _ in 0..<6 where !focus.identifier.hasPrefix("person.") {
+            remote.press(.down, movingFocusIn: app)
+            app.focusSettles(quiet: 0.2)                                // the page done scrolling: Down from a row
+        }                                                               // still on its way lands on another card
         XCTAssertTrue(focus.identifier.hasPrefix("person."), "couldn't reach the cast (focus: \(focus.identifier))")
         let card = focus.identifier
         remote.press(.select)
@@ -41,7 +45,7 @@ final class PeopleTests: XCTestCase {
         shot("person")
         remote.press(.down, in: app, atMost: 3) { focus.identifier.hasPrefix("person.item.") }
         XCTAssertTrue(focus.identifier.hasPrefix("person.item."), "focus isn't on their films (focus: \(focus.identifier))")
-        app.focusSettles(quiet: 0.2)
+        app.focusSettles(quiet: 0.6)                                    // (a Select sooner, as the page lands, went nowhere)
         let opened = focus.identifier
         remote.press(.select)
         XCTAssertTrue(app.buttons["detail.play"].exists(within: 5), "their film didn't open")
