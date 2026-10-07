@@ -89,7 +89,12 @@ extension OnScreen {
             try await screen.wait(for: "player.startMessage", timeout: .seconds(2)) { $0.text == "Getting to 0:42…" }
             #expect(ContinuousClock.now - start >= .seconds(1))
             screen.engine?.finishLoading()
-            try await screen.waitUntilGone("player.startMessage")
+            #expect(screen.element("player.startMessage") != nil, "gone before the picture moved")
+            // The picture moves (and keeps moving, as a real one does): the start is over.
+            try await screen.waitUntil("the words to go once it moves") {
+                screen.engine?.currentTime += .milliseconds(20)
+                return screen.element("player.startMessage") == nil
+            }
         }
 
         @Test func untrackedFromAPagePlaysSayingSo() async throws {
