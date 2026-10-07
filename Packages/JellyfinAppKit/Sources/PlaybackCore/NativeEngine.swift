@@ -57,6 +57,7 @@ public final class NativeEngine: PlayerEngine {
         playerLayer.videoGravity = .resizeAspect
         player.automaticallyWaitsToMinimizeStalling = true
         player.appliesMediaSelectionCriteriaAutomatically = false
+        player.isMuted = Silence.on
         stats.engineName = "AVPlayer"
         #if os(iOS) || os(macOS)
         if AVPictureInPictureController.isPictureInPictureSupported() {

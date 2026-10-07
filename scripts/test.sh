@@ -116,7 +116,12 @@ trap 'exit 143' TERM
 
 # Run a step as a background child and `wait` for it: bash defers traps while a
 # *foreground* child runs, but `wait` is interruptible — so Ctrl-C / kill act now.
-step() { "$@" & wait $!; }
+step() {
+  local t0=$SECONDS rc=0
+  "$@" & wait $! || rc=$?
+  echo "⏱ $1: $((SECONDS - t0)) s"      # where a run's time goes (build vs launch vs tests)
+  return $rc
+}
 
 # Hang protection per kind of step (tree-killing; override with CAP=n).
 CAP="${CAP:-}"

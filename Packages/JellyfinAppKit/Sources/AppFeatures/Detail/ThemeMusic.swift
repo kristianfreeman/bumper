@@ -2,6 +2,7 @@ import AVFoundation
 import Instrumentation
 import JellyfinAPI
 import os
+import PlaybackCore
 
 /// Series/movie theme music on detail pages: fades in quietly, loops, fades
 /// out when leaving the page or starting playback. Keyed by the *owner*
@@ -21,6 +22,7 @@ final class ThemeMusic {
 
     private init() {
         player.volume = 0
+        player.isMuted = Silence.on
         player.preventsDisplaySleepDuringVideoPlayback = false
     }
 

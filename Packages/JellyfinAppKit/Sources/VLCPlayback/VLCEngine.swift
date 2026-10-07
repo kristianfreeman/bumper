@@ -76,6 +76,7 @@ public final class VLCEngine: PlayerEngine {
         // without their dashes, which the argument parser would take as flags).
         let extra = (UserDefaults.standard.string(forKey: "vlcPlayerOptions") ?? "").split(separator: " ").map { $0.hasPrefix("-") ? String($0) : "--" + $0 }
         player = VLCMediaPlayer(options: subtitleStyle.options + extra)
+        if Silence.on { player.audio?.isMuted = true }
         #if os(iOS)
         let floating = VLCFloating()
         self.floating = floating
@@ -245,6 +246,7 @@ public final class VLCEngine: PlayerEngine {
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, any Error>) in
             started = c
             player.play()
+            if Silence.on { player.audio?.isMuted = true }
             if plan.startPosition > .zero {
                 startTarget = plan.startPosition
                 player.time = VLCTime(int: Int32(clamping: Int64(plan.startPosition.milliseconds)))
@@ -286,6 +288,7 @@ public final class VLCEngine: PlayerEngine {
 
     public func play() {
         player.play()
+        if Silence.on { player.audio?.isMuted = true }
     }
 
     public func pause() {

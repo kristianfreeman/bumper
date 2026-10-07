@@ -100,6 +100,7 @@ nonisolated struct LaunchOptions: Sendable {
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         mock = arguments.contains("-mock")
+        Silence.on = mock && !arguments.contains("-sound")
         perfHUD = arguments.contains("-perfHUD")
         reset = arguments.contains("-reset")
         benchmark = arguments.contains("-benchmark")

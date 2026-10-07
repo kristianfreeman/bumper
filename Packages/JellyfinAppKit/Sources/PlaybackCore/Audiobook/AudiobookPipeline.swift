@@ -90,7 +90,7 @@ public final class AudiobookPipeline: NSObject, URLSessionDataDelegate, @uncheck
 
     /// 0…1 (the sleep timer's fade).
     public func setVolume(_ volume: Float) {
-        queue.async { [self] in engine.mainMixerNode.outputVolume = volume }
+        queue.async { [self] in engine.mainMixerNode.outputVolume = Silence.on ? 0 : volume }
     }
 
     public func setRate(_ rate: Float) {
@@ -182,6 +182,7 @@ public final class AudiobookPipeline: NSObject, URLSessionDataDelegate, @uncheck
     private func connect(_ format: AVAudioFormat) {
         engine.connect(player, to: timePitch, format: format)
         engine.connect(timePitch, to: engine.mainMixerNode, format: format)
+        if Silence.on { engine.mainMixerNode.outputVolume = 0 }
         connected = true
     }
 
