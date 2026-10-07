@@ -17,7 +17,7 @@ settings:
     # ── Branding: the ONLY place the user-facing name lives. ──
     APP_DISPLAY_NAME: Bumper
     PRODUCT_BUNDLE_IDENTIFIER: com.kristianfreeman.bumper
-    MARKETING_VERSION: 0.1.0
+    MARKETING_VERSION: 0.2.0
     CURRENT_PROJECT_VERSION: 1
     # ──────────────────────────────────────────────────────────
     SWIFT_VERSION: "6.0"
