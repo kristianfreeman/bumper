@@ -9,6 +9,11 @@ import Observation
 import PlaybackCore
 import VLCPlayback
 import os
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// Orchestrates one playback session: plan → display mode → engine →
 /// reporting, plus everything around the picture (segments, subtitles,
@@ -32,7 +37,7 @@ final class PlayerController {
     private(set) var trickplay: TrickplayProvider?
     var subtitleText: String?
 
-    @ObservationIgnored private let request: PlaybackRequest
+    @ObservationIgnored let request: PlaybackRequest
     @ObservationIgnored let app: AppModel
     @ObservationIgnored private var reporter: PlaybackReporter?
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -135,6 +140,7 @@ final class PlayerController {
                 try await engine.load(plan, autoplay: false)
                 await modeSwitch
             }
+            attachPictureInPicture(engine)
             engine.play()
             phase = .playing
             let ready = totalSpan.end()
@@ -206,10 +212,12 @@ final class PlayerController {
     func stop() async {
         app.nowPlaying = nil
         if app.player === self { app.player = nil }
+        if app.floatingPlayer === self { app.floatingPlayer = nil }
         // Runs from end-of-item *and* from the view disappearing: once only.
         guard phase != .finished else { return }
         phase = .finished
         loop?.cancel()
+        if let engine { detachPictureInPicture(engine) }
         let position = engine?.currentTime ?? .zero
         engine?.stop()
         if let reporter { await reporter.stop(position: position) }
@@ -323,7 +331,14 @@ final class PlayerController {
     private func finishedItem() async {
         Self.log.info("Finished item at \(self.engine?.currentTime.seconds ?? -1, privacy: .public)s status \(String(describing: self.engine?.status), privacy: .public)")
         TraceFile.write("player", "Finished item at \(self.engine?.currentTime.seconds ?? -1)s")
+        let floated = floatFlow.screenClosed
         await stop()
+        // Floating with the screen closed: it ends there. The next one would
+        // open full screen over wherever you'd gone.
+        if floated {
+            if app.queue.contains(item.id) { app.queue.finished(item.id) }
+            return
+        }
         if app.sleepTimer.mode == .endOfItem {        // "End of current episode": no next one
             Self.log.info("Sleep timer: end of item")
             app.sleepTimer.reset()
@@ -568,6 +583,10 @@ final class PlayerController {
         let wasPaused = old.status == .paused && phase == .playing && position > .seconds(1) && !transport.isScrubbing && !isPlaying
         Self.log.notice("AVPlayer → VLCKit at \(position.seconds, privacy: .public)s: \(reason, privacy: .public)")
         TraceFile.write("player", "AVPlayer → VLCKit at \(position.seconds)s: \(reason)")
+        // A floating picture goes with AVPlayer: the screen back for VLCKit's.
+        detachPictureInPicture(old)
+        if floatFlow.screenClosed { app.playback = request }
+        floatFlow = PictureInPictureFlow()
         old.stop()
         next.engine = .vlc
         next.startPosition = position
@@ -575,11 +594,68 @@ final class PlayerController {
         plan = next
         let engine = app.makeEngine(.vlc)
         self.engine = engine
+        attachPictureInPicture(engine)
         do {
             try await engine.load(next, autoplay: !wasPaused)
         } catch {
             phase = .failed(error.localizedDescription)
         }
+    }
+
+    // MARK: Picture in Picture
+
+    @ObservationIgnored private var floatFlow = PictureInPictureFlow()
+
+    /// The PiP button: the picture floats and the screen closes (you can
+    /// browse meanwhile); pressed while floating, it comes back.
+    func togglePictureInPicture() {
+        guard let pip = engine?.pictureInPicture else { return }
+        if pip.isActive {
+            pip.stop()
+        } else {
+            floatFlow.ask()
+            pip.start()
+        }
+    }
+
+    private func attachPictureInPicture(_ engine: any PlayerEngine) {
+        guard let pip = engine.pictureInPicture else { return }
+        pip.didStart = { [weak self] in self?.pictureInPictureStarted() }
+        pip.restoreScreen = { [weak self] in await self?.restoreFromPictureInPicture() }
+        pip.didStop = { [weak self] in self?.pictureInPictureStopped() }
+    }
+
+    private func detachPictureInPicture(_ engine: any PlayerEngine) {
+        guard let pip = engine.pictureInPicture else { return }
+        pip.didStart = nil
+        pip.restoreScreen = nil
+        pip.didStop = nil
+    }
+
+    private func pictureInPictureStarted() {
+        TraceFile.write("player", "floating at \(Int(displayTime.seconds))s")
+        guard floatFlow.started() == .closeScreen else { return }
+        // Held by the app while the screen's closed (the screen going
+        // doesn't stop playback for it: see PlayerView).
+        app.floatingPlayer = self
+        app.playback = nil
+    }
+
+    /// The screen again (the player view takes this controller back), and
+    /// once the picture has somewhere to go, back into it.
+    private func restoreFromPictureInPicture() async {
+        TraceFile.write("player", "back from floating at \(Int(displayTime.seconds))s")
+        guard floatFlow.restore() == .reopenScreen else { return }
+        app.playback = request
+        for _ in 0..<50 where engine?.videoView.window == nil {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    private func pictureInPictureStopped() {
+        guard floatFlow.stopped() == .endPlayback else { return }
+        TraceFile.write("player", "floating window closed: playback ends")
+        Task { await stop() }
     }
 
     // MARK: System integration

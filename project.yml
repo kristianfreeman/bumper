@@ -175,7 +175,7 @@ targets:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: Find your Jellyfin server and your Apple TV.
         NSBonjourServices: [_bumper._tcp]
-        UIBackgroundModes: [audio]                 # audiobooks keep playing
+        UIBackgroundModes: [audio]                 # audiobooks keep playing; Picture in Picture
         # ProMotion: without it an iPhone app's own animations and frame
         # timing stay at 60 Hz on a 120 Hz screen.
         CADisableMinimumFrameDurationOnPhone: true

@@ -161,6 +161,9 @@ final class AppModel {
     /// Watch progress the server didn't get yet (offline), per account.
     var outbox: PlaystateOutbox? { session.map { PlaystateOutbox(defaults: defaults, account: $0.account.id) } }
     var playback: PlaybackRequest?
+    /// The player floating in Picture in Picture with its screen closed:
+    /// held here so it plays on, and taken back when the screen reopens.
+    @ObservationIgnored var floatingPlayer: PlayerController?
     /// A page (or tab) to open from outside the app (a Top Shelf link).
     var pendingRoute: Route?
     var pendingTab: String?
@@ -767,7 +770,7 @@ final class AppModel {
     /// press Play" signal there is. Plans that one item and, if it's a VLCKit
     /// item, opens and buffers it.
     func prepare(_ item: BaseItem) {
-        guard !options.noPrepare, item.kind.isPlayable, playback == nil, downloads?.localFile(for: item.id) == nil,
+        guard !options.noPrepare, item.kind.isPlayable, playback == nil, floatingPlayer == nil, downloads?.localFile(for: item.id) == nil,
               prepared?.itemId != item.id, preparing?.itemId != item.id else { return }
         releasePrepared()
         prewarm(item)
