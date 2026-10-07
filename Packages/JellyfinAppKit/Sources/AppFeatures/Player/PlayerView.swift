@@ -281,7 +281,10 @@ struct PlayerView: View {
                 FocusBackdrop(request.item)
                 VStack(spacing: 30) {
                     ProgressView().scaleEffect(1.6)
-                    Text(request.item.name ?? "").font(.title3).foregroundStyle(theme.primaryText)
+                    VStack(spacing: Platform.isTV ? 12 : 6) {
+                        Text(request.item.name ?? "").font(.title3).foregroundStyle(theme.primaryText)
+                        SlowStartNote(resumingAt: request.resumePoint)
+                    }
                 }
             }
             .transition(.opacity)
@@ -403,6 +406,29 @@ struct PlayerView: View {
             if onControls { backToVideo() }
             chromeVisible = false
         }
+    }
+}
+
+/// Under the title while it opens: nothing for a second, then where it's
+/// going ("Getting to 42:10…"). Its line is always there, so the title
+/// doesn't move when the words come.
+private struct SlowStartNote: View {
+    let resumingAt: Duration?
+    @State private var waited: Duration = .zero
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        let message = SlowStart.message(resumingAt: resumingAt, after: waited)
+        Text(message ?? " ")
+            .font(.callout.monospacedDigit())
+            .foregroundStyle(theme.secondaryText)
+            .opacity(message == nil ? 0 : 1)
+            .accessibilityHidden(message == nil)
+            .accessibilityIdentifier("player.startMessage")
+            .task {
+                try? await Task.sleep(for: SlowStart.delay)
+                withAnimation(.easeOut(duration: 0.3)) { waited = SlowStart.delay }
+            }
     }
 }
 

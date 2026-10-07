@@ -36,6 +36,9 @@ final class PlayerController {
     var foundSubtitle: FoundSubtitle?
     private(set) var trickplay: TrickplayProvider?
     var subtitleText: String?
+    /// The item's chapters, named and in order: from the item handed over
+    /// when it has them, else the full item once it's in.
+    private(set) var chapters: [PlayerChapter] = []
 
     @ObservationIgnored let request: PlaybackRequest
     @ObservationIgnored let app: AppModel
@@ -80,6 +83,8 @@ final class PlayerController {
     private(set) var details: BaseItem?
     var benchTag: String? { app.options.benchTag }
     var subtitleOptions: [MediaStream] { plan?.mediaSource.subtitleStreams ?? [] }
+    /// The chapter playing (or where the user has asked to be).
+    var currentChapter: PlayerChapter? { PlayerChapter.current(in: chapters, at: displayTime) }
     var audioOptions: [MediaTrack] { engine?.audioTracks ?? [] }
 
     // MARK: Lifecycle
@@ -179,6 +184,7 @@ final class PlayerController {
 
             trickplay = TrickplayProvider(item: plan.item, mediaSourceId: plan.mediaSource.id, client: client)
             trickplay?.warm(around: plan.startPosition)
+            if let known = plan.item.chapters ?? request.item.chapters { chapters = PlayerChapter.list(known, runtime: plan.item.runtime) }
             Task { await loadDetails(client: client, plan: plan) }
             Task { await loadSidecars(client: client, plan: plan) }
             await applyInitialSubtitles(plan: plan, client: client)
@@ -526,6 +532,7 @@ final class PlayerController {
     private func loadDetails(client: JellyfinClient, plan: PlaybackPlan) async {
         guard let full = try? await client.item(id: plan.item.id) else { return }
         details = full
+        if let all = full.chapters { chapters = PlayerChapter.list(all, runtime: full.runtime ?? plan.item.runtime) }
         if trickplay == nil {
             trickplay = TrickplayProvider(item: full, mediaSourceId: plan.mediaSource.id, client: client)
             trickplay?.warm(around: engine?.currentTime ?? plan.startPosition)
@@ -549,6 +556,17 @@ final class PlayerController {
             if thumbnailCache.count > 400 { thumbnailCache.removeAll() }
         }
         return image
+    }
+
+    /// A chapter's picture: its own image from the server, else the
+    /// trickplay frame where it starts (nil: neither — the row draws a
+    /// placeholder).
+    func chapterImage(_ chapter: PlayerChapter, pixelWidth: Int) async -> CGImage? {
+        if let tag = chapter.imageTag, let client = app.session?.client {
+            let url = client.imageURL(itemId: item.id, type: .chapter, tag: tag, index: chapter.index, options: ImageOptions(maxWidth: pixelWidth, quality: 85))
+            if let image = try? await ImagePipeline.shared.image(for: ImageRequest(url: url, maxPixelSize: pixelWidth)) { return image }
+        }
+        return await trickplay?.thumbnail(at: chapter.start)
     }
 
     /// Text cue the player overlays (AVPlayer path); VLCKit draws its own.
@@ -722,5 +740,13 @@ extension PlayerController: TransportTarget {
     func pause() {
         engine?.pause()
         reportState()
+    }
+}
+
+extension PlaybackRequest {
+    /// Where a resume starts — nil from the beginning — as the planner will
+    /// have it (a resume point at the end starts again).
+    var resumePoint: Duration? {
+        resume ? PlaybackPlanner.usableStart(item.resumePosition, runtime: item.runtime) : nil
     }
 }

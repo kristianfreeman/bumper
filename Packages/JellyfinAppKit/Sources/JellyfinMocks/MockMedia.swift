@@ -117,7 +117,16 @@ public enum MockMedia {
         item.mediaSources = [source]
         item.mediaStreams = source.mediaStreams
         item.userData = UserItemData()
+        item.chapters = chapters(i, duration: f.duration)
         return item
+    }
+
+    /// Named chapters at each quarter (0:30, 1:00 and 1:30 of a 2-minute
+    /// seek clip), with images — one named the way rippers leave them.
+    static func chapters(_ i: Int, duration: Double) -> [Chapter] {
+        ["Arrival", "The Harbour at Night", "Chapter 03", "Landfall"].enumerated().map { n, name in
+            Chapter(startPositionTicks: Int64(duration * Double(n) / 4 * Double(BaseItem.ticksPerSecond)), name: name, imageTag: "ch\(i)-\(n)")
+        }
     }
 
     static func mediaSource(_ i: Int, _ f: MockMediaFixture) -> MediaSource {

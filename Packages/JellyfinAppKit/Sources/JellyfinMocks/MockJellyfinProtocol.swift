@@ -195,7 +195,9 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             if parts.count >= 4, parts[2] == "Images" {
                 let width = Int(q["maxwidth"] ?? "") ?? 400
                 let square = id.hasPrefix("book-") || id == MockBooks.viewId
-                return (200, image(for: "\(id)-\(parts[3])", width: width, aspect: square ? 1 : parts[3] == "Primary" && !id.contains("-e") ? 1.5 : 0.5625), "image/jpeg")
+                // Chapter images by index (`Images/Chapter/2`): each its own.
+                let kind = parts.dropFirst(3).joined(separator: "-")
+                return (200, image(for: "\(id)-\(kind)", width: width, aspect: square ? 1 : parts[3] == "Primary" && !id.contains("-e") ? 1.5 : 0.5625), "image/jpeg")
             }
             if parts.count == 3, parts[2] == "ThemeSongs" {
                 let songs = MockMedia.themeSongs(for: id)

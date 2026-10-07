@@ -114,7 +114,7 @@ public struct PlaybackPlanner: Sendable {
     /// A resume point at (or past) the end is from somewhere else (a
     /// re-encoded file, another cut): start from the beginning. The player
     /// held its clock at an unreachable point, and showed it everywhere.
-    static func usableStart(_ start: Duration?, runtime: Duration?) -> Duration? {
+    public static func usableStart(_ start: Duration?, runtime: Duration?) -> Duration? {
         guard let start, let runtime, runtime > .zero else { return start }
         return start >= runtime - .seconds(5) ? nil : start
     }
