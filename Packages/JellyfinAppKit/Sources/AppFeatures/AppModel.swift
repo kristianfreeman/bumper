@@ -187,15 +187,17 @@ final class AppModel {
     /// What an in-process view test (Tests/AppFeaturesTests) swaps in, so
     /// a model keeps nothing of the app's or another test's: settings of its
     /// own, a Keychain in memory, a downloads folder of its own, and a
-    /// backend that plays nothing.
+    /// backend that plays nothing. Links never reach the system: they go to
+    /// `openLink` (a test must never open a browser on the Mac it runs on).
     struct StandIns {
         var defaults: UserDefaults
         var keychain = Keychain.inMemory()
         var downloads: URL
         var engine: ((EngineKind) -> any PlayerEngine)?
+        var openLink: (URL) -> Void = { _ in }
     }
 
-    @ObservationIgnored private let standIns: StandIns?
+    @ObservationIgnored let standIns: StandIns?
 
     init(options: LaunchOptions = LaunchOptions(), standIns: StandIns? = nil) {
         self.options = options

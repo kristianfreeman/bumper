@@ -22,6 +22,11 @@ import Testing
 ///     try await screen.press("person.person-a01")
 ///     #expect(screen.text("Cast & Crew") != nil)
 ///
+/// These run on the developer's own Mac, so nothing leaves the process: the
+/// window is never shown, there's no sound, theme songs aren't streamed,
+/// and links the app opens (a trailer online) are held in `links` — one a
+/// test didn't expect fails it. Settings and the Keychain are the test's own.
+///
 /// Waits poll every few milliseconds up to a deadline: never a fixed sleep.
 /// The player runs on `FakeEngine` (no media decoded); `screen.engine` is
 /// the one it made.
@@ -60,7 +65,15 @@ final class Screen {
         var standIns = AppModel.StandIns(defaults: UserDefaults(suiteName: saved.suite)!, downloads: saved.folder.appending(path: "Downloads"))
         var make: (EngineKind) -> any PlayerEngine = { FakeEngine(kind: $0) }
         standIns.engine = { make($0) }
+        var open: (URL) -> Void = { _ in }
+        standIns.openLink = { open($0) }
         app = AppModel(options: LaunchOptions(arguments: ["Bumper", "-mock", "-mockMedia", Self.media.path] + arguments), standIns: standIns)
+        // Nothing reaches the Mac the tests run on: no sound, and no theme
+        // song streamed from the internet on a show's page.
+        Silence.on = true
+        app.settings.playThemeMusic = false
+        app.settings.onlineThemeFallback = false
+        // Never ordered front: the window is drawn and read, never shown.
         window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: content(app).appEnvironment(app).frame(width: size.width, height: size.height))
@@ -70,17 +83,29 @@ final class Screen {
             self?.engines.append(engine)
             return engine
         }
+        open = { [weak self] url in
+            self?.links.append(url)
+            if self?.expectsLinks != true { Issue.record("The app tried to open \(url) (held back: a test never opens links)") }
+        }
     }
 
-    /// A page as a deep link (`-route item:<id>`, `person:<id>`, …) opens it.
+    /// Links the app asked to open (a trailer online): held here, never
+    /// opened. One a test didn't expect fails it.
+    private(set) var links: [URL] = []
+    var expectsLinks = false
+
+    /// A page as a deep link (`-route item:<id>`, `person:<id>`, …) opens
+    /// it; what it plays comes up over it.
     convenience init(route: String, size: CGSize = Screen.page) {
-        self.init(["-route", route], size: size) { app in RoutedStack(initial: app.launchRoute) { Color.clear } }
+        self.init(["-route", route], size: size) { app in
+            PlayerStage(app: app) { RoutedStack(initial: app.launchRoute) { Color.clear } }
+        }
     }
 
     /// The player, as the app presents it whenever something plays
     /// (`-autoplay <id>` starts it; so does any Play on a page).
     static func player(_ arguments: [String], size: CGSize = Screen.wide) -> Screen {
-        Screen(arguments, size: size) { app in PlayerStage(app: app) }
+        Screen(arguments, size: size) { app in PlayerStage(app: app) { Color.black } }
     }
 
     /// The app launched again on what this one saved (settings, the queue,
@@ -297,12 +322,14 @@ nonisolated struct NotOnScreen: Error, CustomStringConvertible {
     var description: String { "Gave up waiting for \(waitingFor). On screen: \(onScreen.prefix(80).joined(separator: ", "))" }
 }
 
-/// The player over everything, as `RootView` presents it on the Mac.
-private struct PlayerStage: View {
+/// The player over everything when something plays, as `RootView`
+/// presents it on the Mac.
+private struct PlayerStage<Below: View>: View {
     @Bindable var app: AppModel
+    @ViewBuilder let below: () -> Below
 
     var body: some View {
-        Color.black.fullScreen(item: $app.playback) { request in
+        below().fullScreen(item: $app.playback) { request in
             PlayerView(request: request)
         }
     }

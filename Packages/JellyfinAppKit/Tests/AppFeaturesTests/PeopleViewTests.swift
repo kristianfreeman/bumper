@@ -1,7 +1,9 @@
 #if os(macOS)                    // in-process view tests: the Mac's `swift test`
 @testable import AppFeatures
 import AppCore
+import Foundation
 import JellyfinAPI
+import PlaybackCore
 import Testing
 
 extension OnScreen {
@@ -48,6 +50,29 @@ extension OnScreen {
             try await screen.wait(for: "detail.trailer")
             try await screen.wait(forText: "Extras")
             #expect(screen.elements(prefix: "extra.movie-0001-extra-").count == 4)
+        }
+
+        @Test func theTrailerPlays() async throws {
+            let screen = Screen(route: "item:movie-0001")
+            try await screen.press("detail.trailer")
+            try await screen.waitUntil("movie-0001-trailer to play") { screen.engine?.plan?.item.id == "movie-0001-trailer" }
+        }
+
+        /// Film 3's only trailer is online: off the TV it's a link (held by
+        /// the harness, never opened).
+        @Test func aTrailerOnlyOnlineIsALink() async throws {
+            let screen = Screen(route: "item:movie-0003")
+            screen.expectsLinks = true
+            try await screen.press("detail.trailer")
+            try await screen.waitUntil("the link") { !screen.links.isEmpty }
+            #expect(screen.links.map { $0.host() ?? "" } == ["www.youtube.com"], "\(screen.links)")
+            #expect(screen.app.playback == nil)
+        }
+
+        @Test func anExtraPlays() async throws {
+            let screen = Screen(route: "item:movie-0001")
+            try await screen.press("extra.movie-0001-extra-1")
+            try await screen.waitUntil("movie-0001-extra-1 to play") { screen.engine?.plan?.item.id == "movie-0001-extra-1" }
         }
 
         @Test func aFilmWithoutThemHasNoTrailerOrExtras() async throws {

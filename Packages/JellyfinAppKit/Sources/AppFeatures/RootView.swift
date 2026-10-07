@@ -64,6 +64,15 @@ extension View {
             .environment(\.downloadStore, app.downloads)
             .preferredColorScheme(app.themes.theme.colorScheme)
             .tint(app.themes.theme.accent)
+            // Every link the app opens goes through `openURL` (a trailer
+            // online, Settings): with stand-ins (tests) none leaves the app.
+            .transformEnvironment(\.openURL) { open in
+                guard let standIns = app.standIns else { return }
+                open = OpenURLAction { url in
+                    standIns.openLink(url)
+                    return .handled
+                }
+            }
     }
 }
 

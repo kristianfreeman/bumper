@@ -92,6 +92,13 @@ extension OnScreen {
             try await screen.waitUntilGone("player.startMessage")
         }
 
+        @Test func untrackedFromAPagePlaysSayingSo() async throws {
+            let screen = Screen(route: "item:movie-0001")
+            try await screen.press("detail.background")
+            try await screen.wait(for: "player.backgroundTag")
+            #expect(screen.app.playback?.background == true)
+        }
+
         // MARK: Picture in Picture
 
         @Test func thePiPButtonShowsOnlyWhileTheBackendCanFloat() async throws {
