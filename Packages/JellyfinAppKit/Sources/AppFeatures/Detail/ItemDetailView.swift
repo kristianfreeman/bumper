@@ -19,6 +19,9 @@ final class DetailModel {
     /// scenes, deleted scenes…): most films have neither.
     private(set) var localTrailers: [BaseItem] = []
     private(set) var extras: [BaseItem] = []
+    /// Trailers and extras asked for: until then the Trailer button would
+    /// offer the link online even when the library has the trailer itself.
+    private(set) var extrasLoaded = false
     /// Series page: the episode the header describes and Play plays — Next
     /// Up at first, then whichever episode card has focus.
     var selectedEpisode: BaseItem?
@@ -65,6 +68,7 @@ final class DetailModel {
         }
         // An episode opened its show: the show's, not the episode's.
         (localTrailers, self.extras) = item.id == opened ? await extras : await Self.extras(of: item.id, client: client)
+        extrasLoaded = true
     }
 
     private static func extras(of id: String, client: JellyfinClient) async -> ([BaseItem], [BaseItem]) {
@@ -75,7 +79,7 @@ final class DetailModel {
 
     /// The Trailer button's: the library's own, else (where links open) the server's link.
     var trailer: Trailer? {
-        guard item.kind == .movie || item.kind == .series else { return nil }
+        guard extrasLoaded, item.kind == .movie || item.kind == .series else { return nil }
         return Trailer.choose(local: localTrailers, remote: item.remoteTrailers, opensLinks: !Platform.isTV)
     }
 
@@ -204,9 +208,16 @@ struct ItemDetailView: View {
             // Programmatic focus is ignored until the view has joined the focus
             // hierarchy (after the push transition), and how long that takes
             // varies — so request it until it actually lands, up to ~1 s.
-            for _ in 0..<20 where !playFocused {
+            // Off the TV a button only takes focus with keyboard navigation
+            // on: ask once (it never landed, and the page waited that second
+            // before loading).
+            if Platform.isTV {
+                for _ in 0..<20 where !playFocused {
+                    playFocused = true
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+            } else {
                 playFocused = true
-                try? await Task.sleep(for: .milliseconds(50))
             }
             guard let client = app.session?.client else { return }
             await model.load(client: client)

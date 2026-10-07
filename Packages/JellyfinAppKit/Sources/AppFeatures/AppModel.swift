@@ -184,13 +184,29 @@ final class AppModel {
     @ObservationIgnored private var prewarmed: [String: (Task<PlaybackPlan, any Error>, ContinuousClock.Instant)] = [:]
     private static let log = Perf.logger("app")
 
-    init(options: LaunchOptions = LaunchOptions()) {
+    /// What an in-process view test (Tests/AppFeaturesTests) swaps in, so
+    /// a model keeps nothing of the app's or another test's: settings of its
+    /// own, a Keychain in memory, a downloads folder of its own, and a
+    /// backend that plays nothing. Links never reach the system: they go to
+    /// `openLink` (a test must never open a browser on the Mac it runs on).
+    struct StandIns {
+        var defaults: UserDefaults
+        var keychain = Keychain.inMemory()
+        var downloads: URL
+        var engine: ((EngineKind) -> any PlayerEngine)?
+        var openLink: (URL) -> Void = { _ in }
+    }
+
+    @ObservationIgnored let standIns: StandIns?
+
+    init(options: LaunchOptions = LaunchOptions(), standIns: StandIns? = nil) {
         self.options = options
+        self.standIns = standIns
         let built = (Bundle.main.executableURL.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.modificationDate] as? Date })
             .map { $0.formatted(.iso8601) } ?? "?"
         TraceFile.write("app", "launch \(PerfRecorder.deviceModel) build \(built) args: \(ProcessInfo.processInfo.arguments.dropFirst().joined(separator: " "))")
-        let defaults = options.mock ? UserDefaults(suiteName: "mock")! : .standard
-        downloads = Self.makeDownloads(mock: options.mock, reset: options.reset)
+        let defaults = standIns?.defaults ?? (options.mock ? UserDefaults(suiteName: "mock")! : .standard)
+        downloads = Self.makeDownloads(mock: options.mock, reset: options.reset, directory: standIns?.downloads)
         if options.reset {
             defaults.removePersistentDomain(forName: options.mock ? "mock" : Brand.bundleIdentifier)
             Task { await ContentCache.shared.removeAll(); await ImagePipeline.shared.removeAll() }
@@ -230,7 +246,7 @@ final class AppModel {
         sync?.start()
         downloads?.allowsCellular = settings.downloadsOverCellular
         libraryUsage = LibraryUsage(defaults: defaults)
-        accounts = AccountStore(defaults: defaults, keychain: Keychain(service: Brand.bundleIdentifier + (options.mock ? ".mock" : "")), protocolClasses: protocols)
+        accounts = AccountStore(defaults: defaults, keychain: standIns?.keychain ?? Keychain(service: Brand.bundleIdentifier + (options.mock ? ".mock" : "")), protocolClasses: protocols)
         themes = ThemeStore(settings: settings)
         capabilities = Perf.measureSync("capabilities.probe", "launch.capabilities") { DeviceCapabilities.probe() }
 
@@ -355,11 +371,11 @@ final class AppModel {
 
     // MARK: Session
 
-    private static func makeDownloads(mock: Bool, reset: Bool) -> DownloadStore? {
+    private static func makeDownloads(mock: Bool, reset: Bool, directory: URL? = nil) -> DownloadStore? {
         guard !Platform.isTV else { return nil }
         guard mock else { return DownloadStore() }
         // Tests: their own folder, and the mock server (a background session can't use one).
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Downloads-mock", directoryHint: .isDirectory)
+        let dir = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Downloads-mock", directoryHint: .isDirectory)
         if reset { try? FileManager.default.removeItem(at: dir) }
         let config = URLSessionConfiguration.default
         config.protocolClasses = [MockJellyfinProtocol.self]
@@ -761,7 +777,8 @@ final class AppModel {
     @ObservationIgnored private var preparing: (itemId: String, task: Task<Void, Never>)?
 
     func makeEngine(_ kind: EngineKind) -> any PlayerEngine {
-        switch kind {
+        if let standIn = standIns?.engine { return standIn(kind) }
+        return switch kind {
         case .native: NativeEngine()
         case .vlc: VLCEngine(subtitleStyle: VLCSubtitleStyle(settings.subtitleStyle, scale: settings.subtitleScale, font: settings.subtitleFont))
         }

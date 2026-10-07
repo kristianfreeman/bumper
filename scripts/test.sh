@@ -5,7 +5,7 @@
 # opt-in, e.g. EXTENSIVE=1). Every step is hang-protected by a tree-killing
 # timeout sized to the step, so a stall fails in seconds, not minutes.
 #
-#   scripts/test.sh                 fast   ~5 s   core logic on macOS (swift test, debug)
+#   scripts/test.sh                 fast   ~10 s  core logic, and screens in-process (AppFeaturesTests), on macOS
 #   scripts/test.sh perf                   ~20 s  same tests optimized: timing budgets enforced
 #   scripts/test.sh unit                   ~1 min core tests on the tvOS simulator
 #   scripts/test.sh smoke [test]           ~25 s  deep-linked UI checks (optionally one test)
@@ -132,6 +132,9 @@ need_vlckit() { [[ -d Vendor/VLCKit.xcframework ]] || scripts/fetch-vlckit.sh; }
 need_project() { [[ -d Bumper.xcodeproj ]] || xcodegen generate; }
 
 # ── Tiers ────────────────────────────────────────────────────────────────────
+# swift test, debug. Its AppFeaturesTests are screens checked in-process (the
+# real app model on the mock, pages in a hidden window, found and pressed by
+# accessibility): see Tests/AppFeaturesTests/Harness/Screen.swift.
 fast() { need_vlckit; (cd "$PKG" && ../../scripts/with-timeout.sh "${CAP:-90}" swift test 2>&1) | sed 's/\x1b\[[0-9;]*m//g' | summarize; }
 
 perf() { need_vlckit; (cd "$PKG" && ../../scripts/with-timeout.sh "${CAP:-180}" swift test -c release -Xswiftc -enable-testing 2>&1) | sed 's/\x1b\[[0-9;]*m//g' | summarize; }

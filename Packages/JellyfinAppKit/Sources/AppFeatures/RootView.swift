@@ -23,15 +23,7 @@ public struct AppRoot: View {
         RootView()
             .environment(\.castLink, cast)
             .environment(\.castPanel, castPanel)
-            .environment(app)
-            .environment(app.settings)
-            .environment(app.themes)
-            .environment(\.theme, app.themes.theme)
-            .environment(\.jellyfin, app.session?.client)
-            .environment(\.hideSpoilers, app.settings.hideSpoilers)
-            .environment(\.downloadStore, app.downloads)
-            .preferredColorScheme(app.themes.theme.colorScheme)
-            .tint(app.themes.theme.accent)
+            .appEnvironment(app)
             .onOpenURL { app.open($0) }                     // the Top Shelf: bumper://play/<id>
             .onAppear { app.cast = cast; app.applyRemoteSetting() }   // Play while connected goes to the TV (the views read it from the environment)
             .onChange(of: app.settings.allowRemote) { _, _ in app.applyRemoteSetting() }
@@ -56,6 +48,31 @@ public struct AppRoot: View {
         guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return nil }
         let t = info.kp_proc.p_un.__p_starttime
         return Date(timeIntervalSince1970: Double(t.tv_sec) + Double(t.tv_usec) / 1_000_000)
+    }
+}
+
+extension View {
+    /// What every screen reads from around it: the app, its settings and
+    /// theme, the server. (In-process view tests set the same around a page.)
+    func appEnvironment(_ app: AppModel) -> some View {
+        environment(app)
+            .environment(app.settings)
+            .environment(app.themes)
+            .environment(\.theme, app.themes.theme)
+            .environment(\.jellyfin, app.session?.client)
+            .environment(\.hideSpoilers, app.settings.hideSpoilers)
+            .environment(\.downloadStore, app.downloads)
+            .preferredColorScheme(app.themes.theme.colorScheme)
+            .tint(app.themes.theme.accent)
+            // Every link the app opens goes through `openURL` (a trailer
+            // online, Settings): with stand-ins (tests) none leaves the app.
+            .transformEnvironment(\.openURL) { open in
+                guard let standIns = app.standIns else { return }
+                open = OpenURLAction { url in
+                    standIns.openLink(url)
+                    return .handled
+                }
+            }
     }
 }
 
