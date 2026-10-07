@@ -63,19 +63,35 @@ booted_udid() {
 
 stop_sim_apps() {
   # The app and the XCTest runner live under the *simulator's* launchd: host
-  # signals never reach them, so terminate them explicitly.
-  local udid; udid=$(booted_udid)
+  # signals never reach them, so terminate them explicitly. $1: the
+  # simulator (the TV's by default); $2 = all: every other booted one too.
+  local udid="${1:-$(booted_udid)}"
   [[ -n "$udid" ]] || return 0
   xcrun simctl terminate "$udid" "$BUNDLE" >/dev/null 2>&1 || true
   # Bumper in any other booted simulator (iPhone, iPad) shares the Mac's
   # loopback: its mock server would hold port 8097 and the TV's can't start.
-  for other in $(xcrun simctl list devices booted 2>/dev/null | grep -oE '[0-9A-F-]{36}'); do
-    xcrun simctl terminate "$other" "$BUNDLE" >/dev/null 2>&1 || true
-  done
+  if [[ "${2:-}" == all ]]; then
+    for other in $(xcrun simctl list devices booted 2>/dev/null | grep -oE '[0-9A-F-]{36}'); do
+      xcrun simctl terminate "$other" "$BUNDLE" >/dev/null 2>&1 || true
+    done
+  fi
   xcrun simctl terminate "$udid" "$BUNDLE.uitests.xctrunner" >/dev/null 2>&1 || true
   # xcodebuild's failure diagnostics (`simctl diagnose`) hang off the simulator
   # service, not our process tree, and can grind on for minutes.
   pkill -f "simctl diagnose" 2>/dev/null || true
+}
+
+# The simulator this run tests on, if any: the only one its teardown
+# touches. (Every exit used to sweep every booted simulator, so a fast or
+# phone run from another checkout killed the TV's app mid-test: "not
+# running", no crash report.)
+TIER="${1:-fast}"
+used_sim() {
+  case "$TIER" in
+    fast|perf|unit) ;;
+    phone) local dest="${PHONE_DEST:-}"; echo "${dest#id=}" ;;
+    *) booted_udid ;;
+  esac
 }
 
 kill_tree() {
@@ -89,7 +105,8 @@ cleanup() {
   trap - EXIT INT TERM
   local child
   for child in $(pgrep -P $$ 2>/dev/null); do kill_tree "$child"; done
-  stop_sim_apps
+  local sim; sim=$(used_sim)
+  [[ -z "$sim" ]] || stop_sim_apps "$sim"
   rm -rf "$LOCK"
   exit "$status"
 }
@@ -152,7 +169,7 @@ phone_run() {
 
 ui_run() {
   mkdir -p "$OUT"
-  stop_sim_apps                                       # clean slate on the simulator
+  stop_sim_apps "" all                                # clean slate (and port 8097 free)
   # Raw log kept for diagnosis. Each test is cut off at a minute (a stall
   # fails fast); the whole run at 15 (tiers have grown past 2).
   TEST_RUNNER_PERF_ITERATIONS="${PERF_ITERATIONS:-1}" \

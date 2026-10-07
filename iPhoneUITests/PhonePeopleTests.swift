@@ -12,9 +12,16 @@ final class PhonePeopleTests: XCTestCase {
         add(a)
     }
 
-    /// Scrolls the page until `element` can be tapped.
+    /// Scrolls the page until `element` can be tapped, then lets the scroll
+    /// come to rest: a tap while the page is still gliding only stops it
+    /// (the extra's tap did nothing, now and then).
     private func reach(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
-        for _ in 0..<8 where !(element.exists && element.isHittable) { app.swipeUp() }
+        var swiped = false
+        for _ in 0..<8 where !(element.exists && element.isHittable) {
+            app.swipeUp(velocity: .slow)
+            swiped = true
+        }
+        if swiped { Thread.sleep(forTimeInterval: 1) }
         return element.exists && element.isHittable
     }
 

@@ -62,11 +62,14 @@ public enum PersonWords {
     /// Newest first, by year (a film without one goes by its premiere,
     /// and with neither, last); A to Z within a year. The server sorts
     /// too, but leaves undated titles wherever its database puts them.
+    /// Each title once, though they had two roles in it (the grid tells
+    /// its cards apart by id).
     public static func filmography(_ items: [BaseItem]) -> [BaseItem] {
         func year(_ item: BaseItem) -> Int? {
             item.productionYear ?? item.premiereDate.map { Calendar(identifier: .gregorian).component(.year, from: $0) }
         }
-        return items.sorted { a, b in
+        var seen = Set<String>()
+        return items.filter { seen.insert($0.id).inserted }.sorted { a, b in
             switch (year(a), year(b)) {
             case let (x?, y?) where x != y: return x > y
             case (nil, _?): return false
