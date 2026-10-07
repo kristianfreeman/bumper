@@ -12,7 +12,11 @@ It is free and open source. The only purchase is an optional themes unlock.
 
 - **Plays your library as it is.** MKV, AVI and TS; HEVC, HDR10, AV1, MPEG-2 and VC-1; DTS,
   TrueHD and E-AC-3; ASS, SSA and PGS subtitles. AVPlayer handles MP4 with H.264 or HEVC and AAC
-  or Dolby audio (Picture in Picture, AirPlay, Dolby Vision); VLCKit handles the rest.
+  or Dolby audio (AirPlay, Dolby Vision); VLCKit handles the rest.
+- **Picture in Picture** on iPhone, iPad and Mac. Leave the app while something plays, or press
+  the PiP button, and the picture floats; restore it to come back to the player where it was. On
+  iPhone and iPad everything floats; on the Mac, what AVPlayer plays (VLCKit's Mac build has no
+  Picture in Picture, so the button isn't there for those files).
 - **Home and libraries as collections.** Rows with a line of copy each, the next episode of what
   you're watching, and a View all page for every row that you can narrow by genre, decade, rating,
   length or when it was added.

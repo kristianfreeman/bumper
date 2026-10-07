@@ -88,8 +88,9 @@ what they hold.
   blank as the TV changes mode when playback starts and stops. Bumper asks
   for the switch and waits for it before the picture starts.
 - **MP4 with H.264 or HEVC and AAC/AC-3/E-AC-3** starts fastest (AVPlayer,
-  ~0.2 s) and gets Picture in Picture and AirPlay. Everything else plays in
-  VLCKit, starting in 0.3–2 s.
+  ~0.2 s) and gets AirPlay, and Picture in Picture on the Mac. Everything else
+  plays in VLCKit, starting in 0.3–2 s; it floats in Picture in Picture on
+  iPhone and iPad, not on the Mac (VLCKit's Mac build has none).
 - **AV1 at 4K is too heavy for an Apple TV 4K (2017)**, which has no AV1
   decoder; 1080p AV1 is fine. Newer Apple TVs decode AV1 in hardware.
 - Old formats (DivX, DVD, WMV, Flash, MJPEG) play as they are; nothing needs

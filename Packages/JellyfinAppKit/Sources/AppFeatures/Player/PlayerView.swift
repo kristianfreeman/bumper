@@ -76,6 +76,17 @@ struct PlayerView: View {
             if let engine = controller?.engine {
                 VideoSurface(view: engine.videoView)
                     .modifier(split.picture)
+                if engine.pictureInPicture?.isActive == true {
+                    // Floating, with the screen still here (you left the app and came back).
+                    VStack(spacing: 10) {
+                        Image(systemName: "pip").font(.system(size: 44, weight: .light))
+                        Text("Playing in Picture in Picture").font(.callout)
+                    }
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .modifier(split.picture)
+                }
             }
             if let controller {
                 SubtitleOverlay(cue: controller.currentCue, scale: app.settings.subtitleScale, style: app.settings.subtitleStyle, font: app.settings.subtitleFont,
@@ -181,6 +192,17 @@ struct PlayerView: View {
             .animation(.easeInOut(duration: 0.22), value: chromeVisible)
             .animation(.spring(duration: 0.28), value: openMenu)
             .task {
+                // Back from Picture in Picture: the same playback, where it is.
+                if let floating = app.floatingPlayer {
+                    app.floatingPlayer = nil
+                    if floating.request.id == request.id {
+                        controller = floating
+                        floating.transport.onActivity = { showChrome() }
+                        scheduleHide()
+                        return
+                    }
+                    await floating.stop()                  // something else to play: the floating one ends
+                }
                 let c = PlayerController(request: request, app: app)
                 controller = c
                 c.transport.onActivity = { showChrome() }
@@ -188,7 +210,8 @@ struct PlayerView: View {
                 scheduleHide()
             }
             .onDisappear {
-                if let controller { Task { await controller.stop() } }
+                // Closed for Picture in Picture: it plays on, held by the app.
+                if let controller, app.floatingPlayer !== controller { Task { await controller.stop() } }
             }
             .onChange(of: fills) { _, fill in controller?.engine?.setFillsScreen(fill) }
             // A new engine (AVPlayer handing over to VLCKit) keeps the choice.

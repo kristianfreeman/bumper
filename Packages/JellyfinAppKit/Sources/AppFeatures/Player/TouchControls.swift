@@ -73,6 +73,13 @@ struct TouchControls: View {
                 glassButton(docked ? "arrow.up.left.and.arrow.down.right" : "rectangle.split.1x2", docked ? "Full Screen" : "Show Details Below", size: 15) { split() }
                     .accessibilityIdentifier("player.layout")
             }
+            // Only where this item's player can float its picture here.
+            if let pip = engine.pictureInPicture, pip.isPossible || pip.isActive {
+                glassButton(pip.isActive ? "pip.exit" : "pip.enter", pip.isActive ? "Exit Picture in Picture" : "Picture in Picture", size: 15) {
+                    controller.togglePictureInPicture()
+                }
+                .accessibilityIdentifier("player.pip")
+            }
             if controller.isBackground {
                 Label("Untracked", systemImage: "infinity")
                     .font(.labelText.weight(.semibold))
