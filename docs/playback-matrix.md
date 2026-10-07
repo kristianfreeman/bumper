@@ -46,6 +46,21 @@ Not covered (no encoder for them here): VC-1, Dolby Vision, DTS-HD MA,
 PGS and VobSub subtitles, Theora. Real files from a library can be played
 through the same runner from the server.
 
+## On a real library
+
+`scripts/device-library-matrix.sh` asks the signed-in server for one item of
+each kind of file it holds (container, codec, size, scan, frame rate, HDR or
+Dolby Vision, lossy or lossless audio, subtitles drawn), then plays each in
+Background (nothing reported to the server) from two minutes in.
+`scripts/device-try.sh <id>` does one.
+
+On one library (2026-10-06): 64 kinds, **58 smooth** after the fixes below —
+including VC-1, Dolby Vision, 4K HDR10, PGS and VobSub subtitles, ASS,
+TrueHD and DTS-HD MA (with Atmos and DTS:X), and AV1 at 1080p. Of the rest:
+one 4K TS was encrypted (scrambled packets: no player can show it), and the
+others were within a frame a second, or files whose stated frame rate isn't
+what they hold.
+
 ## What it found and fixed
 
 - **AVI dropped over half its frames** (an SD sitcom at 15 fps). VLC's own
@@ -55,6 +70,16 @@ through the same runner from the server.
   handed AVPlayer's items to VLCKit, which then started paused. Text
   subtitles now stay on AVPlayer (the server sends them as WebVTT), and a
   hand-off only keeps a pause the person made.
+
+- **The TV's hardware decoder turned some files down** and VLCKit showed
+  nothing ("bad data", the session restarted again and again): real
+  DivX/Xvid, a BBC 1080p50 H.264. MPEG-4 Part 2 is now decoded in software;
+  anything else that decodes nothing for 4 s with data arriving is reopened
+  in software from the same point.
+- **Interlaced H.264** came from the hardware decoder a field at a time
+  (1080i25 at 20 fps); in software, every frame.
+- **10-bit H.264** (no Apple decoder has it) took ~8 s to start while VLCKit
+  tried the hardware first; now software from the start.
 
 ## Guidance
 
