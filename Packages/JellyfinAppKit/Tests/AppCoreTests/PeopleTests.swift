@@ -53,6 +53,8 @@ struct PeopleTests {
             Self.item("Show", year: 2010, kind: .series),
         ]
         #expect(PersonWords.filmography(items).map(\.name) == ["Premiere only", "Alpha", "Beta", "Show", "Old", "Undated"])
+        // Listed twice (they acted in it and directed it): once on the page.
+        #expect(PersonWords.filmography(items + [Self.item("Old", year: 1994)]).count == items.count)
     }
 
     @Test func trailerPrefersTheLibrarysOwn() {
