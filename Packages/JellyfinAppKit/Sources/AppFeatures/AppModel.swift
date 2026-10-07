@@ -71,7 +71,7 @@ nonisolated struct LaunchOptions: Sendable {
     var libraryMatrix = false
     /// Self-driven scroll benchmark (no XCUITest overhead in the numbers).
     var benchmark = false
-    /// Deep link for tests: `item:<id>` or `grid:<libraryId>`.
+    /// Deep link for tests: `item:<id>`, `person:<id>` or `grid:<libraryId>`.
     var route: String?
     /// Serve the mock over a real loopback socket (needed for AVPlayer).
     var mockHTTP = false
@@ -475,6 +475,7 @@ final class AppModel {
         guard parts.count == 2 else { return [] }
         switch parts[0] {
         case "item": return [.item(BaseItem(id: parts[1], name: nil, kind: .movie))]
+        case "person": return [.person(Person(id: parts[1], name: nil))]
         case "library":
             var lib = BaseItem(id: parts[1], name: "Movies", kind: .collectionFolder)
             lib.collectionType = "movies"

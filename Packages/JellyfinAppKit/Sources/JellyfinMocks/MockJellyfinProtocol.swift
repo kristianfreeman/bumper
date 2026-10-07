@@ -201,13 +201,20 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
                 let songs = MockMedia.themeSongs(for: id)
                 return json(ItemsPage(items: songs, totalRecordCount: songs.count))
             }
+            if parts.count == 3, parts[2] == "LocalTrailers" {
+                return json(MockExtras.localTrailers(for: id))
+            }
+            if parts.count == 3, parts[2] == "SpecialFeatures" {
+                return json(MockExtras.specialFeatures(for: id))
+            }
             if parts.count == 3, parts[2] == "Similar" {
                 return page(Array(catalog.movies.shuffledDeterministic(seed: id.hashValue).prefix(12)))
             }
             if parts.count == 3, parts[2] == "PlaybackInfo" {
                 return json(MockMedia.playbackInfo(itemId: id) ?? MockAuth.playbackInfo(itemId: id))
             }
-            if let item = MockMedia.item(id: id) ?? MockBooks.item(id: id) ?? catalog.item(id: id)
+            if let item = MockMedia.item(id: id) ?? MockBooks.item(id: id) ?? catalog.item(id: id).map(MockExtras.detailed)
+                ?? MockPeople.person(id: id) ?? MockExtras.item(id: id)
                 ?? MockPlaylists.playlists(catalog).first(where: { $0.id == id }) { return json(item) }
             return (404, Data(), "text/plain")
         }
@@ -256,6 +263,12 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             items = items.filter { $0.productionYear.map(years.contains) ?? false }
         }
         if let min = q["mincommunityrating"].flatMap(Double.init) { items = items.filter { ($0.communityRating ?? 0) >= min } }
+        // A person's page: what they're in (in those roles, if asked).
+        if let ids = q["personids"], !ids.isEmpty {
+            let wanted = Set(ids.split(separator: ",").map(String.init))
+            let types = Set((q["persontypes"] ?? "").split(separator: ",").map(String.init))
+            items = items.filter { MockPeople.credits($0.id, anyOf: wanted, types: types) }
+        }
         let filters = q["filters"] ?? ""
         if filters.contains("IsUnplayed") { items = items.filter { !$0.isPlayed } }
         if filters.split(separator: ",").contains("IsPlayed") { items = items.filter(\.isPlayed) }
@@ -265,6 +278,12 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         case let s where s.contains("DateCreated"): items.sort { ($0.dateCreated ?? $0.premiereDate ?? .distantPast) > ($1.dateCreated ?? $1.premiereDate ?? .distantPast) }
         case let s where s.contains("CommunityRating"): items.sort { ($0.communityRating ?? 0) > ($1.communityRating ?? 0) }
         case let s where s.contains("Random"): items = items.shuffledDeterministic(seed: 42)
+        case let s where s.hasPrefix("ProductionYear"):
+            let ascending = q["sortorder"]?.hasPrefix("Ascending") == true
+            items.sort { a, b in
+                let x = (a.productionYear ?? 0, a.premiereDate ?? .distantPast), y = (b.productionYear ?? 0, b.premiereDate ?? .distantPast)
+                return ascending ? x < y : x > y
+            }
         case let s where s.contains("SortName"): items.sort { ($0.name ?? "") < ($1.name ?? "") }
         default: break
         }

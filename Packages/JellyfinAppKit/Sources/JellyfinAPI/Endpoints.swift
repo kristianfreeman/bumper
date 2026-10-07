@@ -19,6 +19,7 @@ public enum ItemField: String, Sendable, Codable {
     case remoteTrailers = "RemoteTrailers"
     case originalTitle = "OriginalTitle"
     case providerIds = "ProviderIds"
+    case productionLocations = "ProductionLocations"
 
     /// Enough for a shelf card: art + progress. (UserData, image tags and
     /// blurhashes come back without being asked for.)
@@ -27,6 +28,8 @@ public enum ItemField: String, Sendable, Codable {
     public static let hero: [ItemField] = [.overview, .genres, .primaryImageAspectRatio, .dateCreated]
     /// Full detail page.
     public static let detail: [ItemField] = [.overview, .genres, .people, .studios, .mediaSources, .mediaStreams, .chapters, .trickplay, .taglines, .childCount, .remoteTrailers, .originalTitle, .providerIds]
+    /// A person's page: their bio, and where they were born.
+    public static let person: [ItemField] = [.overview, .productionLocations]
 }
 
 public enum ItemSortOrder: String, Sendable, Codable { case ascending = "Ascending", descending = "Descending" }
@@ -46,6 +49,10 @@ public struct ItemQuery: Sendable, Hashable, Codable {
     /// Production years (a decade: ten of them).
     public var years: [Int]?
     public var minCommunityRating: Double?
+    /// Only what these people are in (a person's page), and only in these
+    /// roles ("Actor", "Director"…).
+    public var personIds: [String]?
+    public var personTypes: [String]?
     public var startIndex: Int = 0
     public var limit: Int? = 100
     public var fields: [ItemField] = ItemField.card
@@ -82,6 +89,17 @@ public struct ItemQuery: Sendable, Hashable, Codable {
         if let nameStartsWith { q.append(.init(name: "nameStartsWith", value: nameStartsWith)) }
         if let years, !years.isEmpty { q.append(.init(name: "years", value: years.map(String.init).joined(separator: ","))) }
         if let minCommunityRating { q.append(.init(name: "minCommunityRating", value: String(minCommunityRating))) }
+        if let personIds, !personIds.isEmpty { q.append(.init(name: "personIds", value: personIds.joined(separator: ","))) }
+        if let personTypes, !personTypes.isEmpty { q.append(.init(name: "personTypes", value: personTypes.joined(separator: ","))) }
+        return q
+    }
+
+    /// A person's films and shows in the library, newest first. `roles`:
+    /// only those they were, e.g. directed ("Director").
+    public static func filmography(personId: String, roles: [String]? = nil) -> ItemQuery {
+        var q = ItemQuery(includeItemTypes: [.movie, .series], sortBy: ["ProductionYear", "PremiereDate", "SortName"], sortOrder: .descending, limit: 300)
+        q.personIds = [personId]
+        q.personTypes = roles
         return q
     }
 }
@@ -238,6 +256,17 @@ extension JellyfinClient {
         q.sortBy = []
         q.enableTotalRecordCount = false
         return try await items(q)
+    }
+
+    /// Trailers in the library beside the item (a `trailers` folder, or
+    /// files ending `-trailer`): played like the item itself.
+    public func localTrailers(itemId: String) async throws -> [BaseItem] {
+        try await send(Request(.get, "/Items/\(itemId)/LocalTrailers", query: [.init(name: "userId", value: userId)]))
+    }
+
+    /// Extras beside the item: behind the scenes, deleted scenes, featurettes…
+    public func specialFeatures(itemId: String) async throws -> [BaseItem] {
+        try await send(Request(.get, "/Items/\(itemId)/SpecialFeatures", query: [.init(name: "userId", value: userId)]))
     }
 
     /// Theme songs for an item (series/movie). `inheritFromParent` lets a

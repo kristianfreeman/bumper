@@ -15,6 +15,10 @@ final class DetailModel {
     var selectedSeason: String?
     private(set) var nextUp: BaseItem?
     private(set) var similar: [BaseItem] = []
+    /// Trailers in the library beside it, and its extras (behind the
+    /// scenes, deleted scenes…): most films have neither.
+    private(set) var localTrailers: [BaseItem] = []
+    private(set) var extras: [BaseItem] = []
     /// Series page: the episode the header describes and Play plays — Next
     /// Up at first, then whichever episode card has focus.
     var selectedEpisode: BaseItem?
@@ -30,6 +34,9 @@ final class DetailModel {
         } else if let cached = await ContentCache.shared.value(BaseItem.self, for: DetailPrefetcher.cacheKey(item.id)) {
             item = cached
         }
+        // Beside the page's own loading, not in its way.
+        let opened = item.id
+        async let extras = Self.extras(of: opened, client: client)
         await Perf.measure("detail.load", .detailLoad) {
             let id = item.id
             let similarId = item.kind == .episode ? (item.seriesId ?? id) : id
@@ -56,6 +63,20 @@ final class DetailModel {
             }
             self.similar = await similar?.items ?? []
         }
+        // An episode opened its show: the show's, not the episode's.
+        (localTrailers, self.extras) = item.id == opened ? await extras : await Self.extras(of: item.id, client: client)
+    }
+
+    private static func extras(of id: String, client: JellyfinClient) async -> ([BaseItem], [BaseItem]) {
+        async let trailers = try? client.localTrailers(itemId: id)
+        async let features = try? client.specialFeatures(itemId: id)
+        return (await trailers ?? [], Extras.shown(await features ?? []))
+    }
+
+    /// The Trailer button's: the library's own, else (where links open) the server's link.
+    var trailer: Trailer? {
+        guard item.kind == .movie || item.kind == .series else { return nil }
+        return Trailer.choose(local: localTrailers, remote: item.remoteTrailers, opensLinks: !Platform.isTV)
     }
 
     private func loadSeries(client: JellyfinClient) async {
@@ -108,6 +129,7 @@ struct ItemDetailView: View {
     @Environment(\.castLink) private var castLink
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
+    @Environment(\.openURL) private var openURL
     @State private var model: DetailModel
     @State private var showTracks = false
     @FocusState private var playFocused: Bool
@@ -149,6 +171,12 @@ struct ItemDetailView: View {
 
                     if item.kind == .series && !model.seasons.isEmpty {
                         episodesRow
+                    }
+                    if !model.extras.isEmpty {
+                        Shelf("Extras", items: model.extras, style: .landscape) { extra in
+                            LandscapeCard(extra, kind: .still, caption: Extras.caption(extra)) { app.play(extra) }
+                                .accessibilityIdentifier("extra.\(extra.id)")
+                        }
                     }
                     if let people = item.people, !people.isEmpty {
                         CastShelf(people: Array(people.prefix(24)))
@@ -309,6 +337,11 @@ struct ItemDetailView: View {
                         .accessibilityIdentifier("detail.background")
                 }
             }
+            if let trailer = model.trailer {
+                Pill("Trailer", systemImage: "movieclapper", size: size) { play(trailer) }
+                    .focused($actionFocus, equals: "trailer")
+                    .accessibilityIdentifier("detail.trailer")
+            }
             // Downloads (iPhone, iPad, Mac): a film or episode, or a show's season.
             if item.kind.isPlayable {
                 DownloadPill(item: model.item, size: size)
@@ -341,6 +374,17 @@ struct ItemDetailView: View {
         .focused($actionFocus, equals: "more")
         .accessibilityLabel("More")
         .accessibilityIdentifier("detail.more")
+    }
+
+    /// One in the library plays here, from the start; one online opens in
+    /// YouTube or the browser.
+    private func play(_ trailer: Trailer) {
+        switch trailer {
+        case .local(let item): app.play(item, resume: false)
+        case .remote(let url):
+            TraceFile.write("detail", "trailer \(url.absoluteString)")
+            openURL(url)
+        }
     }
 
     private func playLabel(_ target: BaseItem) -> String {
@@ -414,6 +458,7 @@ struct ItemDetailView: View {
 
 struct CastShelf: View {
     let people: [Person]
+    @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -421,7 +466,11 @@ struct CastShelf: View {
             Text("Cast & Crew").font(.headline).foregroundStyle(theme.secondaryText).padding(.horizontal, Layout.horizontalMargin)
             ScrollView(.horizontal) {
                 LazyHStack(spacing: Layout.cardSpacing) {
-                    ForEach(people) { person in PersonCard(person) {} }
+                    // By place: someone who directed and acted in it is listed twice.
+                    ForEach(Array(people.enumerated()), id: \.offset) { _, person in
+                        PersonCard(person) { navigate(.person(person)) }
+                            .accessibilityIdentifier("person.\(person.id)")
+                    }
                 }
                 .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 28)

@@ -114,6 +114,10 @@ public struct BaseItem: Codable, Sendable, Identifiable, Hashable {
     public var remoteTrailers: [MediaURL]?
     /// External ids: "Tvdb", "Tmdb", "Imdb", …
     public var providerIds: [String: String]?
+    /// A person's birthplace (their page asks for it).
+    public var productionLocations: [String]?
+    /// What kind of extra this is ("BehindTheScenes", "DeletedScene", …).
+    public var extraType: String?
     // Audio / audiobooks: the author is the album artist; a multi-file book's
     // parts share an album (the book).
     public var album: String?
@@ -140,6 +144,7 @@ public struct BaseItem: Codable, Sendable, Identifiable, Hashable {
         case userData = "UserData", mediaSources = "MediaSources", mediaStreams = "MediaStreams"
         case people = "People", studios = "Studios", chapters = "Chapters", trickplay = "Trickplay"
         case remoteTrailers = "RemoteTrailers", providerIds = "ProviderIds"
+        case productionLocations = "ProductionLocations", extraType = "ExtraType"
         case album = "Album", albumArtist = "AlbumArtist", artists = "Artists"
     }
 
@@ -245,6 +250,14 @@ public struct Person: Codable, Sendable, Hashable, Identifiable {
         case id = "Id", name = "Name", role = "Role", type = "Type", primaryImageTag = "PrimaryImageTag"
         case imageBlurHashes = "ImageBlurHashes"
     }
+
+    public init(id: String, name: String?, role: String? = nil, type: String? = nil, primaryImageTag: String? = nil) {
+        self.id = id
+        self.name = name
+        self.role = role
+        self.type = type
+        self.primaryImageTag = primaryImageTag
+    }
 }
 
 public struct NameIdPair: Codable, Sendable, Hashable {
@@ -257,6 +270,11 @@ public struct MediaURL: Codable, Sendable, Hashable {
     public var url: String?
     public var name: String?
     enum CodingKeys: String, CodingKey { case url = "Url", name = "Name" }
+
+    public init(url: String?, name: String? = nil) {
+        self.url = url
+        self.name = name
+    }
 }
 
 public struct Chapter: Codable, Sendable, Hashable {

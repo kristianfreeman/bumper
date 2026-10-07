@@ -113,6 +113,7 @@ struct RootView: View {
 
 nonisolated enum Route: Hashable, Sendable {
     case item(BaseItem)
+    case person(Person)
     case library(BaseItem)
     case grid(GridSpec)
     case arrivals(ArrivalsSpec)
@@ -608,6 +609,7 @@ struct RoutedStack<Root: View>: View {
         switch route {
         case .item(let item):
             if item.kind == .playlist { PlaylistPage(playlist: item) } else { ItemDetailView(item: item) }
+        case .person(let person): PersonPage(person: person)
         case .library(let library):
             if library.collectionType == "books" { AudiobookLibraryView(libraries: [library]) }
             else if library.collectionType == "playlists" { PlaylistsPage(library: library) }

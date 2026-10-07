@@ -72,6 +72,18 @@ struct RequestTests {
         #expect(url.query()?.contains("api_key=tok") == true)
     }
 
+    @Test func filmographyAsksForTheirFilmsAndShowsNewestFirst() {
+        let q = Dictionary(uniqueKeysWithValues: ItemQuery.filmography(personId: "p1", roles: ["Actor", "GuestStar"]).queryItems(userId: "u1").map { ($0.name, $0.value ?? "") })
+        #expect(q["personIds"] == "p1")
+        #expect(q["personTypes"] == "Actor,GuestStar")
+        #expect(q["includeItemTypes"] == "Movie,Series")
+        #expect(q["sortBy"] == "ProductionYear,PremiereDate,SortName")
+        #expect(q["sortOrder"] == "Descending")
+        #expect(q["recursive"] == "true")
+        // Without a person, neither is sent.
+        #expect(!ItemQuery().queryItems(userId: "u1").contains { $0.name == "personIds" || $0.name == "personTypes" })
+    }
+
     @Test func absoluteURLHandlesServerRelativeAndAbsolute() {
         #expect(client.absoluteURL(serverRelative: "/videos/x/master.m3u8?a=1")?.absoluteString == "http://nas.local:8096/jellyfin/videos/x/master.m3u8?a=1")
         #expect(client.absoluteURL(serverRelative: "https://cdn/x.m3u8")?.absoluteString == "https://cdn/x.m3u8")
@@ -95,6 +107,38 @@ struct MockServerTests {
         #expect(v.items.count >= 2)   // movies + shows (+ test media when configured)
         #expect(!r.items.isEmpty)
         #expect(!l.isEmpty)
+    }
+
+    /// A cast member's page: who they are, and what they're in, newest first.
+    @Test func personAndFilmography() async throws {
+        let film = try await client.item(id: "movie-0001")
+        let people = try #require(film.people)
+        #expect(people.contains { $0.type == "Director" } && people.contains { $0.type == "Actor" })
+        let actor = try #require(people.first { $0.type == "Actor" })
+        let person = try await client.item(id: actor.id, fields: ItemField.person)
+        #expect(person.kind == .person && person.name == actor.name)
+        let titles = try await client.items(.filmography(personId: actor.id)).items
+        #expect(titles.contains { $0.id == "movie-0001" })
+        #expect(titles.allSatisfy { MockPeople.people(for: $0.id).contains { $0.id == actor.id } })
+        let years = titles.compactMap(\.productionYear)
+        #expect(years == years.sorted(by: >))
+        // Counted by role: the actor who directs (person-a02) is both.
+        var directed = ItemQuery.filmography(personId: "person-a02", roles: ["Director"])
+        directed.limit = 0
+        #expect(try await client.items(directed).totalRecordCount > 0)
+    }
+
+    /// Film 1 has a trailer in the library and extras; film 2 has neither.
+    @Test func trailersAndExtras() async throws {
+        let trailers = try await client.localTrailers(itemId: "movie-0001")
+        #expect(trailers.count == 1 && trailers[0].kind.isPlayable)
+        #expect(try await client.item(id: trailers[0].id).id == trailers[0].id)       // it opens like anything else
+        #expect(try await client.item(id: "movie-0001").remoteTrailers?.isEmpty == false)
+        let extras = try await client.specialFeatures(itemId: "movie-0001")
+        #expect(extras.map(\.extraType) == ["BehindTheScenes", "DeletedScene", "Featurette", "Interview"])
+        #expect(try await client.localTrailers(itemId: "movie-0002").isEmpty)
+        #expect(try await client.specialFeatures(itemId: "movie-0002").isEmpty)
+        #expect(try await client.item(id: "movie-0002").remoteTrailers == nil)
     }
 
     @Test func pagingReportsTotals() async throws {
