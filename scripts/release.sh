@@ -8,8 +8,16 @@
 #   BUILD=202610070100 scripts/release.sh       a build number of your own (default: the time, yyyyMMddHHmm)
 #   ASC_KEY_ID=… ASC_ISSUER_ID=… scripts/release.sh   upload with an App Store Connect API key
 #     (~/.appstoreconnect/private_keys/AuthKey_<id>.p8) instead of Xcode's account
+#   RELEASE_XCODE=/Applications/Xcode-27.1.app scripts/release.sh   another Xcode (default: /Applications/Xcode.app)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Releases build with the released Xcode, whatever xcode-select or the shell
+# points at: a beta beside it (iPhone Duo work uses one) never builds a release.
+export DEVELOPER_DIR="${RELEASE_XCODE:-/Applications/Xcode.app}/Contents/Developer"
+if [[ "$DEVELOPER_DIR" == *[Bb]eta* && -z "${ALLOW_BETA:-}" ]]; then
+  echo "$DEVELOPER_DIR is a beta Xcode: the App Store won't take its builds (ALLOW_BETA=1 for TestFlight only)"; exit 1
+fi
+echo "$(xcodebuild -version | head -1) at ${DEVELOPER_DIR%/Contents/Developer}"
 OUT="build/release/$(date +%Y%m%d-%H%M%S)"; mkdir -p "$OUT"
 # Every upload needs a build number App Store Connect hasn't seen: the time
 # it was built (always increasing), the same for all three apps and the Top Shelf.
