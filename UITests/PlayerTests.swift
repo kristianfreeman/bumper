@@ -1,6 +1,10 @@
 import XCTest
 
-/// Player controls against real media (TestMedia/, served by the mock over HTTP).
+/// Player controls against real media (TestMedia/, served by the mock over
+/// HTTP): the remote, focus, and what the real backends report. What the
+/// player shows off the TV (the chapters list, a slow start's words, the
+/// Untracked tag, Picture in Picture) is checked in-process:
+/// AppFeaturesTests' Player.
 @MainActor
 final class PlayerTests: XCTestCase {
     static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia").path
@@ -81,22 +85,6 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(best.label.contains("Best match"), "first result isn't marked: \(best.label)")
         remote.press(.select)
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 5), "the found subtitle didn't come on (VLCKit reports '\(status.label)')")
-    }
-
-    /// Background from a page: it plays, tagged as Background.
-    func testBackgroundFromAPageIsTagged() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-route", "item:media-0"]
-        app.launch()
-        let background = app.buttons["detail.background"]
-        XCTAssertTrue(background.waitForExistence(timeout: 8), "no Background on the page")
-        let remote = XCUIRemote.shared
-        for _ in 0..<6 where !background.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
-        XCTAssertTrue(background.hasFocus, "couldn't reach Background")
-        remote.press(.select)
-        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
-        remote.press(.select)                                       // controls up
-        XCTAssertTrue(app.descendants(matching: .any)["player.backgroundTag"].waitForExistence(timeout: 3), "the player doesn't show it's in the background")
     }
 
     /// Playback (Background and the sleep timer, only here): the sleep
@@ -253,16 +241,6 @@ final class PlayerTests: XCTestCase {
         for _ in 0..<6 { remote.press(.right) }                       // ~1:31
         XCTAssertTrue(waitFor(chapter, label: { $0 == "Landfall" }, timeout: 2), "scrub shows \(chapter.exists ? chapter.label : "no chapter")")
         remote.press(.menu)                                          // cancel the scrub
-    }
-
-    /// A slow start (every media request 1.5 s late) says where it's going.
-    func testSlowStartSaysWhereItsGoing() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-mediaLatency", "1500",
-                               "-autoplay", "media-2", "-startAt", "42"]
-        app.launch()
-        let message = app.staticTexts["player.startMessage"]
-        XCTAssertTrue(waitFor(message, label: { $0 == "Getting to 0:42…" }, timeout: 12), "no message (\(message.exists ? message.label : "none"))")
     }
 
     private func waitForFocus(_ element: XCUIElement, timeout: TimeInterval = 1) -> Bool {

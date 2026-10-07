@@ -74,9 +74,12 @@ final class Screen {
         app.settings.playThemeMusic = false
         app.settings.onlineThemeFallback = false
         // Never ordered front: the window is drawn and read, never shown.
+        // Changes land at once: a window off screen never runs an animation
+        // through (a season's jump along the episodes stayed where it began).
         window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: content(app).appEnvironment(app).frame(width: size.width, height: size.height))
+        window.contentView = NSHostingView(rootView: content(app).appEnvironment(app).frame(width: size.width, height: size.height)
+            .transaction { $0.animation = nil })
         make = { [weak self] kind in
             let engine = FakeEngine(kind: kind)
             self?.nextEngine(engine)

@@ -1,9 +1,10 @@
 import XCTest
 
-/// Queue: add from a page, and the plan leads Home.
+/// Queue: reaching Add to Queue with the remote. Adding, and the plan then
+/// leading Home, is checked in-process: AppFeaturesTests' Queue.
 @MainActor
 final class QueueTests: XCTestCase {
-    func testAddToQueueThenItLeadsHome() {
+    func testAddToQueueWithTheRemote() {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset", "-syncQueue", "-route", "item:movie-0001"]
         app.launch()
@@ -13,12 +14,11 @@ final class QueueTests: XCTestCase {
         for _ in 0..<4 where !add.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
         XCTAssertTrue(add.hasFocus, "couldn't reach Add to Queue")
         remote.press(.select)
-        Thread.sleep(forTimeInterval: 0.5)
-        remote.press(.menu)                                     // back to Home
-        let queue = app.descendants(matching: .any)["collection.queue"]
-        XCTAssertTrue(queue.waitForExistence(timeout: 5), "Queue doesn't lead Home after adding")
-        XCTAssertTrue(app.buttons["queue.play"].exists, "no Play Queue")
+        let added = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "detail.queue", "In Queue")).firstMatch
+        XCTAssertTrue(added.waitForExistence(timeout: 3), "Select didn't add it (\(add.label))")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
+            remote.press(.menu)                                 // back to Home, led by the Queue
+            XCTAssertTrue(app.descendants(matching: .any)["collection.queue"].waitForExistence(timeout: 5))
             Thread.sleep(forTimeInterval: 1)
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/queue-home.png"))
             app.terminate()

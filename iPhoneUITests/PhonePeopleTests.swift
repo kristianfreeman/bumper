@@ -1,8 +1,8 @@
 import XCTest
 
-/// People, trailers and extras on the iPhone. In the mock, film 1 has a
-/// trailer in the library, one online and four extras; film 2 has none;
-/// film 3 only a trailer online (it opens YouTube or the browser here).
+/// People on the iPhone: swiping to the cast and their films, and Back.
+/// What the pages show (trailers, extras, a trailer online as a link) is
+/// checked in-process: AppFeaturesTests' People.
 @MainActor
 final class PhonePeopleTests: XCTestCase {
     private func shot(_ app: XCUIApplication, _ name: String) {
@@ -46,34 +46,5 @@ final class PhonePeopleTests: XCTestCase {
         XCTAssertTrue(back.waitForExistence(timeout: 3), "no way back")
         back.tap()
         XCTAssertTrue(app.staticTexts["person.name"].waitForExistence(timeout: 3), "Back didn't return to their page")
-    }
-
-    /// Film 1: a Trailer button and the Extras row, whose cards play.
-    func testAFilmWithExtrasShowsThem() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0001"]
-        app.launch()
-        XCTAssertTrue(app.buttons["detail.trailer"].waitForExistence(timeout: 10), "no Trailer button")
-        let extra = app.buttons["extra.movie-0001-extra-1"]
-        XCTAssertTrue(extra.waitForExistence(timeout: 5) && reach(extra, in: app), "no Extras row")
-        shot(app, "detail-extras")
-        extra.tap()
-        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 10), "the extra didn't play")
-    }
-
-    /// Film 3's trailer is only online: here it's still a button (not
-    /// pressed: it would leave the app). Film 2 has neither.
-    func testTrailersOnlineShowHere() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0003"]
-        app.launch()
-        XCTAssertTrue(app.buttons["detail.trailer"].waitForExistence(timeout: 10), "no Trailer button for a trailer online")
-        app.terminate()
-        app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0002"]
-        app.launch()
-        XCTAssertTrue(app.buttons["detail.play"].waitForExistence(timeout: 10), "no detail page")
-        Thread.sleep(forTimeInterval: 1.5)                                  // trailers and extras arrive after the page
-        XCTAssertFalse(app.buttons["detail.trailer"].exists, "a Trailer button with no trailer")
-        XCTAssertFalse(app.buttons["extra.movie-0002-extra-1"].exists, "extras where there are none")
     }
 }

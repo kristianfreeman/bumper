@@ -20,6 +20,8 @@ extension OnScreen {
             try await screen.press("season.4")
             try await screen.wait(for: "season.4") { $0.isSelected }
             #expect(screen.element("season.1")?.isSelected == false)
+            // The episodes jump there too.
+            try await screen.waitUntil("season 4's episodes") { screen.elements.contains { $0.text.contains("S4 · E") } }
         }
     }
 }
