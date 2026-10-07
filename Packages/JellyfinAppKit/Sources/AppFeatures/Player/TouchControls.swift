@@ -22,38 +22,39 @@ struct TouchControls: View {
     /// Owned by the player, so they stay up when the controls hide.
     @Binding var findingSubtitles: Bool
     @Binding var showsInfo: Bool
-    /// Under the split's picture, not over it: stacked, no spacers, and no
-    /// Info (it's right there below).
-    var docked = false
+    /// Where they go: over the whole picture, over the split's picture (no
+    /// menus row: it's in the panel below), or that row alone, in the panel.
+    var style: Style = .full
     /// Switches between the picture full screen and the split.
     var split: (() -> Void)? = nil
 
+    enum Style { case full, overPicture, menus }
+
+    /// The split's (either part): Full Screen goes back, and Info is right there below.
+    private var docked: Bool { style != .full }
     private var playing: Bool { engine.status != .paused }
     private var phone: Bool { Layout.device == .phone }
-    /// A phone on its side: little height, so smaller and closer.
-    private var short: Bool { vertical == .compact }
+    /// A phone on its side, or the split's band of picture: little height, so smaller and closer.
+    private var short: Bool { vertical == .compact || style == .overPicture }
 
     var body: some View {
         Group {
-            if docked {
-                VStack(spacing: 16) {
-                    topBar
-                    bottom
-                    transport
-                }
-            } else {
+            switch style {
+            case .full, .overPicture:
                 VStack(spacing: 0) {
                     topBar
                     Spacer(minLength: 0)
                     transport
                     Spacer(minLength: 0)
-                    bottom
+                    if style == .full { bottom } else { timeline }
                 }
+            case .menus:
+                menuRow
             }
         }
         .padding(.horizontal, phone ? 16 : 28)
-        .padding(.top, docked ? 14 : short ? 8 : 4)
-        .padding(.bottom, docked ? 0 : short ? 6 : phone ? 4 : 20)
+        .padding(.top, style == .menus ? 14 : short ? 8 : 4)
+        .padding(.bottom, style == .menus ? 0 : short ? 6 : phone ? 4 : 20)
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)                      // glass and menus, dark over the picture
     }
@@ -114,25 +115,33 @@ struct TouchControls: View {
 
     private var bottom: some View {
         VStack(alignment: .leading, spacing: short ? 4 : 8) {
-            Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                     scrubTime: nil, scrubThumb: nil, paused: engine.status == .paused, chapters: controller.chapters,
-                     seek: { t in Task { await controller.seek(to: t) }; poke() })
-            HStack(spacing: 10) {
-                Text(facts)
-                    .font(.labelText.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 8)
-                subtitlesMenu
-                audioMenu
-                playbackMenu
-                if !docked {
-                    glassButton("info.circle", "Info", size: 15) { showsInfo = true }
-                        .accessibilityIdentifier("control.info")
-                    // Docked, they're a row of pictures in the panel below.
-                    if controller.chapters.count > 1 { chaptersMenu }
-                }
+            timeline
+            menuRow
+        }
+    }
+
+    private var timeline: some View {
+        Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
+                 scrubTime: nil, scrubThumb: nil, paused: engine.status == .paused, chapters: controller.chapters,
+                 seek: { t in Task { await controller.seek(to: t) }; poke() })
+    }
+
+    private var menuRow: some View {
+        HStack(spacing: 10) {
+            Text(facts)
+                .font(.labelText.weight(.medium))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
+            subtitlesMenu
+            audioMenu
+            playbackMenu
+            if !docked {
+                glassButton("info.circle", "Info", size: 15) { showsInfo = true }
+                    .accessibilityIdentifier("control.info")
+                // Docked, they're a row of pictures in the panel below.
+                if controller.chapters.count > 1 { chaptersMenu }
             }
         }
     }

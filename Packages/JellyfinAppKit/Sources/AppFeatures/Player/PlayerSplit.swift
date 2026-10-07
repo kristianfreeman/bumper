@@ -39,6 +39,14 @@ struct PlayerSplit: Equatable {
         fold != nil || size.height > size.width * 1.1
     }
 
+    /// Whether the space can take a split at all: room for a picture and a
+    /// panel under it. A phone on its side (~370 pt high) hasn't — a sliver of
+    /// picture over a squashed panel — so it stays full screen and offers no
+    /// split; an iPad, an open iPhone Duo or a Mac window has.
+    static func canSplit(_ size: CGSize, fold: CGRect?) -> Bool {
+        fold != nil || size.height >= 480
+    }
+
     /// The fold across the space (iPhone Duo on its side, half open), when
     /// there's one: the top half for watching, the bottom one to touch.
     /// iOS 27.1's reserved regions; nothing elsewhere, or built with an
@@ -74,9 +82,9 @@ struct PictureFrame: ViewModifier {
 }
 
 #if !os(tvOS)
-/// Under the split's picture: the controls (always up — they're not over
-/// anything), then about it, what's next and the queue. Find Subtitles
-/// opens here rather than in a sheet over it.
+/// Under the split's picture: subtitles, audio and playback (always up; play,
+/// skip and the timeline are on the picture), then about it, what's next and
+/// the queue. Find Subtitles opens here rather than in a sheet over it.
 struct PlayerPanel: View {
     let controller: PlayerController
     let engine: any PlayerEngine
@@ -88,7 +96,7 @@ struct PlayerPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             TouchControls(controller: controller, engine: engine, close: close, poke: poke,
-                          findingSubtitles: $findingSubtitles, showsInfo: .constant(false), docked: true, split: fullScreen)
+                          findingSubtitles: $findingSubtitles, showsInfo: .constant(false), style: .menus, split: fullScreen)
             if findingSubtitles {
                 FindSubtitlesSheet(controller: controller) {
                     findingSubtitles = false

@@ -43,6 +43,8 @@ extension OnScreen {
         @Test func theSplitsPictureIsAsWideAsTheSpaceUpToHalfItsHeight() {
             #expect(PlayerSplit.splits(CGSize(width: 390, height: 844), fold: nil))
             #expect(!PlayerSplit.splits(CGSize(width: 1280, height: 720), fold: nil))
+            #expect(!PlayerSplit.canSplit(CGSize(width: 852, height: 372), fold: nil), "a phone on its side offers no split")
+            #expect(PlayerSplit.canSplit(CGSize(width: 1180, height: 780), fold: nil), "an iPad on its side can")
             #expect(!PlayerSplit.splits(CGSize(width: 1000, height: 1050), fold: nil))           // nearly square: full screen
             #expect(PlayerSplit(size: CGSize(width: 720, height: 1280), fold: nil, aspect: 16 / 9).pictureHeight == 405)
             #expect(PlayerSplit(size: CGSize(width: 720, height: 1000), fold: nil, aspect: 0.5).pictureHeight == 500)   // a tall picture: half

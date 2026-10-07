@@ -35,6 +35,8 @@ struct PlayerView: View {
     @State private var splitChoice: Bool?
     /// Split: Find Subtitles opens below the picture, not in a sheet.
     @State private var docked = false
+    /// The space can take a split (no split button on a phone on its side).
+    @State private var canSplit = false
     @FocusState private var focus: PlayerFocus?
     /// Focus is on the icon row: the video isn't a place to move to (Left
     /// from the first icon went onto it, invisibly). Down goes back.
@@ -60,12 +62,14 @@ struct PlayerView: View {
         // video view is never rehosted.
         GeometryReader { proxy in
             let byShape = PlayerSplit.splits(proxy.size, fold: PlayerSplit.fold(in: proxy))
-            let layout = (splitChoice ?? byShape)
+            let allowed = PlayerSplit.canSplit(proxy.size, fold: PlayerSplit.fold(in: proxy))
+            let layout = allowed && (splitChoice ?? byShape)
                 ? PlayerSplit(size: proxy.size, fold: PlayerSplit.fold(in: proxy), aspect: controller?.videoAspect)
                 : PlayerSplit.full
             layers(layout)
                 .onChange(of: byShape) { _, _ in splitChoice = nil }      // a new shape: its own way again
                 .onChange(of: layout.isSplit, initial: true) { _, split in docked = split }
+                .onChange(of: allowed, initial: true) { _, can in canSplit = can }
         }
         #endif
     }
@@ -107,7 +111,8 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
             }
             ChromeScrim()
-                .opacity(!split.isSplit && (chromeVisible || openMenu != nil) ? 1 : 0)
+                .opacity(chromeVisible || openMenu != nil ? 1 : 0)
+                .modifier(split.picture)
             // The video's focus target (a sibling of the controls, so
             // left/right on an icon or menu row move focus, not the video).
             // Presses and swipes on it are read by RemoteGestures.
@@ -147,13 +152,23 @@ struct PlayerView: View {
             }
             #else
             if split.isSplit, let controller, let engine = controller.engine {
-                // Below the picture (and the fold): always up, nothing over the video.
+                // On the picture, as full screen: play, skip and the timeline,
+                // tapped up and fading on their own.
+                if chromeVisible {
+                    TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
+                                  findingSubtitles: $findingSubtitles, showsInfo: $showsInfo, style: .overPicture,
+                                  split: { splitChoice = false })
+                        .modifier(split.pictureArea)
+                        .transition(.opacity)
+                }
+                // Below the picture (and the fold): the menus and what's around it, always up.
                 PlayerPanel(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
                             fullScreen: { splitChoice = false }, findingSubtitles: $findingSubtitles)
                     .padding(.top, split.panelTop)
             } else if chromeVisible, let controller, let engine = controller.engine {
                 TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
-                              findingSubtitles: $findingSubtitles, showsInfo: $showsInfo, split: { splitChoice = true })
+                              findingSubtitles: $findingSubtitles, showsInfo: $showsInfo,
+                              split: canSplit ? { splitChoice = true } : nil)
                     .transition(.opacity)
             }
             #endif
@@ -313,7 +328,7 @@ struct PlayerView: View {
             .focused($focus, equals: .skip)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.horizontal, Platform.isTV ? 90 : Layout.horizontalMargin + 8)
-            .padding(.bottom, Platform.isTV ? (chromeVisible ? 300 : 90) : (chromeVisible && !docked ? SubtitleOverlay.controlsHeight : 16))
+            .padding(.bottom, Platform.isTV ? (chromeVisible ? 300 : 90) : (chromeVisible ? (docked ? 64 : SubtitleOverlay.controlsHeight) : 16))
             .transition(.opacity)
         }
     }
