@@ -216,6 +216,20 @@ extension Font {
         default: .callout
         }
     }
+    // Text set at a size of its own, by what it's for. Each keeps the style it
+    // had on the TV, iPhone and iPad; on the Mac, where those styles come out
+    // at 10–12 pt, each reads at the Mac's own sizes (13 to read, 11 below).
+
+    /// Text to read that isn't the main thing: a description, an overview,
+    /// an error, a value.
+    public static var detailText: Font { Layout.device == .mac ? .body : .callout }
+    /// A smaller line under something: a setting's explanation, a server.
+    public static var smallText: Font { Layout.device == .mac ? .subheadline : .footnote }
+    /// A small label: "Administrator", a status, "See All", a chevron.
+    public static var labelText: Font { Layout.device == .mac ? .subheadline : .caption }
+    /// The smallest line: a button's caption, a tagline, a count.
+    public static var fineText: Font { Layout.device == .mac ? .subheadline : .caption2 }
+
     /// A card's name.
     public static var cardTitle: Font { Layout.device == .mac ? .body : .caption }
     /// The line under a card's name.

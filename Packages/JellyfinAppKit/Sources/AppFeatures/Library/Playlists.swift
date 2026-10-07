@@ -89,7 +89,7 @@ struct PlaylistsPage: View {
                 }
                 .tvFocusSection()
                 if list?.isEmpty == true {
-                    Text("No video playlists yet. Make one in Jellyfin and it shows up here.").font(.callout).foregroundStyle(theme.secondaryText)
+                    Text("No video playlists yet. Make one in Jellyfin and it shows up here.").font(.detailText).foregroundStyle(theme.secondaryText)
                 }
             }
             .padding(.horizontal, Layout.horizontalMargin)
@@ -149,7 +149,7 @@ struct PlaylistPage: View {
                 }
                 .tvFocusSection()
                 if self.items?.isEmpty == true {
-                    Text("Nothing in this playlist yet.").font(.callout).foregroundStyle(theme.secondaryText)
+                    Text("Nothing in this playlist yet.").font(.detailText).foregroundStyle(theme.secondaryText)
                 }
             }
             .padding(.horizontal, Layout.horizontalMargin)

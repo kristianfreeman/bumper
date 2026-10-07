@@ -216,7 +216,7 @@ struct ItemDetailView: View {
                     .font(Self.phone ? .headline : .title3.weight(.semibold)).foregroundStyle(theme.primaryText).lineLimit(1)
                 MetadataLine(item: episodeMetadata(episode))
                 Text(episode.overview ?? "")
-                    .font(.callout).foregroundStyle(theme.secondaryText).lineLimit(3)
+                    .font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(3)
                     .spoilerBlur(episode.spoils(hidingSpoilers: app.settings.hideSpoilers), revealable: true)
                     .frame(maxWidth: 1100, minHeight: Self.phone ? 0 : 90, alignment: .topLeading)   // fixed height: focus moves don't shift the buttons
             }
@@ -250,7 +250,7 @@ struct ItemDetailView: View {
                 Text(tagline).font(.headline).foregroundStyle(theme.primaryText)
             }
             if let overview = item.overview {
-                Text(overview).font(.callout).foregroundStyle(theme.secondaryText).lineLimit(Self.phone ? 3 : 4).frame(maxWidth: 1100, alignment: .leading)
+                Text(overview).font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(Self.phone ? 3 : 4).frame(maxWidth: 1100, alignment: .leading)
                     .spoilerBlur(item.spoils(hidingSpoilers: app.settings.hideSpoilers), revealable: true)
             }
             actionButtons(item)
@@ -565,7 +565,7 @@ private struct WidePlayButton: View {
             if let playing = cast?.nowPlaying, playing.itemId == target.id, let on = cast?.watching {
                 Label("\(playing.paused ? "Paused" : "Playing") on \(on) · \(CastLink.clock(playing.position)) of \(CastLink.clock(playing.duration))",
                       systemImage: "tv")
-                    .font(.footnote.weight(.medium))
+                    .font(.smallText.weight(.medium))
                     .foregroundStyle(theme.secondaryText)
                     .contentTransition(.numericText())
                     .accessibilityIdentifier("detail.onTV")

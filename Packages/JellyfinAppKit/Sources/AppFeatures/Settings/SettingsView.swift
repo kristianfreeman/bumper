@@ -131,8 +131,8 @@ struct ThemePreview: View {
                     .font(.title3).padding(16).foregroundStyle(.white)
             }
             .cardHighlight()
-            Text(theme.name).font(.callout.weight(.semibold)).lineLimit(1)
-            Text(theme.tagline).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(theme.name).font(.detailText.weight(.semibold)).lineLimit(1)
+            Text(theme.tagline).font(.fineText).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 }
@@ -147,7 +147,7 @@ struct CapabilitiesView: View {
                 row("H.264", c.h264); row("HEVC / HEVC Main10", c.hevc); row("AV1", c.av1Hardware); row("VP9", c.vp9Hardware)
             }
             Section("VLCKit") {
-                Text("MKV, AVI, TS, VC-1, MPEG-2, AV1, VP9, DTS, TrueHD, FLAC, Opus, ASS/SSA, PGS, VobSub, DVB").font(.caption)
+                Text("MKV, AVI, TS, VC-1, MPEG-2, AV1, VP9, DTS, TrueHD, FLAC, Opus, ASS/SSA, PGS, VobSub, DVB").font(.labelText)
             }
             Section("Output") {
                 row("HDR Display", c.hdrEligible)

@@ -192,8 +192,8 @@ struct SkeletonCard: View {
         VStack(alignment: .leading, spacing: 12) {
             RoundedRectangle(cornerRadius: 22).fill(theme.surface.opacity(0.5)).frame(width: width, height: width * aspect)
             VStack(alignment: .leading, spacing: 2) {
-                Text(" ").font(.caption)
-                Text(" ").font(.caption2)
+                Text(" ").font(.labelText)
+                Text(" ").font(.fineText)
             }
         }
         .accessibilityHidden(true)
@@ -230,8 +230,8 @@ struct ViewAllTile: View {
                     .frame(width: circle, height: circle)
                     .background(focused ? Color.black.opacity(0.08) : theme.primaryText.opacity(0.12), in: .circle)
                 VStack(spacing: 1) {
-                    Text("View all").font((Layout.device == .phone ? Font.caption : .callout).weight(.semibold))
-                    if let count { Text(count.formatted()).font(Layout.device == .phone ? .caption2 : .caption).opacity(0.7) }
+                    Text("View all").font((Layout.device == .phone ? Font.caption : .detailText).weight(.semibold))
+                    if let count { Text(count.formatted()).font(Layout.device == .phone ? .caption2 : .labelText).opacity(0.7) }
                 }
             }
             .foregroundStyle(focused ? .black : theme.primaryText)

@@ -205,7 +205,7 @@ struct ArrivalsPage: View {
                     .tvFocusSection()
                 }
                 if arrivals?.isEmpty == true {
-                    Text("Nothing new yet.").font(.callout).foregroundStyle(theme.secondaryText)
+                    Text("Nothing new yet.").font(.detailText).foregroundStyle(theme.secondaryText)
                 }
             }
             .padding(.horizontal, Layout.horizontalMargin)

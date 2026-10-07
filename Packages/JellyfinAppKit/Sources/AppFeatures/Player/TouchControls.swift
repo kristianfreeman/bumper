@@ -50,13 +50,13 @@ struct TouchControls: View {
             glassButton("xmark", "Close", size: 17) { close() }
                 .accessibilityIdentifier("player.close")
             VStack(alignment: .leading, spacing: 1) {
-                if let kicker { Text(kicker).font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+                if let kicker { Text(kicker).font(.labelText.weight(.semibold)).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
                 Text(controller.item.name ?? "").font(phone ? .headline : .title3.weight(.semibold)).lineLimit(1)
             }
             Spacer(minLength: 0)
             if controller.isBackground {
                 Label("Untracked", systemImage: "infinity")
-                    .font(.caption.weight(.semibold))
+                    .font(.labelText.weight(.semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.white.opacity(0.85), in: .capsule)
@@ -93,7 +93,7 @@ struct TouchControls: View {
                      seek: { t in Task { await controller.seek(to: t) }; poke() })
             HStack(spacing: 10) {
                 Text(facts)
-                    .font(.caption.weight(.medium))
+                    .font(.labelText.weight(.medium))
                     .foregroundStyle(.white.opacity(0.75))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -184,7 +184,7 @@ struct TouchControls: View {
             HStack(spacing: 6) {
                 glassFace(on ? "gearshape.fill" : "gearshape", size: 15)
                 if let left = timer.shortLabel, !phone || !short {
-                    Text(left).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.white.opacity(0.85))
+                    Text(left).font(.labelText.weight(.semibold).monospacedDigit()).foregroundStyle(.white.opacity(0.85))
                 }
             }
         }
@@ -247,7 +247,7 @@ struct FindSubtitlesSheet: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(sub.name).lineLimit(2)
-                                    Text(FoundSubtitles.detail(sub, best: i == 0)).font(.caption.weight(i == 0 && FoundSubtitles.isClearFit(sub) ? .bold : .regular))
+                                    Text(FoundSubtitles.detail(sub, best: i == 0)).font(.labelText.weight(i == 0 && FoundSubtitles.isClearFit(sub) ? .bold : .regular))
                                         .foregroundStyle(i == 0 && FoundSubtitles.isClearFit(sub) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                                 }
                                 Spacer()

@@ -424,7 +424,7 @@ struct HeroInfo: View {
                 MetadataLine(item: item)
                 if let overview = item.overview {
                     Text(overview)
-                        .font(.callout)
+                        .font(.detailText)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(3)
                         .spoilerBlur(item.spoils(hidingSpoilers: hideSpoilers))
@@ -444,7 +444,7 @@ struct MetadataLine: View {
     var body: some View {
         let parts = Self.parts(for: item)
         Text(parts.joined(separator: "  ·  "))
-            .font(Layout.device == .phone ? .subheadline : .callout.weight(.medium))
+            .font(Layout.device == .phone ? .subheadline : .detailText.weight(.medium))
             .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
     }

@@ -349,8 +349,8 @@ struct SettingsView: View {
                             Image(systemName: "square.grid.3x3.fill").font(.system(size: 44))
                                 .frame(width: 240, height: 135)
                                 .background(theme.surface, in: .rect(cornerRadius: 18))
-                            Text("All Themes").font(.callout.weight(.semibold))
-                            Text("\(Theme.all.count) themes and accents").font(.caption2).foregroundStyle(theme.secondaryText)
+                            Text("All Themes").font(.detailText.weight(.semibold))
+                            Text("\(Theme.all.count) themes and accents").font(.fineText).foregroundStyle(theme.secondaryText)
                         }
                     }
                     .buttonStyle(.borderless)
@@ -487,7 +487,7 @@ private struct SettingTileFace: View {
                 value
             }
             Text(tile.title).font(.headline).lineLimit(1)
-            Text(tile.detail).font(.caption).opacity(0.7).lineLimit(2, reservesSpace: true)
+            Text(tile.detail).font(.labelText).opacity(0.7).lineLimit(2, reservesSpace: true)
         }
         .foregroundStyle(focused ? .black : theme.primaryText)
         .padding(24)
@@ -512,15 +512,15 @@ private struct SettingTileFace: View {
                 .animation(.spring(duration: 0.25), value: b.wrappedValue)
         case .choice:
             HStack(spacing: 8) {
-                Text(tile.valueText).font(.callout.weight(.semibold)).lineLimit(1)
-                Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption.weight(.bold)).opacity(0.6)
+                Text(tile.valueText).font(.detailText.weight(.semibold)).lineLimit(1)
+                Image(systemName: open ? "chevron.up" : "chevron.down").font(.labelText.weight(.bold)).opacity(0.6)
             }
         case .action(let value, _):
-            if let value { Text(value).font(.callout.weight(.semibold)) }
+            if let value { Text(value).font(.detailText.weight(.semibold)) }
         case .link(let value, _):
             HStack(spacing: 8) {
-                if let value { Text(value).font(.callout.weight(.semibold)).lineLimit(1) }
-                Image(systemName: "chevron.right").font(.caption.weight(.bold)).opacity(0.6)
+                if let value { Text(value).font(.detailText.weight(.semibold)).lineLimit(1) }
+                Image(systemName: "chevron.right").font(.labelText.weight(.bold)).opacity(0.6)
             }
         }
     }
@@ -552,7 +552,7 @@ private struct SectionTitle: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.title3.weight(.bold)).foregroundStyle(theme.primaryText)
-            Text(lede).font(.callout).foregroundStyle(theme.secondaryText).lineLimit(1)
+            Text(lede).font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
     }
@@ -572,7 +572,7 @@ private struct AccountCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(session.account.userName).font(.system(size: Layout.sectionTitle, weight: .bold)).foregroundStyle(theme.primaryText)
                     Text("\(session.server.name) · \(session.server.url.host() ?? session.server.url.absoluteString)\(session.server.version.map { " · Jellyfin \($0)" } ?? "")")
-                        .font(.callout).foregroundStyle(theme.secondaryText)
+                        .font(.detailText).foregroundStyle(theme.secondaryText)
                     HStack(spacing: 16) {
                         ForEach(app.accounts.accounts.filter { $0.id != session.id }) { other in
                             Pill("Switch to \(other.userName)", systemImage: "person.2", size: .small, alwaysShowsTitle: true) { app.switchAccount(other.id) }
@@ -683,7 +683,7 @@ extension SettingsView {
                                 .overlay { Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1) }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(t.name).foregroundStyle(theme.primaryText)
-                                Text(t.tagline).font(.footnote).foregroundStyle(theme.secondaryText)
+                                Text(t.tagline).font(.smallText).foregroundStyle(theme.secondaryText)
                             }
                             Spacer()
                             if t.isPremium && !themes.isUnlocked { Image(systemName: "lock.fill").foregroundStyle(theme.secondaryText) }
@@ -772,7 +772,7 @@ extension SettingsView {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(tile.title).foregroundStyle(tile.id.hasPrefix("remove") ? .red : theme.primaryText)
-                Text(tile.detail).font(.footnote).foregroundStyle(theme.secondaryText)
+                Text(tile.detail).font(.smallText).foregroundStyle(theme.secondaryText)
             }
         } icon: {
             Image(systemName: tile.symbol).foregroundStyle(theme.accent)
@@ -785,12 +785,12 @@ extension SettingsView {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title).foregroundStyle(theme.primaryText)
-                        if let detail { Text(detail).font(.footnote).foregroundStyle(theme.secondaryText) }
+                        if let detail { Text(detail).font(.smallText).foregroundStyle(theme.secondaryText) }
                     }
                 } icon: { Image(systemName: symbol).foregroundStyle(theme.accent) }
                 Spacer()
                 if let value { Text(value).foregroundStyle(theme.secondaryText) }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(theme.secondaryText.opacity(0.6))
+                Image(systemName: "chevron.right").font(.smallText.weight(.semibold)).foregroundStyle(theme.secondaryText.opacity(0.6))
             }
         }
     }
@@ -811,7 +811,7 @@ private struct FormAccount: View {
                     Text(session.account.userName).font(.title3.weight(.semibold)).foregroundStyle(theme.primaryText)
                     Text(session.server.name).font(.subheadline).foregroundStyle(theme.secondaryText)
                     Text("\(session.server.url.host() ?? session.server.url.absoluteString)\(session.server.version.map { " · Jellyfin \($0)" } ?? "")")
-                        .font(.footnote).foregroundStyle(theme.secondaryText)
+                        .font(.smallText).foregroundStyle(theme.secondaryText)
                 }
             }
             .padding(.vertical, 6)

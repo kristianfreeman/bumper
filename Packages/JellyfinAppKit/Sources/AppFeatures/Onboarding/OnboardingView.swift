@@ -46,7 +46,7 @@ private struct OnboardingHeader: View {
         VStack(alignment: .leading, spacing: 18) {
             if let eyebrow {
                 Text(eyebrow.uppercased())
-                    .font(.caption.weight(.bold)).tracking(2)
+                    .font(.labelText.weight(.bold)).tracking(2)
                     .foregroundStyle(theme.secondaryText)
             }
             Text(title)
@@ -94,7 +94,7 @@ private struct ServerRowFace: View {
                 .foregroundStyle(focused ? .black : theme.primaryText)
             VStack(alignment: .leading, spacing: 4) {
                 Text(name).font(.headline)
-                Text(detail).font(.callout).opacity(0.65)
+                Text(detail).font(.detailText).opacity(0.65)
             }
             .lineLimit(1)
             Spacer(minLength: 20)
@@ -156,7 +156,7 @@ struct ServerConnectView: View {
                         HStack(spacing: 16) {
                             if !searched || discovered.isEmpty { ProgressView() }
                             Text(searched ? "Still looking. If it's on another network, type its address." : "Looking…")
-                                .font(.callout).foregroundStyle(theme.secondaryText)
+                                .font(.detailText).foregroundStyle(theme.secondaryText)
                         }
                         .frame(height: 72)
                     }
@@ -169,7 +169,7 @@ struct ServerConnectView: View {
                 }
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout).foregroundStyle(.red)
+                        .font(.detailText).foregroundStyle(.red)
                         .frame(maxWidth: 820, alignment: .leading)
                 }
                 Spacer(minLength: 0)
@@ -289,7 +289,7 @@ struct SignInView: View {
                 .fixedSize()                  // never squeezed narrower than their labels (a click on the text missed)
                 .tvFocusSection()
                 if let error {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(.red)
+                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.detailText).foregroundStyle(.red)
                 }
                 Spacer(minLength: 0)
             }
@@ -417,7 +417,7 @@ private struct ProfileFace: View {
                 .foregroundStyle(focused ? theme.primaryText : theme.secondaryText)
                 .lineLimit(1)
             Text(user.hasPassword == false ? " " : "Password")
-                .font(.caption2).foregroundStyle(theme.secondaryText.opacity(0.7))
+                .font(.fineText).foregroundStyle(theme.secondaryText.opacity(0.7))
         }
         .frame(width: size + 40)
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
@@ -449,7 +449,7 @@ private struct QuickConnectCard: View {
             .accessibilityLabel(code)
             .accessibilityIdentifier("quickconnect.code")
             Text("In \(Brand.displayName) on another device (Settings → Approve a Device), or in Jellyfin under your profile → Quick Connect, enter this code. This \(thisDevice) signs in on its own.")
-                .font(.callout).foregroundStyle(theme.secondaryText)
+                .font(.detailText).foregroundStyle(theme.secondaryText)
                 .frame(maxWidth: 520, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }

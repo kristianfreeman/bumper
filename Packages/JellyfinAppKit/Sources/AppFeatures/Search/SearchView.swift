@@ -127,7 +127,7 @@ private struct UnderstoodSection: View {
                     Text(understood.filter.parts.map(understood.filter.text).joined(separator: " · ").capitalizedFirst)
                         .font(.sectionTitle).foregroundStyle(theme.primaryText)
                     Text(understood.items.isEmpty ? "Nothing in your library fits that yet." : "From your \(understood.filter.libraryName == "Everything" ? "library" : understood.filter.libraryName.lowercased()).")
-                        .font(.callout).foregroundStyle(theme.secondaryText)
+                        .font(.detailText).foregroundStyle(theme.secondaryText)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("search.understood")

@@ -126,7 +126,7 @@ struct DownloadsView: View {
                 }
                 if all.isEmpty {
                     Text("Download a film or an episode from its page, and it plays from here with no connection.")
-                        .font(.callout).foregroundStyle(theme.secondaryText)
+                        .font(.detailText).foregroundStyle(theme.secondaryText)
                 }
                 if !active.isEmpty {
                     section("Downloading", subtitle: active.count == 1 ? "One on its way." : "\(active.count) on their way, one at a time.") {
@@ -172,7 +172,7 @@ struct DownloadsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title).font(.sectionTitle).foregroundStyle(theme.primaryText)
-                Text(subtitle).font(.callout).foregroundStyle(theme.secondaryText)
+                Text(subtitle).font(.detailText).foregroundStyle(theme.secondaryText)
             }
             content()
         }
@@ -189,8 +189,8 @@ private struct DownloadRow: View {
         let store = app.downloads
         HStack(spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(DownloadWords.title(record.item)).font(.callout.weight(.semibold)).foregroundStyle(theme.primaryText).lineLimit(1)
-                Text(DownloadWords.status(record)).font(.caption).foregroundStyle(theme.secondaryText).lineLimit(1)
+                Text(DownloadWords.title(record.item)).font(.detailText.weight(.semibold)).foregroundStyle(theme.primaryText).lineLimit(1)
+                Text(DownloadWords.status(record)).font(.labelText).foregroundStyle(theme.secondaryText).lineLimit(1)
                 ProgressStrip(record.progress ?? 0).frame(maxWidth: 420)
             }
             Spacer(minLength: 12)
@@ -225,7 +225,7 @@ private struct ShowTile: View {
         return LandscapeCard(show, width: width, kind: .landscape, action: action)
             .overlay(alignment: .bottomLeading) {
                 Text("\(DownloadWords.count(count, "episode", "episodes")) · \(DownloadWords.bytes(bytes))")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(.fineText).foregroundStyle(.secondary)
                     .offset(y: 22)
             }
             .padding(.bottom, 22)

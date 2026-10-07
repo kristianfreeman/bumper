@@ -126,7 +126,7 @@ public struct PillFace<Icon: View>: View {
             VStack(spacing: 6) {
                 face
                 Text(caption ?? title)
-                    .font(.caption2.weight(.medium))
+                    .font(.fineText.weight(.medium))
                     .foregroundStyle(theme.secondaryText)
                     .lineLimit(1)
                     .fixedSize()
@@ -145,8 +145,8 @@ public struct PillFace<Icon: View>: View {
                 .clipShape(.circle)
             if open {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(size == .large ? .title3.weight(.semibold) : .callout.weight(.semibold))
-                    if let detail { Text(detail).font(.caption2).opacity(0.7) }
+                    Text(title).font(size == .large ? .title3.weight(.semibold) : .detailText.weight(.semibold))
+                    if let detail { Text(detail).font(.fineText).opacity(0.7) }
                 }
                 .lineLimit(1)
                 .fixedSize()

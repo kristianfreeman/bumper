@@ -84,7 +84,7 @@ struct RootView: View {
                 VStack(spacing: 18) {
                     ProgressView()
                     Text("Signing in as \(who)…").font(.headline).foregroundStyle(theme.primaryText)
-                    Text("From your other devices.").font(.callout).foregroundStyle(theme.secondaryText)
+                    Text("From your other devices.").font(.detailText).foregroundStyle(theme.secondaryText)
                 }
                 .accessibilityIdentifier("onboarding.cloudSignIn")
             } else {
@@ -305,7 +305,10 @@ struct MainTabView: View {
             visited.insert(selection)
             if paths.isEmpty { paths["home"] = app.launchRoute }
         }
-        .onChange(of: selection) { _, tab in
+        .onChange(of: selection) { left, tab in
+            // The Mac's places work like the sidebar in Music or TV: going back
+            // to one opens its top, not the page you'd gone into there.
+            paths[left] = []
             visited.insert(tab)
             recordOpen(tab)
         }

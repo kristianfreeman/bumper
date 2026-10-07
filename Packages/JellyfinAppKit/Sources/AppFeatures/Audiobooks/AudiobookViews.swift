@@ -99,7 +99,7 @@ struct NowPlayingPill: View {
                 Image(systemName: player.isPlaying ? "waveform" : "pause.fill")
                     .symbolEffect(.variableColor.iterative, isActive: player.isPlaying)
             }
-            .font(.callout.weight(.semibold))
+            .font(.detailText.weight(.semibold))
         }
         .accessibilityIdentifier("audiobook.nowPlaying")
     }
@@ -127,7 +127,7 @@ struct AudiobookDetailView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(book.title).font(.title.bold()).foregroundStyle(theme.primaryText).lineLimit(2)
                             if let author = book.author { Text(author).font(.title3).foregroundStyle(theme.secondaryText) }
-                            Text(facts(book)).font(.callout).foregroundStyle(theme.secondaryText)
+                            Text(facts(book)).font(.detailText).foregroundStyle(theme.secondaryText)
                         }
                         HStack(spacing: 24) {
                             Button { app.listen(book) } label: {
@@ -140,7 +140,7 @@ struct AudiobookDetailView: View {
                             }
                         }
                         if let overview = book.overview {
-                            Text(overview).font(.callout).foregroundStyle(theme.secondaryText).lineLimit(3).frame(maxWidth: 1000, alignment: .leading)
+                            Text(overview).font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(3).frame(maxWidth: 1000, alignment: .leading)
                         }
                         if !book.chapters.isEmpty { ChapterList(book: book, current: nil) { app.listen(book, from: $0.start) } }
                     }
@@ -233,7 +233,7 @@ private struct ChapterRow: View {
             Text(clock(range.lowerBound)).monospacedDigit().opacity(0.6)
             Text(hoursMinutes(range.upperBound - range.lowerBound)).opacity(0.6).frame(width: 130, alignment: .trailing)
         }
-        .font(.callout)
+        .font(.detailText)
         .foregroundStyle(focused ? .black : .primary)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -322,7 +322,7 @@ struct AudiobookNowPlayingView: View {
                 Spacer()
                 Text("−" + clock(length - within))
             }
-            .font(.callout.monospacedDigit())
+            .font(.detailText.monospacedDigit())
             .foregroundStyle(.white.opacity(0.85))
         }
     }
@@ -424,7 +424,7 @@ struct AudiobookNowPlayingView: View {
     private var status: some View {
         VStack {
             if let error = player.error {
-                Label(error, systemImage: "exclamationmark.triangle").font(.callout).padding(20).overVideoPanel(cornerRadius: 18)
+                Label(error, systemImage: "exclamationmark.triangle").font(.detailText).padding(20).overVideoPanel(cornerRadius: 18)
             } else if player.isBuffering {
                 ProgressView().padding(20)
             }

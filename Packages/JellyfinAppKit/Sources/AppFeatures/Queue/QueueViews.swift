@@ -38,7 +38,7 @@ struct QueueSection: View {
             HStack(alignment: .center, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Queue").font(.sectionTitle).foregroundStyle(theme.primaryText)
-                    Text(QueueWords.summary(store)).font(.callout).foregroundStyle(theme.secondaryText)
+                    Text(QueueWords.summary(store)).font(.detailText).foregroundStyle(theme.secondaryText)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("collection.queue")
@@ -106,7 +106,7 @@ private struct TimeBadge: View {
             if slot.entry.ambient { Image(systemName: "sparkles") }
             Text(slot.entry.ambient ? "Suggested · \(QueueWords.time(slot))" : QueueWords.time(slot))
         }
-        .font(.caption.weight(.bold))
+        .font(.labelText.weight(.bold))
         .foregroundStyle(slot.overruns ? .white : .black)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -131,7 +131,7 @@ struct QueuePage: View {
                 .tvFocusSection()
                 if store.isEmpty {
                     Text("Add things from any page with “Add to Queue” — or hold Select on a card.")
-                        .font(.callout).foregroundStyle(theme.secondaryText)
+                        .font(.detailText).foregroundStyle(theme.secondaryText)
                 }
                 VStack(spacing: 14) {
                     ForEach(store.timeline, id: \.entry.id) { slot in
@@ -162,7 +162,7 @@ private struct QueueRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.seriesName ?? item.name ?? "").font(.headline).foregroundStyle(theme.primaryText).lineLimit(1)
                 Text([item.seriesName != nil ? item.name : nil, "\(Int(QueuePlan.remaining(item) / 60)) min", slot.entry.ambient ? "suggested" : nil].compactMap { $0 }.joined(separator: " · "))
-                    .font(.callout).foregroundStyle(theme.secondaryText).lineLimit(1)
+                    .font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(1)
             }
             Spacer()
             HStack(spacing: 14) {

@@ -108,7 +108,7 @@ struct ProfileView: View {
                             .font(.title.bold()).foregroundStyle(theme.primaryText)
                         HStack(spacing: 10) {
                             if model.user?.policy?.isAdministrator == true {
-                                Text("Administrator").font(.caption.weight(.semibold))
+                                Text("Administrator").font(.labelText.weight(.semibold))
                                     .padding(.horizontal, 10).padding(.vertical, 4)
                                     .background(theme.accent.opacity(0.2), in: .capsule)
                                     .foregroundStyle(theme.accent)
@@ -158,14 +158,14 @@ struct ProfileView: View {
             Text(model.user?.name ?? app.session?.account.userName ?? "")
                 .font(.system(size: 52, weight: .bold)).foregroundStyle(theme.primaryText)
             if model.user?.policy?.isAdministrator == true {
-                Text("Administrator").font(.caption.weight(.semibold))
+                Text("Administrator").font(.labelText.weight(.semibold))
                     .padding(.horizontal, 14).padding(.vertical, 6)
                     .background(theme.accent.opacity(0.2), in: .capsule)
                     .foregroundStyle(theme.accent)
             }
             if let active = model.user?.lastActivityDate {
                 Text("Last active \(active.formatted(.relative(presentation: .named)))")
-                    .font(.callout).foregroundStyle(theme.secondaryText)
+                    .font(.detailText).foregroundStyle(theme.secondaryText)
             }
             // The TV's profile is a tab: switching people is here.
             if app.accounts.accounts.count > 1 {
@@ -203,14 +203,14 @@ struct ProfileView: View {
                     .padding(.bottom, 4)
                 ForEach(top, id: \.self) { g in
                     HStack(spacing: Platform.isTV ? 20 : 12) {
-                        Text(g.name).font(.callout).foregroundStyle(theme.primaryText).lineLimit(1)
+                        Text(g.name).font(.detailText).foregroundStyle(theme.primaryText).lineLimit(1)
                             .frame(width: Platform.isTV ? 220 : Layout.device == .phone ? 110 : 160, alignment: .leading)
                         GeometryReader { geo in
                             Capsule().fill(theme.accent.opacity(0.85))
                                 .frame(width: max(12, geo.size.width * CGFloat(g.count) / CGFloat(most)))
                         }
                         .frame(height: Platform.isTV ? 14 : 10)
-                        Text("\(g.count)").font(.callout.monospacedDigit()).foregroundStyle(theme.secondaryText).frame(width: Platform.isTV ? 60 : 40, alignment: .trailing)
+                        Text("\(g.count)").font(.detailText.monospacedDigit()).foregroundStyle(theme.secondaryText).frame(width: Platform.isTV ? 60 : 40, alignment: .trailing)
                     }
                 }
             }
@@ -231,7 +231,7 @@ struct ProfileView: View {
                 row(Platform.isTV ? "Apple TV" : DownloadWords.device, PerfRecorder.hardwareModel)
                 row("App", "\(Brand.displayName) \(Brand.version) (\(Brand.build))")
             }
-            .font(.callout)
+            .font(.detailText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Platform.isTV ? 28 : 18)
@@ -260,7 +260,7 @@ struct StatTile: View {
             Text(value ?? "–").font(.system(size: compact ? 30 : 54, weight: .bold).monospacedDigit()).foregroundStyle(theme.primaryText)
                 .lineLimit(1).minimumScaleFactor(0.5)
                 .contentTransition(.numericText())
-            Text(label).font(compact ? .footnote : .callout).foregroundStyle(theme.secondaryText).lineLimit(1)
+            Text(label).font(compact ? .smallText : .detailText).foregroundStyle(theme.secondaryText).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(compact ? 16 : 28)

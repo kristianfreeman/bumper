@@ -394,7 +394,7 @@ struct CollectionPage: View {
                 .animation(.easeOut(duration: 0.15), value: model.refreshing)
                 if model.settled, !model.refreshing, model.items.isEmpty {
                     Text("Nothing matches. Try removing a filter.")
-                        .font(.callout).foregroundStyle(theme.secondaryText)
+                        .font(.detailText).foregroundStyle(theme.secondaryText)
                 }
             }
             .padding(.horizontal, Layout.horizontalMargin)
@@ -499,7 +499,7 @@ struct FilterSentence: View {
                     Menu { partMenu(part) } label: {
                         HStack(spacing: 6) {
                             Text(filter.text(part))
-                            Image(systemName: "xmark").font(.caption2.weight(.bold)).opacity(0.7)
+                            Image(systemName: "xmark").font(.fineText.weight(.bold)).opacity(0.7)
                         }
                     }
                     .tint(theme.accent)

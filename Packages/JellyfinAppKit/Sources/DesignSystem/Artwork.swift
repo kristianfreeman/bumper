@@ -67,7 +67,7 @@ private struct RevealHint: View {
             .fill(.white.opacity(focused ? 0.14 : 0.001))
             .overlay {
                 if focused {
-                    Label("Show", systemImage: "eye").font(.callout.weight(.semibold)).foregroundStyle(.white)
+                    Label("Show", systemImage: "eye").font(.detailText.weight(.semibold)).foregroundStyle(.white)
                         .transition(.opacity)
                 }
             }
