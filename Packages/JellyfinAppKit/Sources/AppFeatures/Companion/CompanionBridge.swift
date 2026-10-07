@@ -4,6 +4,7 @@ import DesignSystem
 import Foundation
 import Instrumentation
 import JellyfinAPI
+import PlaybackCore
 #if canImport(UIKit)
 import UIKit
 #else
@@ -45,6 +46,7 @@ final class CompanionBridge {
     }
 
     func start() {
+        guard ticker == nil else { return }
         host.onLog = { TraceFile.write("companion", $0) }
         host.onCommand = { [weak self] command, connection in
             Task { @MainActor in await self?.handle(command, from: connection) }
@@ -58,6 +60,16 @@ final class CompanionBridge {
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
+        TraceFile.write("companion", "remote on")
+    }
+
+    /// Settings → Remote off: no longer on the network; phones drop.
+    func stop() {
+        guard let ticker else { return }
+        ticker.cancel()
+        self.ticker = nil
+        host.stop()
+        TraceFile.write("companion", "remote off")
     }
 
     private func publish() {
@@ -67,7 +79,7 @@ final class CompanionBridge {
             tvName: Self.deviceName,
             userName: session.account.userName,
             focused: app.focusedItem.map { Self.item($0, client: client) },
-            playing: app.nowPlaying.map { CompanionNowPlaying(item: Self.item($0.item, client: client), position: $0.position, duration: $0.duration, paused: $0.paused) }
+            playing: app.nowPlaying.map { video(playing: $0, client: client) }
                 ?? app.audiobook.map { CompanionNowPlaying(item: Self.item($0.book.card, client: client), position: $0.position, duration: $0.book.duration, paused: !$0.isPlaying) },
             queue: app.queue.timeline.map { CompanionPlanEntry(item: Self.item($0.entry.item, client: client), start: $0.start, suggested: $0.entry.ambient, overruns: $0.overruns) },
             doneBy: app.queue.plan.doneBy,
@@ -79,6 +91,40 @@ final class CompanionBridge {
             lastPlaying = p
         }
         host.publish(state)
+    }
+
+    /// What's on, with what the phone's now-playing sheet steers: tracks,
+    /// Untracked, the sleep timer, and what comes next.
+    private func video(playing info: NowPlayingInfo, client: JellyfinClient) -> CompanionNowPlaying {
+        var p = CompanionNowPlaying(item: Self.item(info.item, client: client), position: info.position, duration: info.duration, paused: info.paused)
+        p.backdropURL = ArtworkSource.resolve(info.item, .backdrop)?.request(client: client, pixelWidth: 1200).url
+        p.kind = info.item.kind == .episode ? "episode" : info.item.kind == .movie ? "film" : nil
+        let timer = app.sleepTimer
+        p.sleep = switch timer.mode {
+        case .off: .off
+        case .minutes(let m): .minutes(m)
+        case .endOfItem: .endOfItem
+        }
+        p.sleepLabel = timer.shortLabel
+        guard let player = app.player else { return p }
+        p.subtitles = player.subtitleOptions.map { CompanionTrack(id: $0.index, title: MenuCard.trackName($0), detail: MenuCard.trackNote($0)) }
+        p.subtitle = player.selectedSubtitle
+        p.subtitleSearch = switch player.subtitleSearch {
+        case .idle: nil
+        case .searching: .searching
+        case .results(let found):
+            .results(found.enumerated().map { i, sub in CompanionFoundSubtitle(id: sub.id, name: sub.name, detail: FoundSubtitles.detail(sub, best: i == 0)) })
+        case .failed(let message): .failed(message)
+        }
+        p.audio = player.audioOptions.map { CompanionTrack(id: $0.id, title: $0.title, detail: $0.detail) }
+        p.audioTrack = player.engine?.selectedAudioTrack
+        p.untracked = player.isBackground
+        var next: [BaseItem] = player.upNext.map { [$0] } ?? []
+        for slot in app.queue.timeline where slot.entry.item.id != info.item.id && !next.contains(where: { $0.id == slot.entry.item.id }) {
+            next.append(slot.entry.item)
+        }
+        p.upNext = next.prefix(6).map { Self.item($0, client: client) }
+        return p
     }
 
     private func handle(_ command: CompanionCommand, from connection: CompanionConnection) async {
@@ -100,6 +146,31 @@ final class CompanionBridge {
             app.queue.setDoneBy(date)
         case .playPause:
             if let book = app.audiobook { book.togglePlayPause() } else { NotificationCenter.default.post(name: .companionPlayPause, object: nil) }
+        case .seek(let seconds):
+            await app.player?.seek(to: .seconds(seconds))
+        case .skip(let seconds):
+            await app.player?.skip(by: .seconds(seconds))
+        case .selectSubtitle(let index):
+            await app.player?.selectSubtitle(index)
+        case .findSubtitles:
+            await app.player?.findSubtitles()
+        case .useFoundSubtitle(let id):
+            if let player = app.player, case .results(let found) = player.subtitleSearch, let sub = found.first(where: { $0.id == id }) {
+                await player.use(sub)                        // a found one becomes a track of the item, and on
+                if player.foundSubtitle?.id == sub.id { player.subtitleSearch = .idle }   // (a failure stays, to say why)
+            }
+        case .cancelSubtitleSearch:
+            app.player?.subtitleSearch = .idle
+        case .selectAudio(let id):
+            await app.player?.selectAudio(id)
+        case .setUntracked(let on):
+            app.player?.setBackground(on)
+        case .setSleep(let choice):
+            switch choice {
+            case .off: app.sleepTimer.reset()
+            case .minutes(let m): app.sleepTimer.set(.minutes(m))
+            case .endOfItem: app.sleepTimer.set(.endOfItem)
+            }
         case .search(let words):
             var q = ItemQuery(includeItemTypes: [.movie, .series], limit: 24)
             q.searchTerm = words

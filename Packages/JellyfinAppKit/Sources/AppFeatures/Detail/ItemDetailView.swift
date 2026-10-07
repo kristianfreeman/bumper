@@ -197,8 +197,9 @@ struct ItemDetailView: View {
                 Text([episode.episodeLabel, episode.name].compactMap { $0 }.joined(separator: " · "))
                     .font(Self.phone ? .headline : .title3.weight(.semibold)).foregroundStyle(theme.primaryText).lineLimit(1)
                 MetadataLine(item: episodeMetadata(episode))
-                Text(episode.overview(hidingSpoilers: app.settings.hideSpoilers) ?? (episode.isSpoilerSensitive && app.settings.hideSpoilers ? "Hidden until you've watched it." : ""))
+                Text(episode.overview ?? "")
                     .font(.callout).foregroundStyle(theme.secondaryText).lineLimit(3)
+                    .spoilerBlur(episode.spoils(hidingSpoilers: app.settings.hideSpoilers))
                     .frame(maxWidth: 1100, minHeight: Self.phone ? 0 : 90, alignment: .topLeading)   // fixed height: focus moves don't shift the buttons
             }
             .id(episode.id)
@@ -230,8 +231,9 @@ struct ItemDetailView: View {
             if let tagline = item.taglines?.first {
                 Text(tagline).font(.headline).foregroundStyle(theme.primaryText)
             }
-            if let overview = item.overview(hidingSpoilers: app.settings.hideSpoilers) {
+            if let overview = item.overview {
                 Text(overview).font(.callout).foregroundStyle(theme.secondaryText).lineLimit(Self.phone ? 3 : 4).frame(maxWidth: 1100, alignment: .leading)
+                    .spoilerBlur(item.spoils(hidingSpoilers: app.settings.hideSpoilers))
             }
             actionButtons(item)
         }
@@ -284,7 +286,7 @@ struct ItemDetailView: View {
                     .accessibilityIdentifier("detail.queue")
                 if item.kind == .series || item.kind == .movie {
                     // On a loop, not marking anything watched (a show from a random episode).
-                    Pill("Background", systemImage: "infinity", size: size) { app.playInBackground(item) }
+                    Pill("Untracked", systemImage: "infinity", size: size) { app.playInBackground(item) }
                         .focused($actionFocus, equals: "background")
                         .accessibilityIdentifier("detail.background")
                 }

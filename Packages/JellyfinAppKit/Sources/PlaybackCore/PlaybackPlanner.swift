@@ -17,6 +17,9 @@ public struct PlaybackPlanner: Sendable {
     public var capabilities: DeviceCapabilities
     public var preference: EnginePreference
     public var maxBitrate: Int?
+    /// Off ("Disable Transcoding"): files play as they are, or not at all —
+    /// never converted by the server; what can't play says why.
+    public var allowsTranscoding = true
     /// Can this device software-decode a stream in real time?
     /// (codec, width, height, fps) → Bool. nil = assume yes.
     public var softwareDecodeCheck: (@Sendable (String, Int, Int, Double) -> Bool)?
@@ -100,7 +103,7 @@ public struct PlaybackPlanner: Sendable {
         if preference == .automatic && blockers.isEmpty {
             return Decision(engine: .native, method: .directPlay, reasons: ["AVPlayer: MP4/MOV · H.264/HEVC · AAC/AC-3/E-AC-3"])
         }
-        if let tooHeavy = softwareDecodeTooHeavy(source), source.supportsTranscoding != false {
+        if allowsTranscoding, let tooHeavy = softwareDecodeTooHeavy(source), source.supportsTranscoding != false {
             return Decision(engine: .native, method: .transcode, reasons: [tooHeavy])
         }
         return Decision(engine: .vlc, method: .directPlay, reasons: preference == .vlc ? ["VLCKit (forced)"] : blockers)
@@ -138,10 +141,13 @@ public struct PlaybackPlanner: Sendable {
     public enum PlanError: Error, LocalizedError {
         case noMediaSource
         case server(String)
+        /// It would need the server to convert it, and transcoding is off.
+        case needsTranscoding(String)
         public var errorDescription: String? {
             switch self {
             case .noMediaSource: "This item has no playable media."
             case .server(let code): "The server can't play this item (\(code))."
+            case .needsTranscoding(let why): "This needs your server to convert it (\(why)), and transcoding is off in Settings."
             }
         }
     }
@@ -156,7 +162,9 @@ public struct PlaybackPlanner: Sendable {
     ) async throws -> PlaybackPlan {
         let startPosition = Self.usableStart(startPosition, runtime: item.runtime)
         var request = PlaybackInfoRequest(userId: client.userId, deviceProfile: deviceProfile())
-        request.maxStreamingBitrate = maxBitrate
+        // No conversion: no bitrate cap either (only conversion can meet one).
+        request.maxStreamingBitrate = allowsTranscoding ? maxBitrate : nil
+        request.enableTranscoding = allowsTranscoding
         request.mediaSourceId = mediaSourceId
         request.audioStreamIndex = audioIndex
         request.subtitleStreamIndex = subtitleIndex
@@ -173,6 +181,10 @@ public struct PlaybackPlanner: Sendable {
         let audio = audioIndex ?? source.defaultAudioStreamIndex
         let subtitle = subtitleIndex ?? source.defaultSubtitleStreamIndex
         var decision = decide(source: source, audioIndex: audio, subtitleIndex: subtitle)
+        if decision.method == .transcode && !allowsTranscoding {
+            let why = source.videoStream?.isDolbyVision == true ? "Dolby Vision outside MP4" : "the server won't send it as it is"
+            throw PlanError.needsTranscoding(why)
+        }
 
         // We picked "transcode" but asked with the VLCKit profile, so the
         // server may not have produced a URL. Ask again with AVPlayer's profile.

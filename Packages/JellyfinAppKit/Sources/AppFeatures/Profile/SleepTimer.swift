@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 import Observation
 
 /// "Stop playing in 30 minutes" / "at the end of this episode". When it
@@ -13,11 +14,16 @@ final class SleepTimer {
         case endOfItem
     }
 
-    static let presets = [15, 30, 45, 60, 90]
+    static let presets = [15, 30, 60]
 
     /// "15 Minutes", "1 Hour", "1 Hour 30 Minutes".
     static func title(_ minutes: Int) -> String {
         minutes < 60 ? "\(minutes) Minutes" : minutes == 60 ? "1 Hour" : "\(minutes / 60) Hour\(minutes >= 120 ? "s" : "") \(minutes % 60) Minutes"
+    }
+    /// The player's Stop Playing choices: "In 15 Minutes", "After This Episode".
+    static func stopTitle(_ minutes: Int) -> String { "In " + title(minutes) }
+    static func afterTitle(_ kind: ItemKind?) -> String {
+        kind == .episode ? "After This Episode" : kind == .movie ? "After This Film" : "After This One"
     }
     static let fadeLength: Duration = .seconds(8)
 

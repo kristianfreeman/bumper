@@ -48,9 +48,8 @@ public final class CastLink {
     public var connectedTo: String? {
         didSet {
             guard connectedTo != oldValue else { return }
-            if let tv = connectedTo {
-                notice = Notice(title: "Connected to \(tv)", detail: "What you play now starts on the TV.", symbol: "tv.fill")
-            } else if let tv = oldValue {
+            // Connecting needs no notice: the bar above the tabs says so.
+            if connectedTo == nil, let tv = oldValue {
                 notice = Notice(title: watching == nil ? "Lost \(tv)" : "Disconnected from \(tv)",
                                 detail: "What you play now plays on this \(Self.deviceWord).", symbol: "tv.slash")
             }
@@ -65,12 +64,9 @@ public final class CastLink {
     public var available: Bool { !tvs.isEmpty }
     public var isConnected: Bool { connectedTo != nil }
     public var notice: Notice?
-
-    /// Says it started on the TV (Play pressed while connected).
-    func noteStarted(_ title: String?, background: Bool = false) {
-        guard let tv = connectedTo else { return }
-        notice = Notice(title: background ? "Background on \(tv)" : "Playing on \(tv)", detail: title, symbol: "play.tv.fill")
-    }
+    /// Settings → Remote: off, the phone doesn't look for TVs, and the TV
+    /// button and bar go.
+    public var enabled = true
 
     /// "12:04", "1:02:10".
     static func clock(_ seconds: Double) -> String {
@@ -110,7 +106,7 @@ struct CastButton: View {
     @State private var showsRemote = false
 
     var body: some View {
-        if let cast {
+        if let cast, cast.enabled {
             Group {
                 if !cast.isConnected, cast.tvs.count == 1, let tv = cast.tvs.first {
                     Button { cast.connect(tv) } label: { label(cast) }
@@ -150,16 +146,12 @@ struct CastButton: View {
     }
 }
 
-/// The TV's remote (its Queue, search, what's on it), as a sheet.
+/// The TV's remote (what's on it, and what's next), as a sheet.
 private struct RemoteSheet: View {
     @Environment(\.castPanel) private var panel
 
     var body: some View {
-        if let panel {
-            panel
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
+        panel                                       // sizes itself (presentationDetents)
     }
 }
 
@@ -202,6 +194,8 @@ struct CastBar: View {
             }
         }
         .padding(.horizontal, 14)
+        .padding(.bottom, 4)                        // the text sits clear of the progress line
+        .frame(maxHeight: .infinity)                // the bar's full height: the line runs along its foot
         .overlay(alignment: .bottom) { progress }
         .animation(.default, value: cast.nowPlaying?.paused)
         .sheet(isPresented: $showsRemote) { RemoteSheet() }
@@ -226,7 +220,8 @@ struct CastBar: View {
                     .animation(.linear(duration: 0.5), value: playing.position)
             }
             .frame(height: 2)
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 3)
             .allowsHitTesting(false)
         }
     }
@@ -286,7 +281,7 @@ extension View {
     /// connected), and the notices at the top.
     @ViewBuilder func castBar(_ cast: CastLink?) -> some View {
         if let cast {
-            let shown = cast.isConnected || cast.nowPlaying != nil
+            let shown = cast.enabled && (cast.isConnected || cast.nowPlaying != nil)
             Group {
                 if #available(iOS 26.1, *) {
                     tabViewBottomAccessory(isEnabled: shown) { CastBar(cast: cast) }

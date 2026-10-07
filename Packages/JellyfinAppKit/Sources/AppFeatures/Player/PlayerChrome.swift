@@ -115,11 +115,15 @@ struct TransportBar: View {
             Spacer()
             HStack(alignment: .bottom, spacing: 40) {
                 PlayingTitle(controller: controller, engine: engine)
+                    .opacity(openMenu == .info ? 0 : 1)        // the About band says it, in its place
+                    .animation(.easeOut(duration: 0.2), value: openMenu)
                 Spacer(minLength: 0)
                 HStack(spacing: 18) {
                     ForEach(PlayerMenu.allCases, id: \.self) { menu in
-                        Pill(menu.title, systemImage: menu.symbol + (openMenu == menu || lit(menu) ? ".fill" : ""),
-                             detail: detail(menu), size: .small, active: lit(menu)) { open(menu) }
+                        // On (subtitles, Background, a sleep timer): a filled glyph,
+                        // not a ring — a ring read as focus.
+                        Pill(menu.title, systemImage: menu.symbol + (lit(menu) ? ".fill" : ""),
+                             detail: detail(menu), size: .small) { open(menu) }
                             .accessibilityIdentifier("control.\(menu.rawValue)")
                             .focused(focus, equals: .control(menu))
                             // Down: back to the video — not while a card is open
@@ -158,7 +162,9 @@ struct TransportBar: View {
 
     private func detail(_ menu: PlayerMenu) -> String? {
         guard menu == .playback else { return nil }
-        return app.sleepTimer.shortLabel.map { "Sleep in \($0)" } ?? (controller.isBackground ? "Background" : nil)
+        let timer = app.sleepTimer
+        if timer.mode == .endOfItem { return "Stops after this" }
+        return timer.shortLabel.map { "Stops in \($0)" } ?? (controller.isBackground ? "Untracked" : nil)
     }
 }
 
@@ -172,7 +178,7 @@ struct PlayingTitle: View {
         let phone = Layout.device == .phone
         VStack(alignment: .leading, spacing: phone ? 4 : 8) {
             if controller.isBackground {
-                Label("Background", systemImage: "infinity")
+                Label("Untracked", systemImage: "infinity")
                     .font((phone ? Font.caption : .callout).weight(.semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, phone ? 8 : 14)
@@ -375,20 +381,24 @@ struct MenuCard: View {
     let close: () -> Void
 
     var body: some View {
+        let band = menu == .info                     // About: a band across, above the timeline
         VStack(alignment: .leading, spacing: 12) {
-            Text(heading)
-                .font(.headline)
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.horizontal, 26)
-                .contentTransition(.opacity)
+            if !band {
+                Text(heading)
+                    .font(.headline)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.horizontal, 26)
+                    .contentTransition(.opacity)
+            }
             content
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 10)
-        .frame(width: menu == .info ? 900 : 600, alignment: .leading)
+        .frame(minWidth: band ? nil : 600, maxWidth: band ? .infinity : 600, alignment: .leading)
         .overVideoPanel(cornerRadius: 34)
         .tvFocusSection()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.leading, band ? 90 : 0)
         .padding(.trailing, 90)
         .padding(.bottom, 270)
         .defaultFocus(focus, defaultOption)
@@ -416,7 +426,7 @@ struct MenuCard: View {
 
     private var heading: String {
         if menu == .subtitles, controller.subtitleSearch != .idle { return "Found Subtitles" }
-        return menu == .info ? (controller.item.kind == .episode ? "About This Episode" : "About This Film") : menu.title
+        return menu.title
     }
 
     @ViewBuilder
@@ -464,35 +474,40 @@ struct MenuCard: View {
             }
             .padding(.horizontal, 10)
         case .playback:
+            // A short card: what's below scrolls up as focus moves down.
             let timer = app.sleepTimer
+            ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                OptionRow(title: "Background", detail: controller.isBackground ? "Plays on; nothing is marked watched" : nil, selected: false,
-                          id: "background", focus: focus, symbol: "infinity", trailing: controller.isBackground ? "On" : "Off") {
+                OptionRow(title: "Untracked", detail: "Your progress won't be saved.", selected: false,
+                          id: "background", focus: focus, symbol: "infinity", trailing: controller.isBackground ? "On" : "Off", detailWhenFocused: true) {
                     controller.setBackground(!controller.isBackground)
                 }
-                Text("Sleep Timer")
+                Text("Stop Playing")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
                     .padding(.horizontal, 26)
                     .padding(.top, 14)
-                OptionRow(title: "Off", detail: nil, selected: !timer.isActive, id: "sleep-off", focus: focus) {
+                OptionRow(title: "Never", detail: nil, selected: !timer.isActive, id: "sleep-off", focus: focus) {
                     timer.reset()
                     close()
                 }
                 ForEach(SleepTimer.presets, id: \.self) { minutes in
-                    OptionRow(title: SleepTimer.title(minutes), detail: nil, selected: timer.mode == .minutes(minutes), id: "sleep-\(minutes)", focus: focus,
-                              trailing: timer.mode == .minutes(minutes) ? timer.shortLabel.map { "\($0) left" } : nil) {
+                    OptionRow(title: SleepTimer.stopTitle(minutes), detail: nil, selected: timer.mode == .minutes(minutes), id: "sleep-\(minutes)", focus: focus,
+                              trailing: timer.mode == .minutes(minutes) ? timer.shortLabel.map { "Stops in \($0)" } : nil) {
                         timer.set(.minutes(minutes))
                         close()
                     }
                 }
-                OptionRow(title: controller.item.kind == .episode ? "End of This Episode" : "End of This Film", detail: nil,
+                OptionRow(title: SleepTimer.afterTitle(controller.item.kind), detail: nil,
                           selected: timer.mode == .endOfItem, id: "sleep-end", focus: focus) {
                     timer.set(.endOfItem)
                     close()
                 }
             }
             .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            }
+            .frame(maxHeight: 430)
         case .info:
             ItemAbout(controller: controller)
                 .padding(.horizontal, 26)
@@ -529,7 +544,14 @@ struct MenuCard: View {
             case .idle: .option(controller.foundSubtitle != nil ? "sub-found" : controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")
             }
         case .audio: .option((controller.engine?.selectedAudioTrack ?? controller.audioOptions.first?.id).map { "audio-\($0)" } ?? "audio-none")
-        case .playback: .option("background")
+        // The sleep timer's current choice (the card's main business);
+        // Untracked is one step up.
+        case .playback:
+            switch app.sleepTimer.mode {
+            case .off: .option("sleep-off")
+            case .endOfItem: .option("sleep-end")
+            case .minutes(let m): .option(SleepTimer.presets.contains(m) ? "sleep-\(m)" : "sleep-off")
+            }
         case .info: .option("info")
         }
     }
@@ -547,12 +569,16 @@ private struct OptionRow: View {
     /// A clear best match: in the accent.
     var highlighted = false
     var symbol: String? = nil
-    /// A state at the end of the row ("On", "12m left").
+    /// A state at the end of the row ("On", "Stops in 12m").
     var trailing: String? = nil
+    /// The detail explains the row: shown only on it, not over the whole card.
+    var detailWhenFocused = false
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) { Face(title: title, detail: detail, selected: selected, highlighted: highlighted, symbol: symbol, trailing: trailing) }
+        Button(action: action) {
+            Face(title: title, detail: detail, selected: selected, highlighted: highlighted, symbol: symbol, trailing: trailing, detailWhenFocused: detailWhenFocused)
+        }
             .buttonStyle(BareButtonStyle())
             .focused(focus, equals: .option(id))
             .accessibilityIdentifier("option.\(id)")
@@ -566,8 +592,13 @@ private struct OptionRow: View {
         let highlighted: Bool
         let symbol: String?
         let trailing: String?
+        let detailWhenFocused: Bool
         @Environment(\.isFocused) private var focused
         @Environment(\.theme) private var theme
+        /// A focus-only detail, changed in an animation: tvOS moves focus
+        /// outside any, and the row (and the rows below it) jumped open.
+        @State private var expanded = false
+        private var showsDetail: Bool { detail != nil && (!detailWhenFocused || expanded) }
 
         var body: some View {
             HStack(spacing: 16) {
@@ -579,10 +610,12 @@ private struct OptionRow: View {
                 .frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1).truncationMode(.middle)
-                    if let detail {
+                    if let detail, showsDetail {
                         Text(detail).font(.caption.weight(highlighted ? .bold : .medium))
                             .foregroundStyle(focused ? Color.black.opacity(0.6) : highlighted ? theme.accent : .white.opacity(0.55))
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
                 Spacer(minLength: 8)
@@ -592,12 +625,16 @@ private struct OptionRow: View {
             }
             .foregroundStyle(focused ? .black : .white)
             .padding(.horizontal, 18)
-            .padding(.vertical, detail == nil ? 16 : 11)
+            .padding(.vertical, showsDetail ? 11 : 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(focused ? Color.white : selected ? Color.white.opacity(0.07) : .clear, in: .rect(cornerRadius: 18, style: .continuous))
             .scaleEffect(focused ? 1.025 : 1)
             .shadowWhen(focused, color: .black.opacity(0.35), radius: 16, y: 6)
             .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
+            .onChange(of: focused) { _, now in
+                guard detailWhenFocused else { return }
+                withAnimation(.spring(duration: 0.32, bounce: 0.12)) { expanded = now }
+            }
         }
     }
 }
@@ -607,57 +644,146 @@ private struct OptionRow: View {
 struct ItemAbout: View {
     let controller: PlayerController
     @Environment(AppModel.self) private var app
-    @Environment(\.jellyfin) private var client
+
+    private var tv: Bool { Platform.isTV }
+    private var phone: Bool { Layout.device == .phone }
+    private var small: Font { tv ? .caption : .footnote }
 
     var body: some View {
         let item = controller.item
-        let tv = Platform.isTV
-        HStack(alignment: .top, spacing: tv ? 32 : 16) {
-            Artwork(item: item, kind: item.kind == .episode ? .still : .backdrop, width: tv ? 300 : 120)
-                .frame(width: tv ? 300 : 120, height: (tv ? 300 : 120) * 9 / 16)
-                .clipShape(.rect(cornerRadius: tv ? 16 : 10))
-            VStack(alignment: .leading, spacing: tv ? 10 : 6) {
-                Text(item.name ?? "").font(tv ? .title3.weight(.bold) : .headline).lineLimit(2)
-                Text(Self.facts(item)).font(tv ? .callout : .caption).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                if let overview = item.overview(hidingSpoilers: app.settings.hideSpoilers) {
-                    Text(overview).font(tv ? .callout : .footnote).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 5 : 6)
-                        .fixedSize(horizontal: false, vertical: true)
+        let art: CGFloat = tv ? 300 : 120
+        let layout = phone ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+                           : AnyLayout(HStackLayout(alignment: .top, spacing: tv ? 32 : 18))
+        layout {
+            HStack(alignment: .top, spacing: tv ? 28 : 14) {
+                // You're watching it: its own still, never hidden as a spoiler.
+                let kind: ArtworkKind = item.kind == .episode ? .still : .backdrop
+                Artwork(ArtworkSource.resolve(item, kind), kind: kind, width: art)
+                    .frame(width: art, height: art * 9 / 16)
+                    .clipShape(.rect(cornerRadius: tv ? 14 : 8))
+                VStack(alignment: .leading, spacing: tv ? 4 : 2) {
+                    Text(Self.facts(item)).font(small).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    Text(item.name ?? "").font(tv ? .callout.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
+                    if let overview = item.overview {                     // you're watching it: no spoiler
+                        Text(overview).font(small).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 2 : 4)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, tv ? 6 : 4)
+                    }
                 }
-                if let cast = Self.cast(item) {
-                    Text(cast).font(tv ? .callout : .footnote).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
-                }
-                if let next = controller.nextEpisode {
-                    Label("Next: \([next.episodeLabel, next.name].compactMap { $0 }.joined(separator: " · "))", systemImage: "forward.end")
-                        .font((tv ? Font.callout : .footnote).weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .padding(.top, 4)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if sleepStop != nil || controller.upNext != nil || Self.starring(item) != nil || Self.director(item) != nil {
+                side(item)
+                    .frame(width: phone || controller.upNext != nil && sleepStop == nil ? nil : (tv ? 400 : 240), alignment: .leading)
+                    .frame(maxHeight: phone ? nil : .infinity, alignment: .topLeading)   // the divider runs the band's height
+                    .padding(.leading, phone ? 0 : (tv ? 28 : 16))
+                    .overlay(alignment: .leading) {
+                        if !phone { Rectangle().fill(.white.opacity(0.14)).frame(width: 1) }
+                    }
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(.white)
     }
 
-    /// "S2 · E3 · 2019 · 48 min · TV-14 · Drama, Mystery"
+    /// What comes after this one — unless the sleep timer stops it first —
+    /// or, with nothing after it, who's in it.
+    @ViewBuilder private func side(_ item: BaseItem) -> some View {
+        if let stop = sleepStop {
+            HStack(alignment: .top, spacing: tv ? 14 : 8) {
+                Image(systemName: "moon.zzz").font(small.weight(.semibold))
+                lines("Sleep Timer", stop, nil)
+            }
+        } else if let next = controller.upNext {
+            // A card the size of the art on the left: the next one's picture
+            // (the show's art for an unwatched episode, so no spoiler), its
+            // name over the foot of it.
+            let words = Self.nextLines(next, after: item)
+            let width: CGFloat = tv ? 300 : (phone ? 200 : 160)
+            Artwork(item: next, kind: .landscape, width: width)
+                .frame(width: width, height: width * 9 / 16)
+                .overlay {
+                    LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Up Next").font(.caption2.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+                        Text(words.title).font(small.weight(.semibold)).lineLimit(2)
+                        if let detail = words.detail { Text(detail).font(.caption2).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+                    }
+                    .padding(tv ? 14 : 8)
+                }
+                .clipShape(.rect(cornerRadius: tv ? 14 : 8))
+        } else if let starring = Self.starring(item) {
+            lines("Starring", starring, Self.director(item).map { "Directed by \($0)" })
+        } else if let director = Self.director(item) {
+            lines("Directed by", director, nil)
+        }
+    }
+
+    private func lines(_ label: String, _ title: String, _ detail: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(small).foregroundStyle(.white.opacity(0.6))
+            Text(title).font(small.weight(.semibold)).lineLimit(2)
+            if let detail { Text(detail).font(small).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
+        }
+    }
+
+    /// "Stops after this episode", or "Stops in 18 min" when that comes
+    /// before this one ends and the next would start.
+    private var sleepStop: String? {
+        let timer = app.sleepTimer
+        switch timer.mode {
+        case .off:
+            return nil
+        case .endOfItem:
+            return "Stops after this \(controller.item.kind == .episode ? "episode" : controller.item.kind == .movie ? "film" : "one")"
+        case .minutes:
+            guard let left = timer.remaining else { return nil }
+            if controller.upNext != nil, let engine = controller.engine, let length = engine.duration,
+               left > length - engine.currentTime { return nil }
+            return "Stops in \(max(1, Int((left.components.seconds + 59) / 60))) min"
+        }
+    }
+
+    /// "The Fresh Prince of Bel-Air · S1 · E1 · 23 min · TV-PG";
+    /// "1999 · 2 hr 16 min · R · Sci-Fi, Action".
     static func facts(_ item: BaseItem) -> String {
+        let episode = item.kind == .episode
         var parts: [String] = []
+        if episode, let series = item.seriesName { parts.append(series) }
         if let label = item.episodeLabel { parts.append(label) }
-        if let year = item.productionYear { parts.append(String(year)) }
+        if !episode, let year = item.productionYear { parts.append(String(year)) }
         if let runtime = item.runtime { parts.append(MetadataLine.runtimeString(runtime)) }
         if let rating = item.officialRating, !rating.isEmpty { parts.append(rating) }
-        if let genres = item.genres, !genres.isEmpty { parts.append(genres.prefix(2).joined(separator: ", ")) }
+        if !episode, let genres = item.genres, !genres.isEmpty { parts.append(genres.prefix(2).joined(separator: ", ")) }
         return parts.joined(separator: " · ")
     }
 
-    /// "With Rhea Seehorn, Bob Odenkirk and Giancarlo Esposito · Directed by Vince Gilligan"
-    static func cast(_ item: BaseItem) -> String? {
-        let people = item.people ?? []
-        let actors = people.filter { $0.type == "Actor" }.prefix(3).compactMap(\.name)
-        let director = people.first { $0.type == "Director" }?.name
-        var parts: [String] = []
-        if !actors.isEmpty {
-            parts.append("With " + (actors.count > 1 ? actors.dropLast().joined(separator: ", ") + " and " + actors.last! : actors[0]))
+    /// "E2 · Bang the Drum, Ashley" (same season), "S2 · E1 · …" (next
+    /// season), a show's name under another show's episode; "Film · 2003".
+    static func nextLines(_ next: BaseItem, after item: BaseItem) -> (title: String, detail: String?) {
+        let name = next.name ?? ""
+        switch next.kind {
+        case .episode:
+            let sameShow = next.seriesId != nil && next.seriesId == item.seriesId
+            let label = sameShow && next.parentIndexNumber == item.parentIndexNumber ? next.indexNumber.map { "E\($0)" } : next.episodeLabel
+            return ([label, name].compactMap { $0 }.joined(separator: " · "), sameShow ? nil : next.seriesName)
+        case .movie:
+            return (name, ["Film", next.productionYear.map(String.init)].compactMap { $0 }.joined(separator: " · "))
+        default:
+            return (name, next.productionYear.map(String.init))
         }
-        if let director { parts.append("Directed by \(director)") }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Ralph Fiennes, Tony Revolori and Saoirse Ronan"
+    static func starring(_ item: BaseItem) -> String? {
+        let actors = (item.people ?? []).filter { $0.type == "Actor" }.prefix(3).compactMap(\.name)
+        guard let last = actors.last else { return nil }
+        return actors.count > 1 ? actors.dropLast().joined(separator: ", ") + " and " + last : last
+    }
+
+    static func director(_ item: BaseItem) -> String? {
+        (item.people ?? []).first { $0.type == "Director" }?.name
     }
 }

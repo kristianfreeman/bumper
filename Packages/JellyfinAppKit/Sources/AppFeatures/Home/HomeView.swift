@@ -376,11 +376,12 @@ struct HeroInfo: View {
                         .lineLimit(2)
                 }
                 MetadataLine(item: item)
-                if let overview = item.overview(hidingSpoilers: hideSpoilers) {
+                if let overview = item.overview {
                     Text(overview)
                         .font(.callout)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(3)
+                        .spoilerBlur(item.spoils(hidingSpoilers: hideSpoilers))
                         .frame(maxWidth: 1000, alignment: .leading)
                 }
             }
@@ -444,7 +445,7 @@ struct ItemContextMenu: View {
     var body: some View {
         Button(item.kind == .episode ? "Episode Details" : "See Details", systemImage: "info.circle") { navigate(.item(item)) }
         if [.series, .episode, .movie].contains(item.kind) {
-            Button("Background", systemImage: "infinity") { app.playInBackground(item) }
+            Button("Play Untracked", systemImage: "infinity") { app.playInBackground(item) }
         }
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }

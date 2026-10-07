@@ -230,3 +230,15 @@ struct LocalPlanTests {
     #expect(PlaybackPlanner.usableStart(.seconds(600), runtime: .seconds(1200)) == .seconds(600))
     #expect(PlaybackPlanner.usableStart(.seconds(600), runtime: nil) == .seconds(600))
 }
+
+@Test func heavySoftwareDecodeStaysOnVLCWhenTranscodingIsOff() {
+    var planner = PlaybackPlanner(capabilities: .appleTV4KReference, preference: .automatic, maxBitrate: nil,
+                                  softwareDecodeCheck: { _, _, _, _ in false })
+    var v = MediaStream(index: 0, type: .video, codec: "av1"); v.width = 3840; v.height = 2160; v.realFrameRate = 24
+    let source = MediaSource(id: "s", container: "mkv", mediaStreams: [v])
+    #expect(planner.decide(source: source, audioIndex: nil, subtitleIndex: nil).method == .transcode)
+    planner.allowsTranscoding = false
+    let d = planner.decide(source: source, audioIndex: nil, subtitleIndex: nil)
+    #expect(d.engine == EngineKind.vlc)
+    #expect(d.method == PlayMethod.directPlay)
+}

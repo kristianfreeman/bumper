@@ -22,4 +22,20 @@ final class PlayerShots: XCTestCase {
         remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("7-playback")
         remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("8-info")
     }
+
+    /// The About band on an episode (with the next episode beside it).
+    func testAboutBand() throws {
+        let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] ?? NSTemporaryDirectory()
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-autoplay", "series-001-s1-e2"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        Thread.sleep(forTimeInterval: 2)
+        remote.press(.select); Thread.sleep(forTimeInterval: 0.4)
+        remote.press(.up); Thread.sleep(forTimeInterval: 0.5)
+        for _ in 0..<3 { remote.press(.right) }
+        remote.press(.select); Thread.sleep(forTimeInterval: 1.2)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/about-episode.png"))
+    }
 }

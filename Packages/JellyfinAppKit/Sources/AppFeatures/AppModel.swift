@@ -145,6 +145,8 @@ final class AppModel {
     /// What's focused anywhere in the app, and what's playing (the companion shows both).
     var focusedItem: BaseItem?
     var nowPlaying: NowPlayingInfo?
+    /// The video playing now, for the phone to steer (tracks, seeking).
+    @ObservationIgnored weak var player: PlayerController?
     @ObservationIgnored lazy var companion = CompanionBridge(app: self)
     @ObservationIgnored private var defaults: UserDefaults = .standard
     let capabilities: DeviceCapabilities
@@ -170,6 +172,8 @@ final class AppModel {
     @ObservationIgnored var collectionLibraries: [BaseItem] = []
     /// Every library and where it is in the app (Settings → Libraries).
     var libraryPlan: SidebarPlan?
+    /// How many things each library holds (films, shows, audiobooks…), by id.
+    var libraryCounts: [String: Int] = [:]
 
     @ObservationIgnored private var prewarmed: [String: (Task<PlaybackPlan, any Error>, ContinuousClock.Instant)] = [:]
     private static let log = Perf.logger("app")
@@ -232,7 +236,7 @@ final class AppModel {
         FocusTracker.onFeatured = { [weak self] item in self?.focusedItem = item }
         // Only the TV answers phones: a phone or Mac advertising itself showed
         // up in the phone's list of TVs.
-        if Platform.isTV { companion.start() }
+        applyRemoteSetting()
         #if DEBUG
         Task { @MainActor in try? await Task.sleep(for: .seconds(2)); await self.probeSubtitles(); await self.probeDownloads() }
         #endif
@@ -318,10 +322,12 @@ final class AppModel {
 
     var planner: PlaybackPlanner {
         let budget = SoftwareDecodeBudget.forModel(options.simulateModel ?? PerfRecorder.hardwareModel)
-        return PlaybackPlanner(
+        var planner = PlaybackPlanner(
             capabilities: capabilities, preference: settings.enginePreference, maxBitrate: settings.maxBitrate,
             softwareDecodeCheck: { codec, w, h, fps in budget.allows(codec: codec, pixelRate: Double(w * h) * fps) }
         )
+        planner.allowsTranscoding = !settings.disableTranscoding
+        return planner
     }
 
     // MARK: Session
@@ -560,7 +566,6 @@ final class AppModel {
     func playInBackground(_ item: BaseItem) {
         if let cast = casting {
             cast.play(item.id, false, true)
-            cast.noteStarted(item.name, background: true)
             return
         }
         guard let client = session?.client else { return }
@@ -614,6 +619,15 @@ final class AppModel {
     /// Background and Queue go to the TV.
     @ObservationIgnored var cast: CastLink?
 
+    /// Settings → Remote: the TV answers phones (only the TV: a phone or Mac
+    /// advertising itself showed up in the phone's list of TVs); a phone
+    /// looks for TVs.
+    func applyRemoteSetting() {
+        let on = settings.allowRemote
+        if Platform.isTV { on ? companion.start() : companion.stop() }
+        cast?.enabled = on
+    }
+
     /// Connected to a TV: what's played goes there (books stay on the phone).
     private var casting: CastLink? { cast?.isConnected == true ? cast : nil }
 
@@ -622,7 +636,6 @@ final class AppModel {
             TraceFile.write("cast", "play \(item.name ?? item.id) on \(cast.connectedTo ?? "?")")
             libraryUsage.recordPlay(item, libraries: libraries)
             cast.play(item.id, resume, false)
-            cast.noteStarted(item.seriesName.map { "\($0) · \(item.name ?? "")" } ?? item.name)
             return
         }
         if audiobook != nil { stopAudiobook() }             // one thing plays at a time

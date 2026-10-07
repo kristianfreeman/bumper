@@ -2,9 +2,6 @@ import Companion
 import Foundation
 import Network
 import Observation
-#if canImport(FoundationModels)
-import FoundationModels
-#endif
 
 /// The phone's side: finds Apple TVs running the app, connects to one, and
 /// mirrors what it shows.
@@ -27,17 +24,33 @@ final class CompanionModel {
     /// The service name of the TV linked to (its Bonjour name).
     private var linked: String?
     private(set) var state: CompanionState?
-    private(set) var results: [CompanionItem] = []
-    private(set) var resultsTitle: String?
-    private(set) var searching = false
 
     private let queue = DispatchQueue(label: "companion.phone")
     private var browser: NWBrowser?
     private var connection: CompanionConnection?
 
+    /// Settings → Apple TV Remote.
+    private var enabled = false
+
     func startBrowsing() {
+        enabled = true
         guard browser == nil else { return }
         let b = NWBrowser(for: .bonjour(type: CompanionService.type, domain: nil), using: .tcp)
+        // A browser that stops (the local-network prompt on first use, the
+        // network changing) starts again, or no TV would ever turn up.
+        b.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .failed, .waiting:
+                Task { @MainActor in
+                    guard let self, self.browser === b else { return }
+                    b.cancel()
+                    self.browser = nil
+                    try? await Task.sleep(for: .seconds(2))
+                    if self.browser == nil, self.enabled { self.startBrowsing() }
+                }
+            default: break
+            }
+        }
         b.browseResultsChangedHandler = { [weak self] results, _ in
             let found = results.compactMap { r -> TV? in
                 if case .service(let name, _, _, _) = r.endpoint { return TV(name: name, endpoint: r.endpoint) }
@@ -53,6 +66,30 @@ final class CompanionModel {
         }
         b.start(queue: queue)
         browser = b
+    }
+
+    /// Settings → Remote off: stop looking, and drop the TV.
+    func stopBrowsing() {
+        enabled = false
+        browser?.cancel()
+        browser = nil
+        tvs = []
+        casting = false
+        let c = connection
+        connection = nil
+        linked = nil
+        connectedTo = nil
+        state = nil
+        c?.cancel()
+    }
+
+    /// Back in the app: look again — the system may have stopped the search
+    /// meanwhile, and a TV opened since should turn up.
+    func refresh() {
+        guard enabled, connection == nil else { return }
+        browser?.cancel()
+        browser = nil
+        startBrowsing()
     }
 
     /// Casts to a TV by name (one the browser found): from now on Play goes there.
@@ -80,62 +117,19 @@ final class CompanionModel {
                 if let again = self.tvs.first(where: { $0.name == tv.name }) { self.connect(again) }
             }
         }
+        c.onReady = { [weak self] in Task { @MainActor in if self?.connection === c { self?.connectedTo = tv.name } } }
         connection = c
         linked = tv.name
-        connectedTo = tv.name
-        c.start()
+        c.start(timeout: .seconds(5))
     }
 
     func send(_ command: CompanionCommand) { connection?.send(.command(command)) }
-
-    func search(_ words: String) {
-        let trimmed = words.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { results = []; resultsTitle = nil; return }
-        searching = true
-        send(.search(trimmed))
-    }
-
-    /// A request in plain words. Where Apple Intelligence is available the
-    /// phone's on-device model first turns it into the words the TV's
-    /// filter understands; elsewhere the TV reads it as it is.
-    func ask(_ words: String) async {
-        let trimmed = words.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        searching = true
-        send(.ask(await Self.rewrite(trimmed)))
-    }
-
-    static var hasOnDeviceModel: Bool {
-        #if canImport(FoundationModels)
-        if case .available = SystemLanguageModel.default.availability { return true }
-        #endif
-        return false
-    }
-
-    static func rewrite(_ words: String) async -> String {
-        #if canImport(FoundationModels)
-        guard case .available = SystemLanguageModel.default.availability else { return words }
-        let session = LanguageModelSession(instructions: """
-            You turn a viewer's request for something to watch into short filter words, \
-            using only: a genre (comedy, horror, action, romance, drama, mystery, thriller, science fiction, \
-            animation, documentary, family, western), a decade like "1980s", "unwatched", "under N minutes", \
-            "highly rated", "this week". Reply with just the words, separated by spaces.
-            """)
-        if let reply = try? await session.respond(to: words) {
-            return reply.content + " " + words          // the TV reads both: the model's words win where they're clearer
-        }
-        #endif
-        return words
-    }
 
     private func receive(_ message: CompanionMessage) {
         switch message {
         case .hello: break                          // the name found on the network (the room) stays
         case .state(let s): state = s
-        case .results(let query, let items, let understood):
-            results = items
-            resultsTitle = understood.map { "“\(query)” — \($0)" } ?? "“\(query)”"
-            searching = false
+        case .results: break
         case .command: break
         }
     }

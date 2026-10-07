@@ -114,12 +114,12 @@ final class PlayerTests: XCTestCase {
         remote.press(.select)
         let fifteen = app.buttons["option.sleep-15"]
         XCTAssertTrue(fifteen.waitForExistence(timeout: 2), "no sleep options")
-        XCTAssertTrue(app.buttons["option.background"].exists, "no Background switch")
+        XCTAssertTrue(app.buttons["option.background"].exists, "no Untracked switch")
         for _ in 0..<4 where !fifteen.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.3) }
         remote.press(.select)
         let deadline = Date().addingTimeInterval(3)
         while Date() < deadline, !(playback.value as? String ?? "").contains("m") { Thread.sleep(forTimeInterval: 0.1) }
-        XCTAssertTrue(["Sleep in 15m", "Sleep in 14m"].contains(playback.value as? String ?? ""), "the pill doesn't show the time left (\(playback.value ?? "nil"))")
+        XCTAssertTrue(["Stops in 15m", "Stops in 14m"].contains(playback.value as? String ?? ""), "the pill doesn't show the time left (\(playback.value ?? "nil"))")
     }
 
     /// Select with the controls down brings them up and the video plays on;
@@ -145,6 +145,25 @@ final class PlayerTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.6)
         remote.press(.playPause)
         XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].waitForExistence(timeout: 2), "Play/Pause on the icons didn't resume")
+    }
+
+    /// Left alone on the icons while it plays, the controls go (8 s).
+    func testIdleControlsHideFromTheIcons() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "series-001-s1-e2", "-startAt", "300"]   // 10 minutes, past its intro
+        app.launch()
+        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        let subtitles = app.buttons["control.subtitles"]
+        Thread.sleep(forTimeInterval: 5)                              // up at the start; gone (Select now shows, not pauses)
+        remote.press(.select)
+        XCTAssertTrue(subtitles.waitForExistence(timeout: 2), "Select didn't bring the controls up")
+        remote.press(.up)
+        XCTAssertTrue(waitForFocus(subtitles, timeout: 2), "Up didn't reach the icons")
+        Thread.sleep(forTimeInterval: 6)
+        XCTAssertTrue(subtitles.exists, "the controls went too soon")
+        Thread.sleep(forTimeInterval: 3.5)
+        XCTAssertFalse(subtitles.exists, "the controls stayed up, left alone")
     }
 
     /// One press of Play/Pause pauses — and stays paused. (It could arrive

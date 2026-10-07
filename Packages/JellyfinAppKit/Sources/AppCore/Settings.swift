@@ -116,6 +116,11 @@ public final class AppSettings {
     public var onlineThemeFallback: Bool { didSet { save(onlineThemeFallback, "detail.themeMusicOnline") } }
     /// Unwatched episodes: blurred stills, no descriptions.
     public var hideSpoilers: Bool { didSet { save(hideSpoilers, "browse.hideSpoilers") } }
+    /// Never ask the server to convert: play files as they are, or say why not.
+    public var disableTranscoding: Bool { didSet { save(disableTranscoding, "playback.disableTranscoding") } }
+    /// The phone remote: the TV answers iPhones and iPads; a phone or iPad
+    /// looks for TVs. Off on either, they don't connect.
+    public var allowRemote: Bool { didSet { save(allowRemote, "companion.allowRemote") } }
     /// Libraries left out of the app (Settings → Libraries), by id.
     public var hiddenLibraries: Set<String> { didSet { save(Array(hiddenLibraries), "browse.hiddenLibraries") } }
     /// iPhone/iPad: downloads may use cellular data (off: Wi-Fi only).
@@ -146,6 +151,8 @@ public final class AppSettings {
         onlineThemeFallback = defaults.object(forKey: "detail.themeMusicOnline") as? Bool ?? true
         hideSpoilers = defaults.object(forKey: "browse.hideSpoilers") as? Bool ?? true
         hiddenLibraries = Set(defaults.stringArray(forKey: "browse.hiddenLibraries") ?? [])
+        disableTranscoding = defaults.object(forKey: "playback.disableTranscoding") as? Bool ?? false
+        allowRemote = defaults.object(forKey: "companion.allowRemote") as? Bool ?? true
     }
 
     /// Bumper Dark, until someone picks another theme.

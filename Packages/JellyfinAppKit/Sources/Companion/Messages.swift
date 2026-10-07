@@ -44,11 +44,70 @@ public struct CompanionPlanEntry: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// A subtitle or audio track on the TV: its stream index and its name.
+public struct CompanionTrack: Codable, Sendable, Hashable, Identifiable {
+    public var id: Int
+    public var title: String
+    public var detail: String?
+
+    public init(id: Int, title: String, detail: String? = nil) {
+        self.id = id
+        self.title = title
+        self.detail = detail
+    }
+}
+
+/// A subtitle the TV's server found ("Find Subtitles"), best first.
+public struct CompanionFoundSubtitle: Codable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var name: String
+    /// "Best match · 92%", "46% match".
+    public var detail: String
+
+    public init(id: String, name: String, detail: String) {
+        self.id = id
+        self.name = name
+        self.detail = detail
+    }
+}
+
+/// Find Subtitles on the TV, as it goes.
+public enum CompanionSubtitleSearch: Codable, Sendable, Hashable {
+    case searching
+    case results([CompanionFoundSubtitle])
+    case failed(String)
+}
+
+/// The TV's sleep timer, as the phone sets it.
+public enum CompanionSleep: Codable, Sendable, Hashable {
+    case off
+    case minutes(Int)
+    case endOfItem
+}
+
 public struct CompanionNowPlaying: Codable, Sendable, Hashable {
     public var item: CompanionItem
     public var position: Double
     public var duration: Double
     public var paused: Bool
+    // A video's controls (nil for an audiobook, or from an older TV):
+    /// Clean 16:9 art, without a title in it.
+    public var backdropURL: URL?
+    public var subtitles: [CompanionTrack]?
+    /// The subtitle on (a stream index); nil when off.
+    public var subtitle: Int?
+    public var audio: [CompanionTrack]?
+    public var audioTrack: Int?
+    public var untracked: Bool?
+    public var sleep: CompanionSleep?
+    /// "18m", "End of episode".
+    public var sleepLabel: String?
+    /// "episode", "film": for "End of This Episode".
+    public var kind: String?
+    /// What plays after it, then the rest of the Queue.
+    public var upNext: [CompanionItem]?
+    /// Find Subtitles, while it's searching or has results.
+    public var subtitleSearch: CompanionSubtitleSearch?
 
     public init(item: CompanionItem, position: Double, duration: Double, paused: Bool) {
         self.item = item
@@ -85,7 +144,7 @@ public struct CompanionState: Codable, Sendable, Hashable {
 /// What the phone asks for.
 public enum CompanionCommand: Codable, Sendable, Hashable {
     case play(itemId: String)
-    /// Play from the start (`resume` false), or as Background (on a loop,
+    /// Play from the start (`resume` false), or Untracked (on a loop,
     /// nothing marked watched; a show from a random episode).
     case playItem(itemId: String, resume: Bool, background: Bool)
     case addToQueue(itemId: String)
@@ -93,6 +152,19 @@ public enum CompanionCommand: Codable, Sendable, Hashable {
     case moveInQueue(itemId: String, by: Int)
     case setDoneBy(Date?)
     case playPause
+    /// To this many seconds in.
+    case seek(to: Double)
+    /// Back (negative) or ahead by this many seconds.
+    case skip(by: Double)
+    /// A subtitle by stream index; nil turns them off.
+    case selectSubtitle(Int?)
+    case selectAudio(Int)
+    case setUntracked(Bool)
+    case setSleep(CompanionSleep)
+    /// Find Subtitles: the TV's server searches; results come in the state.
+    case findSubtitles
+    case useFoundSubtitle(id: String)
+    case cancelSubtitleSearch
     /// Titles matching words (the TV searches its library).
     case search(String)
     /// A request in plain words ("something funny from the 80s") — the

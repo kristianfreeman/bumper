@@ -55,7 +55,7 @@ struct TouchControls: View {
             }
             Spacer(minLength: 0)
             if controller.isBackground {
-                Label("Background", systemImage: "infinity")
+                Label("Untracked", systemImage: "infinity")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -134,8 +134,7 @@ struct TouchControls: View {
                 Task { await controller.findSubtitles() }
             }
         } label: {
-            glassFace(controller.selectedSubtitle != nil || controller.foundSubtitle != nil ? "captions.bubble.fill" : "captions.bubble", size: 15,
-                      on: controller.selectedSubtitle != nil || controller.foundSubtitle != nil)
+            glassFace(controller.selectedSubtitle != nil || controller.foundSubtitle != nil ? "captions.bubble.fill" : "captions.bubble", size: 15)
         }
         .menuIndicator(.hidden)
         .accessibilityLabel("Subtitles")
@@ -168,19 +167,22 @@ struct TouchControls: View {
         let on = timer.isActive || controller.isBackground
         return Menu {
             Toggle(isOn: Binding(get: { controller.isBackground }, set: { controller.setBackground($0) })) {
-                Label("Background", systemImage: "infinity")
+                Label {
+                    Text("Untracked")
+                    Text("Your progress won't be saved.")
+                } icon: { Image(systemName: "infinity") }
             }
-            Picker("Sleep Timer", selection: Binding(get: { timer.mode }, set: { mode in
+            Picker("Stop Playing", selection: Binding(get: { timer.mode }, set: { mode in
                 if mode == .off { timer.reset() } else { timer.set(mode) }
             })) {
-                Text("Off").tag(SleepTimer.Mode.off)
-                ForEach(SleepTimer.presets, id: \.self) { m in Text(SleepTimer.title(m)).tag(SleepTimer.Mode.minutes(m)) }
-                Text(controller.item.kind == .episode ? "End of This Episode" : "End of This Film").tag(SleepTimer.Mode.endOfItem)
+                Text("Never").tag(SleepTimer.Mode.off)
+                ForEach(SleepTimer.presets, id: \.self) { m in Text(SleepTimer.stopTitle(m)).tag(SleepTimer.Mode.minutes(m)) }
+                Text(SleepTimer.afterTitle(controller.item.kind)).tag(SleepTimer.Mode.endOfItem)
             }
             .pickerStyle(.menu)
         } label: {
             HStack(spacing: 6) {
-                glassFace(on ? "gearshape.fill" : "gearshape", size: 15, on: on)
+                glassFace(on ? "gearshape.fill" : "gearshape", size: 15)
                 if let left = timer.shortLabel, !phone || !short {
                     Text(left).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.white.opacity(0.85))
                 }
@@ -194,26 +196,27 @@ struct TouchControls: View {
 
     // MARK: Pieces
 
-    private func glassButton(_ symbol: String, _ label: String, size: CGFloat, on: Bool = false, action: @escaping () -> Void) -> some View {
+    private func glassButton(_ symbol: String, _ label: String, size: CGFloat, action: @escaping () -> Void) -> some View {
         Button {
             action()
             poke()
         } label: {
-            glassFace(symbol, size: size, on: on)
+            glassFace(symbol, size: size)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
     /// An icon in a glass circle (tinted while `on`), big enough to hit.
-    private func glassFace(_ symbol: String, size: CGFloat, on: Bool = false) -> some View {
+    /// On (subtitles, Background, a sleep timer) shows as the filled glyph
+    /// alone, as on the TV: a lit button read as a selected one.
+    private func glassFace(_ symbol: String, size: CGFloat) -> some View {
         Image(systemName: symbol)
             .font(.system(size: size, weight: .semibold))
             .contentTransition(.symbolEffect(.replace))
-            .foregroundStyle(on ? Color.black : .white)
+            .foregroundStyle(.white)
             .frame(width: max(40, size * 2.4), height: max(40, size * 2.4))
-            .background(on ? Color.white : .clear, in: .circle)
-            .glassEffect(on ? .identity : .regular.interactive(), in: .circle)
+            .glassEffect(.regular.interactive(), in: .circle)
             .contentShape(.circle)
     }
 }

@@ -16,6 +16,19 @@ extension BaseItem {
     public func overview(hidingSpoilers: Bool) -> String? {
         hidingSpoilers && isSpoilerSensitive ? nil : overview
     }
+
+    /// Whether its description is a spoiler to blur (Hide Spoilers on, not yet watched).
+    public func spoils(hidingSpoilers: Bool) -> Bool { hidingSpoilers && isSpoilerSensitive }
+}
+
+extension View {
+    /// An unwatched episode's description: the real words, blurred past
+    /// reading — the shape of a description is there, not what happens.
+    public func spoilerBlur(_ hidden: Bool) -> some View {
+        blur(radius: hidden ? (Platform.isTV ? 14 : 8) : 0)
+            .accessibilityHidden(hidden)
+            .overlay { if hidden { Color.clear.accessibilityElement().accessibilityLabel("Description hidden until you've watched it") } }
+    }
 }
 
 /// Which artwork to show for an item, with Jellyfin's fallbacks applied

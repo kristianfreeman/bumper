@@ -111,6 +111,11 @@ public struct PillFace<Icon: View>: View {
     }
 
     private var open: Bool { focused || alwaysShowsTitle }
+    /// `open`, changed inside an animation: tvOS moves focus outside any
+    /// transaction, so the label (and every neighbour making room for it)
+    /// jumped. Changed here with a spring, the pill grows and shrinks and the
+    /// row around it moves with it — every pill in the app.
+    @State private var shown: Bool?
     @Environment(\.pillCaptions) private var captions
     @Environment(\.pillCaption) private var caption
 
@@ -133,6 +138,7 @@ public struct PillFace<Icon: View>: View {
 
     @ViewBuilder private var face: some View {
         let d = size.diameter
+        let open = shown ?? self.open
         HStack(spacing: d * 0.16) {
             icon
                 .frame(width: d * (fillsIcon ? 0.9 : 0.62), height: d * (fillsIcon ? 0.9 : 0.62))
@@ -160,6 +166,10 @@ public struct PillFace<Icon: View>: View {
         .opacity(enabled ? 1 : 0.4)
         .animation(.spring(duration: 0.3, bounce: 0.2), value: focused)
         .animation(.easeOut(duration: 0.2), value: active)
+        .onChange(of: self.open, initial: true) { was, now in
+            if shown == nil || was == now { shown = now; return }
+            withAnimation(.spring(duration: 0.34, bounce: 0.16)) { shown = now }
+        }
     }
 
     private var foreground: Color {

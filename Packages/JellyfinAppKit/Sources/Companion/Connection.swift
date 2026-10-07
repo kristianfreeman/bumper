@@ -20,16 +20,27 @@ public final class CompanionConnection: @unchecked Sendable {
         self.init(NWConnection(to: endpoint, using: .tcp), queue: queue)
     }
 
-    public func start() {
+    /// `timeout`: give up if not connected by then. A TV that's listed but
+    /// not answering (its app asleep, closed, not yet opened) leaves a
+    /// connection waiting forever, and the phone never tried again once the
+    /// app was up.
+    public func start(timeout: Duration? = nil) {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready: self?.onReady?()
+            case .waiting: self?.connection.cancel()          // not answering: closes, and the phone tries again
             case .failed, .cancelled: self?.onClose?()
             default: break
             }
         }
         connection.start(queue: queue)
         receive()
+        if let timeout {
+            queue.asyncAfter(deadline: .now() + timeout / .seconds(1)) { [weak self] in
+                guard let self, self.connection.state != .ready else { return }
+                self.connection.cancel()
+            }
+        }
     }
 
     public func send(_ message: CompanionMessage) {

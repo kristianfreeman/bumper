@@ -54,6 +54,14 @@ final class PlayerController {
     }
 
     var item: BaseItem { details ?? plan?.item ?? request.item }
+    /// What plays when this one ends, as `finishedItem()` decides it: the
+    /// next in the queue, else the next episode (with Play Next Episode on);
+    /// in Background, round to the first episode again.
+    var upNext: BaseItem? {
+        if isBackground { return nextEpisode ?? firstEpisode.flatMap { $0.id == item.id ? nil : $0 } }
+        if app.queue.contains(item.id), let next = app.queue.next(after: item.id) { return next }
+        return app.settings.autoplayNextEpisode ? nextEpisode : nil
+    }
     /// Background: plays on and on (round to the first episode again) and
     /// tells the server nothing. Starts from the request; switched with
     /// `setBackground(_:)` while playing.
@@ -196,6 +204,7 @@ final class PlayerController {
 
     func stop() async {
         app.nowPlaying = nil
+        if app.player === self { app.player = nil }
         // Runs from end-of-item *and* from the view disappearing: once only.
         guard phase != .finished else { return }
         phase = .finished
@@ -224,6 +233,7 @@ final class PlayerController {
                     Task { await reporter.progress(position: now, paused: paused) }
                 }
                 if tick % 2 == 0 {                                   // for the companion app
+                    self.app.player = self
                     self.app.nowPlaying = NowPlayingInfo(item: self.item, position: now.seconds,
                                                          duration: (engine.duration ?? self.item.runtime ?? .zero).seconds, paused: engine.status == .paused)
                 }

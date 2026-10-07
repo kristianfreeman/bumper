@@ -77,3 +77,33 @@ public enum LibraryWords {
         return flavour.map { "\(n) \(what), \($0)." } ?? "\(n) \(what), a few picked at random."
     }
 }
+
+extension LibraryWords {
+    /// What a library's count counts (nil: nothing worth counting).
+    public static func countedKinds(_ type: String?) -> [ItemKind]? {
+        switch type {
+        case "movies": [.movie]
+        case "tvshows": [.series]
+        case "boxsets": [.boxSet]
+        case "books": [.audioBook]
+        case "homevideos": [.video]
+        case "musicvideos": [.musicVideo]
+        case "playlists": [.playlist]
+        default: nil
+        }
+    }
+
+    /// "612 films", "1 show", "34 audiobooks".
+    public static func count(_ n: Int, of type: String?) -> String {
+        let (one, many): (String, String) = switch type {
+        case "movies": ("film", "films")
+        case "tvshows": ("show", "shows")
+        case "boxsets": ("collection", "collections")
+        case "books": ("audiobook", "audiobooks")
+        case "homevideos", "musicvideos": ("video", "videos")
+        case "playlists": ("playlist", "playlists")
+        default: ("title", "titles")
+        }
+        return "\(n.formatted()) \(n == 1 ? one : many)"
+    }
+}

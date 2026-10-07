@@ -201,16 +201,15 @@ struct PlayerView: View {
         }
     }
 
-    /// Any focus on the controls keeps them up; back on the video, the timer resumes.
+    /// Every move is activity: the controls stay up, and go again once
+    /// they're left alone (`scheduleHide`).
     private func focusChanged(_ now: PlayerFocus?) {
         TraceFile.write("focus", now.map { "\($0)" } ?? "none")
         if case .control = now {
             onControls = true
-            hideTask?.cancel()
             chromeVisible = true
-        } else if now == .surface {
-            scheduleHide()
         }
+        scheduleHide()
     }
 
     // MARK: Pieces
@@ -268,8 +267,8 @@ struct PlayerView: View {
     // MARK: Input
 
     private func open(_ menu: PlayerMenu) {
-        hideTask?.cancel()
         openMenu = menu
+        scheduleHide()
     }
 
     private func closeMenu() {
@@ -325,12 +324,17 @@ struct PlayerView: View {
         scheduleHide()
     }
 
+    /// Left alone while it plays, the controls go: 4 s from the video, 8 s
+    /// on the icons, 20 s in an open card (time to read it). Paused, they stay.
     private func scheduleHide() {
         hideTask?.cancel()
+        let wait: Duration = openMenu != nil ? .seconds(20) : onControls ? .seconds(8) : .seconds(4)
         hideTask = Task {
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, openMenu == nil, !findingSubtitles, !showsInfo, controller.isPlaying else { return }
-            if case .control = focus { return }
+            try? await Task.sleep(for: wait)
+            guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, !findingSubtitles, !showsInfo, controller.isPlaying else { return }
+            if openMenu == .subtitles, controller.subtitleSearch != .idle { return }      // searching: wait for it
+            openMenu = nil
+            if onControls { backToVideo() }
             chromeVisible = false
         }
     }

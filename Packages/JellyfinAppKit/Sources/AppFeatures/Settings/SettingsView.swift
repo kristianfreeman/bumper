@@ -155,7 +155,7 @@ struct CapabilitiesView: View {
                 row("Match Content (tvOS Settings)", DisplayModeManager.matchingEnabled)
             }
         }
-        .navigationTitle("Device")
+        .navigationTitle("Device Capabilities")
     }
 
     private func row(_ label: String, _ on: Bool) -> some View {

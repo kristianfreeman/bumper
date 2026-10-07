@@ -33,7 +33,8 @@ public struct AppRoot: View {
             .preferredColorScheme(app.themes.theme.colorScheme)
             .tint(app.themes.theme.accent)
             .onOpenURL { app.open($0) }                     // the Top Shelf: bumper://play/<id>
-            .onAppear { app.cast = cast }       // Play while connected goes to the TV (the views read it from the environment)
+            .onAppear { app.cast = cast; app.applyRemoteSetting() }   // Play while connected goes to the TV (the views read it from the environment)
+            .onChange(of: app.settings.allowRemote) { _, _ in app.applyRemoteSetting() }
     }
 
     /// Call from the App's init, as early as possible.
@@ -411,6 +412,24 @@ struct MainTabView: View {
         audiobookLibraries = withAudiobooks
         apply(fresh) { withAudiobooks.contains($0.id) }
         await ContentCache.shared.store(fresh, for: key)
+        await countLibraries(fresh)
+    }
+
+    /// What each library holds, for Settings → Libraries ("612 films").
+    private func countLibraries(_ views: [BaseItem]) async {
+        var counts: [String: Int] = [:]
+        await withTaskGroup(of: (String, Int?).self) { group in
+            for view in views {
+                guard let kinds = LibraryWords.countedKinds(view.collectionType) else { continue }
+                group.addTask { [client = session.client] in
+                    var q = ItemQuery(parentId: view.id, includeItemTypes: kinds, limit: 0)
+                    q.fields = []
+                    return (view.id, try? await client.items(q).totalRecordCount)
+                }
+            }
+            for await (id, n) in group { if let n { counts[id] = n } }
+        }
+        app.libraryCounts = counts
     }
 
     private func apply(_ views: [BaseItem], hasAudiobooks: (BaseItem) -> Bool) {

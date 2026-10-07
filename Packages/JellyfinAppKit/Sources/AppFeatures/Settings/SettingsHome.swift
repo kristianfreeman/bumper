@@ -41,14 +41,14 @@ struct SettingsView: View {
                     header
                     AccountCard(confirmSignOut: $confirmSignOut)
                         .id("account")
-                    section("watching", "Watching", "Around what you watch.", watchingTiles(settings))
+                    section("watching", "Watching", "Episodes, intros and theme songs.", watchingTiles(settings))
                     libraries(settings)
                     subtitles(settings)
-                    section("picture", "Picture and Sound", "How things play.", pictureTiles(settings))
+                    section("picture", "Picture and Sound", "How videos play.", pictureTiles(settings))
                     look
                     if let store = app.downloads { storage(store, settings) }
-                    section("audiobooks", "Audiobooks", "Listening.", audiobookTiles(settings))
-                    section("about", "About", "\(Brand.displayName) \(Brand.version) (\(Brand.build)). Open source; themes are the only purchase.", aboutTiles(settings))
+                    section("audiobooks", "Audiobooks", "How books play.", audiobookTiles(settings))
+                    section("about", "About", "\(Brand.displayName) \(Brand.version) (\(Brand.build))", aboutTiles(settings))
                 }
                 .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 60)
@@ -87,18 +87,30 @@ struct SettingsView: View {
 
     // MARK: Libraries
 
-    /// Every library on the server: a switch for each one the app can show
-    /// (and where it is), then the ones it can't, and why.
+    /// A switch for every library the app plays (libraries of things it
+    /// can't play — e-books, comics — aren't listed at all).
     private func libraryTiles(_ settings: AppSettings) -> [SettingTile] {
-        (app.libraryPlan?.libraries ?? []).filter(\.placement.canShow).map { lib in
-            .toggle("library.\(lib.id)", lib.item.name ?? "Library", Self.symbol(for: lib.item), Self.whereItIs(lib.placement),
+        let libraries: [SidebarPlan.Library] = app.libraryPlan?.libraries ?? []
+        return libraries.filter { $0.placement.canShow }.map { lib -> SettingTile in
+            SettingTile.toggle("library.\(lib.id)", lib.item.name ?? "Library", Self.symbol(for: lib.item), libraryLine(lib),
                     Binding(get: { !settings.hiddenLibraries.contains(lib.id) },
                             set: { shown in if shown { settings.hiddenLibraries.remove(lib.id) } else { settings.hiddenLibraries.insert(lib.id) } }))
         }
     }
 
-    private var unplayableLibraries: [SidebarPlan.Library] {
-        (app.libraryPlan?.libraries ?? []).filter { !$0.placement.canShow }
+    /// "612 films", "12 collections · on the Movies page", "Hidden" — what's
+    /// in it, and where it is when that isn't a tab of its own.
+    private func libraryLine(_ lib: SidebarPlan.Library) -> String {
+        if lib.placement == .hidden { return "Hidden" }
+        let count = app.libraryCounts[lib.id].map { LibraryWords.count($0, of: lib.item.collectionType) }
+        let place: String? = switch lib.placement {
+        case .more: "under More"
+        case .audiobooks: "in Audiobooks"
+        case .collectionsRow: "on the Movies page"
+        default: nil
+        }
+        let line = [count, place].compactMap { $0 }.joined(separator: " · ")
+        return line.isEmpty ? " " : line.prefix(1).uppercased() + line.dropFirst()
     }
 
     /// What the switch does — and, when the Apple TV itself has Match
@@ -106,21 +118,10 @@ struct SettingsView: View {
     static func matchDetail(on: Bool) -> String {
         #if os(tvOS)
         if on && !DisplayModeManager.matchingEnabled {
-            return "Turn on Match Frame Rate in the Apple TV's Settings → Video and Audio first."
+            return "Also turn on Match Content in Apple TV Settings."
         }
         #endif
-        return "Switches the TV to each video's frame rate and HDR format."
-    }
-
-    static func whereItIs(_ p: SidebarPlan.Placement) -> String {
-        switch p {
-        case .tab: "Its own tab"
-        case .more: "Under More"
-        case .audiobooks: "In Audiobooks"
-        case .collectionsRow: "A row on Movies"
-        case .hidden: "Hidden"
-        case .notPlayable(let why): why
-        }
+        return "Switches your TV to suit each video."
     }
 
     static func symbol(for library: BaseItem) -> String {
@@ -146,24 +147,8 @@ struct SettingsView: View {
         let tiles = libraryTiles(settings)
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: 24) {
-                SectionTitle(title: "Libraries", lede: "What's on your server, and where you'll find it.")
+                SectionTitle(title: "Libraries", lede: "Choose which libraries show up.")
                 TileGrid(tiles: tiles, columns: columns) { tileView($0) }
-                if !unplayableLibraries.isEmpty {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(unplayableLibraries) { lib in
-                            Label {
-                                Text(lib.item.name ?? "Library").foregroundStyle(theme.primaryText.opacity(0.75))
-                                + Text("  ·  \(Self.whereItIs(lib.placement))").foregroundStyle(theme.secondaryText)
-                            } icon: {
-                                Image(systemName: Self.symbol(for: lib.item)).foregroundStyle(theme.secondaryText)
-                            }
-                            .font(.callout)
-                        }
-                    }
-                    .padding(.top, 6)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("settings.unplayableLibraries")
-                }
             }
             .tvFocusSection()
             .id("libraries")
@@ -225,18 +210,25 @@ struct SettingsView: View {
 
     private func watchingTiles(_ settings: AppSettings) -> [SettingTile] {
         @Bindable var settings = settings
-        return [
-            .toggle("autoplay", "Play Next Episode", "forward.end", "Starts the next episode when the credits begin.", $settings.autoplayNextEpisode),
-            .toggle("intros", "Skip Intros", "forward", "Skips intros and recaps without asking.", $settings.skipIntrosAutomatically),
-            .toggle("spoilers", "Hide Spoilers", "eye.slash", "Unwatched episodes show the show's art, not a still, and no description.", $settings.hideSpoilers),
-            .choice("music", "Theme Music", "music.note", "Plays a show's theme song on its page.",
+        var tiles: [SettingTile] = [
+            .toggle("autoplay", "Play Next Episode", "forward.end", "Plays the next episode when the credits start.", $settings.autoplayNextEpisode),
+            .toggle("intros", "Skip Intros", "forward", "Skips intros and recaps for you.", $settings.skipIntrosAutomatically),
+            .toggle("spoilers", "Hide Spoilers", "eye.slash", "Hides details of episodes you haven't seen.", $settings.hideSpoilers),
+            .choice("music", "Theme Music", "music.note", "Plays the theme song on a show's page.",
                     options: [("off", "Off"), ("shows", "Shows"), ("all", "Shows and Movies")],
                     current: !settings.playThemeMusic ? "off" : settings.themeMusicForMovies ? "all" : "shows") { v in
                         settings.playThemeMusic = v != "off"
                         settings.themeMusicForMovies = v == "all"
                     },
-            .toggle("themesOnline", "Find Missing Theme Songs", "globe", "For shows your server has no theme song for.", $settings.onlineThemeFallback),
+            .toggle("themesOnline", "Find Missing Theme Songs", "globe", "Looks online when your server has none.", $settings.onlineThemeFallback),
         ]
+        // The phone remote (no Mac: it neither answers nor looks for TVs).
+        if !Platform.isMac {
+            tiles.append(Platform.isTV
+                ? .toggle("remote", "iPhone Remote", "iphone", "Lets your iPhone or iPad control this TV.", $settings.allowRemote)
+                : .toggle("remote", "Apple TV Remote", "appletv", "Play to and control your Apple TV.", $settings.allowRemote))
+        }
+        return tiles
     }
 
     private func pictureTiles(_ settings: AppSettings) -> [SettingTile] {
@@ -245,11 +237,12 @@ struct SettingsView: View {
             .choice("engine", "Player", "play.rectangle", engineHelp(settings.enginePreference),
                     options: [(EnginePreference.automatic.rawValue, "Automatic"), (EnginePreference.vlc.rawValue, "Always VLCKit")],
                     current: settings.enginePreference.rawValue) { settings.enginePreference = EnginePreference(rawValue: $0) ?? .automatic },
-            .choice("bitrate", "Maximum Bitrate", "speedometer", "Above this, the server lowers the quality to fit.",
+            .choice("bitrate", "Maximum Bitrate", "speedometer", "Your server lowers anything above this.",
                     options: bitrateOptions.map { (bitrateKey($0), bitrateTitle($0)) },
                     current: bitrateKey(settings.maxBitrate)) { settings.maxBitrate = Int($0) },
             .toggle("match", "Match Frame Rate and Range", "tv", Self.matchDetail(on: settings.matchContent), $settings.matchContent),
-            .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio to your receiver as is.", $settings.preferPassthrough),
+            .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio straight to your receiver.", $settings.preferPassthrough),
+            .toggle("noTranscode", "Disable Transcoding", "bolt.slash", "Never asks your server to convert. Some videos won't play.", $settings.disableTranscoding),
         ]
     }
 
@@ -259,7 +252,7 @@ struct SettingsView: View {
             .choice("rate", "Speed", "gauge.with.dots.needle.50percent", "Voices keep their pitch at any speed.",
                     options: audiobookRates.map { (String($0), rateTitle($0)) },
                     current: String(settings.audiobookRate)) { settings.audiobookRate = Double($0) ?? 1 },
-            .toggle("smart", "Smart Speed", "waveform", "Shortens silences, so books finish sooner without sounding faster.", $settings.smartSpeed),
+            .toggle("smart", "Smart Speed", "waveform", "Shortens silences to save time.", $settings.smartSpeed),
         ]
     }
 
@@ -269,13 +262,13 @@ struct SettingsView: View {
         let count = store.records.values.filter(\.isDone).count
         var tiles: [SettingTile] = [
             .link("downloads", "Downloads", "arrow.down.circle",
-                  "\(DownloadWords.bytes(store.bytesUsed)) on this \(DownloadWords.device)\(store.freeBytes.map { ", \(DownloadWords.bytes($0)) free" } ?? ""). Remove a show, a season or an episode there.",
+                  "\(DownloadWords.bytes(store.bytesUsed)) used\(store.freeBytes.map { ", \(DownloadWords.bytes($0)) free" } ?? "").",
                   value: count == 0 ? "None" : String(count)) { navigate(.downloads) },
         ]
-        tiles.append(.choice("downloadQuality", "Download Quality", "dial.medium", "What Download does. Long-press (or right-click) Download for another size.",
+        tiles.append(.choice("downloadQuality", "Download Quality", "dial.medium", "The size used when you download.",
                              options: DownloadPreset.allCases.map { ($0.rawValue, $0.title) }, current: settings.downloadQuality) { settings.downloadQuality = $0 })
         if Layout.device == .phone || Layout.device == .pad {
-            tiles.append(.toggle("cellular", "Download on Cellular", "antenna.radiowaves.left.and.right", "Off: downloads wait for Wi-Fi.",
+            tiles.append(.toggle("cellular", "Download on Cellular", "antenna.radiowaves.left.and.right", "When off, downloads wait for Wi-Fi.",
                                  Binding(get: { settings.downloadsOverCellular }, set: { settings.downloadsOverCellular = $0; store.allowsCellular = $0 })))
         }
         if !store.records.isEmpty {
@@ -299,13 +292,13 @@ struct SettingsView: View {
 
     private func subtitleTiles(_ settings: AppSettings) -> [SettingTile] {
         [
-            .choice("subMode", "Show Subtitles", "captions.bubble", "In your preferred language, when there are some.",
+            .choice("subMode", "Show Subtitles", "captions.bubble", "When subtitles turn on.",
                     options: [SubtitleMode.always, .serverDefault, .forcedOnly, .off].map { ($0.rawValue, $0.title) },
                     current: settings.subtitleMode.rawValue) { settings.subtitleMode = SubtitleMode(rawValue: $0) ?? .always },
-            .choice("subStyle", "Style", "textformat", "How the words sit on the picture.",
+            .choice("subStyle", "Style", "textformat", "How subtitles look.",
                     options: SubtitleStyle.allCases.map { ($0.rawValue, $0.title) },
                     current: settings.subtitleStyle.rawValue) { settings.subtitleStyle = SubtitleStyle(rawValue: $0) ?? .classic },
-            .choice("subFont", "Font", "character", "Styled subtitles (ASS/SSA) keep their own.",
+            .choice("subFont", "Font", "character", "Styled subtitles keep their own font.",
                     options: SubtitleFont.allCases.map { ($0.rawValue, $0.title) },
                     current: settings.subtitleFont.rawValue) { settings.subtitleFont = SubtitleFont(rawValue: $0) ?? .system },
             .choice("subSize", "Size", "textformat.size", "Relative to the screen.",
@@ -373,9 +366,9 @@ struct SettingsView: View {
     private func aboutTiles(_ settings: AppSettings) -> [SettingTile] {
         @Bindable var settings = settings
         var tiles: [SettingTile] = [
-            .link("capabilities", Platform.isTV ? "This Apple TV" : "This \(DownloadWords.device)", "cpu", Platform.isTV ? "What it can decode and send to your TV." : "What it can decode.", value: app.capabilities.hdrEligible ? "HDR" : "SDR") { navigate(.settings("capabilities")) },
-            .toggle("hud", "Performance Overlay", "gauge.with.dots.needle.67percent", "Frame timing, memory and playback stats on screen.", $settings.showPerformanceHUD),
-            .action("caches", "Clear Caches", "trash", "Removes saved artwork and pages. They load again from the server.", value: cleared ? "Cleared" : nil) {
+            .link("capabilities", "Device Capabilities", "cpu", Platform.isTV ? "What this Apple TV can play." : "What this \(DownloadWords.device) can play.", value: app.capabilities.hdrEligible ? "HDR" : "SDR") { navigate(.settings("capabilities")) },
+            .toggle("hud", "Performance Overlay", "gauge.with.dots.needle.67percent", "Shows playback stats on screen.", $settings.showPerformanceHUD),
+            .action("caches", "Clear Caches", "trash", "Frees space. Artwork reloads from your server.", value: cleared ? "Cleared" : nil) {
                 Task { await ImagePipeline.shared.removeAll(); await ContentCache.shared.removeAll(); cleared = true }
             },
             .link("source", "Source Code", "chevron.left.forwardslash.chevron.right", "Bumper is open source.", value: Brand.sourceCodeURL.host() ?? "") {},
@@ -427,8 +420,8 @@ struct SettingsView: View {
     }
 
     private func engineHelp(_ e: EnginePreference) -> String {
-        e == .automatic ? "MP4 plays in AVPlayer (Picture in Picture, AirPlay, Dolby Vision); everything else in VLCKit."
-                        : "Everything plays in VLCKit. No Picture in Picture or AirPlay."
+        e == .automatic ? "Apple's player when it can, VLC for the rest."
+                        : "VLC for everything. No AirPlay or Picture in Picture."
     }
 }
 
@@ -711,7 +704,7 @@ extension SettingsView {
             Section {
                 ForEach(aboutTiles(settings)) { row($0) }
             } header: { Text("About") } footer: {
-                Text("\(Brand.displayName) \(Brand.version) (\(Brand.build)). Open source; themes are the only purchase.")
+                Text("\(Brand.displayName) \(Brand.version) (\(Brand.build))")
             }
         }
         .formStyle(.grouped)
@@ -734,19 +727,8 @@ extension SettingsView {
         if !tiles.isEmpty {
             Section {
                 ForEach(tiles) { row($0) }
-                ForEach(unplayableLibraries) { lib in
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(lib.item.name ?? "Library").foregroundStyle(theme.secondaryText)
-                            Text(Self.whereItIs(lib.placement)).font(.footnote).foregroundStyle(theme.secondaryText)
-                        }
-                    } icon: {
-                        Image(systemName: Self.symbol(for: lib.item)).foregroundStyle(theme.secondaryText)
-                    }
-                    .accessibilityIdentifier("settings.unplayable.\(lib.id)")
-                }
             } header: { Text("Libraries") } footer: {
-                Text("Hiding a library only leaves it out of \(Brand.displayName); it stays on your server.")
+                Text("Hidden libraries stay on your server.")
             }
             .id("libraries")
         }
