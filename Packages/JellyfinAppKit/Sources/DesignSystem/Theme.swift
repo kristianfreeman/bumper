@@ -187,11 +187,37 @@ public enum Layout {
 }
 
 extension Font {
+    // The Mac's text styles run a size or two below iOS's (caption is 10 pt
+    // there, body 13): on the Mac these follow the TV app on the Mac instead —
+    // 13 pt to read, 11 pt for what's under it, ~21 pt row titles.
+
     /// The line under a page's title ("Five films arrived this week."):
     /// big on the TV, body size in a hand.
-    public static var pageLede: Font { Layout.device == .phone ? .body : .title3 }
+    public static var pageLede: Font {
+        switch Layout.device {
+        case .phone: .body
+        case .mac: .title2
+        default: .title3
+        }
+    }
     /// A collection's title on a page ("Pick up where you left off").
-    public static var sectionTitle: Font { Layout.device == .phone ? .headline : .title3.weight(.bold) }
+    public static var sectionTitle: Font {
+        switch Layout.device {
+        case .phone: .headline
+        case .mac: .system(size: 21, weight: .bold)
+        default: .title3.weight(.bold)
+        }
+    }
     /// The line under a collection's title.
-    public static var sectionSubtitle: Font { Layout.device == .phone ? .subheadline : .callout }
+    public static var sectionSubtitle: Font {
+        switch Layout.device {
+        case .phone: .subheadline
+        case .mac: .body
+        default: .callout
+        }
+    }
+    /// A card's name.
+    public static var cardTitle: Font { Layout.device == .mac ? .body : .caption }
+    /// The line under a card's name.
+    public static var cardSubtitle: Font { Layout.device == .mac ? .subheadline : .caption2 }
 }

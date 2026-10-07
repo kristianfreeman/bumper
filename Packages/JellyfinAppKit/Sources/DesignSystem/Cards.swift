@@ -75,7 +75,7 @@ public struct PosterCard: View {
                     }
                     .cardFocus()
                 Text(item.name ?? "")
-                    .font(.caption)
+                    .font(.cardTitle)
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
                     .frame(width: width, alignment: .leading)
@@ -113,8 +113,8 @@ public struct SquareCard: View {
                     }
                     .cardFocus()
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name ?? "").font(.caption).foregroundStyle(theme.primaryText)
-                    Text(subtitle ?? " ").font(.caption2).foregroundStyle(theme.secondaryText)
+                    Text(item.name ?? "").font(.cardTitle).foregroundStyle(theme.primaryText)
+                    Text(subtitle ?? " ").font(.cardSubtitle).foregroundStyle(theme.secondaryText)
                 }
                 .lineLimit(1)
                 .frame(width: width, alignment: .leading)
@@ -183,8 +183,8 @@ public struct LandscapeCard: View {
                 // Always two lines (an empty one if there's no subtitle): every
                 // card is the same height, so grids never re-measure as they scroll.
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.caption).foregroundStyle(theme.primaryText).lineLimit(1)
-                    Text(subtitle ?? " ").font(.caption2).foregroundStyle(theme.secondaryText).lineLimit(1)
+                    Text(title).font(.cardTitle).foregroundStyle(theme.primaryText).lineLimit(1)
+                    Text(subtitle ?? " ").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
                 }
                 .frame(width: width, alignment: .leading)
             }
@@ -212,8 +212,8 @@ public struct PersonCard: View {
                     .frame(width: Layout.castWidth, height: Layout.castWidth)
                     .clipShape(.circle)
                     .cardHighlight()
-                Text(person.name ?? "").font(.caption2).foregroundStyle(theme.primaryText).lineLimit(1)
-                Text(person.role ?? "").font(.caption2).foregroundStyle(theme.secondaryText).lineLimit(1)
+                Text(person.name ?? "").font(Layout.device == .mac ? .subheadline : .caption2).foregroundStyle(theme.primaryText).lineLimit(1)
+                Text(person.role ?? "").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
             }
             .frame(width: Layout.castWidth + 20)
         }
