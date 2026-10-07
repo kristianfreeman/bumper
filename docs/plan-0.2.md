@@ -13,6 +13,15 @@ iOS 27.1 the split follows the fold (`reservedRegions(kind: .division)`); built 
 SDK it goes by shape alone. Duo work builds with the Xcode 27.1 beta; releases stay on the
 released Xcode (`scripts/release.sh` refuses a beta).
 
+**Picture in Picture** (§1), **people, trailers and extras** (§2), **chapters** (§3) and **the
+slow-start message** (§4) are built and merged. Still to see on a real device: an MKV floating
+through VLCKit, PiP on the Mac (AVPlayer only; VLCKit's Mac build has none), and person pages and
+chapters with the Siri Remote. Subtitles don't float with the picture yet.
+
+**Faster tests.** Screens are checked in-process in the fast tier (`Tests/AppFeaturesTests`:
+real views, the mock server and a fake player, 40–250 ms a check); the simulator tiers keep what
+needs the TV's focus engine and remote, with the app's timers at a fifth (`-quickTimers`).
+
 ## 1. Picture in Picture
 
 iPhone, iPad and Mac. Leave the player (swipe home, switch apps, close the window's player)
