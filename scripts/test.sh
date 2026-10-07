@@ -13,6 +13,7 @@
 #   scripts/test.sh tabs [test]            ~15 s  the tab bar along the top, and Up/Down/Menu focus routing
 #   scripts/test.sh profile [test]         ~15 s  Home profile corner: menu, sleep timer, stats
 #   scripts/test.sh settings [test]        ~15 s  Settings tab navigation
+#   scripts/test.sh people [test]          ~40 s  cast and crew pages, trailers and extras on a film's page
 #   scripts/test.sh search [test]          ~20 s  global search, with the search service running locally
 #   scripts/test.sh one Class[/test]       any one TV UI test class or test
 #   scripts/test.sh phone [Class[/test]]   ~2 min the iPhone UI tests (not the companion: companion-check.sh)
@@ -175,6 +176,7 @@ case "${1:-fast}" in
   scroll) step build_for_testing; step ui_run -only-testing:"BumperUITests/ScrollTests" ;;
   tabs|sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/TabBarTests${2:+/$2}" ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
+  people) step build_for_testing; step ui_run -only-testing:"BumperUITests/PeopleTests${2:+/$2}" ;;
   search)
     # The search service, locally, answering without Jev.
     step build_for_testing
