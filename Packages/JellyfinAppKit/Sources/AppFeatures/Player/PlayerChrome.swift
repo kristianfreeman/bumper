@@ -666,6 +666,8 @@ private struct OptionRow: View {
 /// who's in it, and what's next.
 struct ItemAbout: View {
     let controller: PlayerController
+    /// Its name over the overview (the split's panel already has it, by Close).
+    var showsName = true
     @Environment(AppModel.self) private var app
 
     private var tv: Bool { Platform.isTV }
@@ -686,7 +688,9 @@ struct ItemAbout: View {
                     .clipShape(.rect(cornerRadius: tv ? 14 : 8))
                 VStack(alignment: .leading, spacing: tv ? 4 : 2) {
                     Text(Self.facts(item)).font(small).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                    Text(item.name ?? "").font(tv ? .callout.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
+                    if showsName {
+                        Text(item.name ?? "").font(tv ? .callout.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
+                    }
                     if let overview = item.overview {                     // you're watching it: no spoiler
                         Text(overview).font(small).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 2 : 4)
                             .fixedSize(horizontal: false, vertical: true)

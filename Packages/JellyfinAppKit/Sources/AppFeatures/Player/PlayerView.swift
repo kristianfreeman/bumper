@@ -30,6 +30,11 @@ struct PlayerView: View {
     /// Off the TV: the Find Subtitles and Info sheets.
     @State private var findingSubtitles = false
     @State private var showsInfo = false
+    /// The picture full screen (false) or over the controls (true) by
+    /// choice; nil goes by the space's shape. A new shape clears it.
+    @State private var splitChoice: Bool?
+    /// Split: Find Subtitles opens below the picture, not in a sheet.
+    @State private var docked = false
     @FocusState private var focus: PlayerFocus?
     /// Focus is on the icon row: the video isn't a place to move to (Left
     /// from the first icon went onto it, invisibly). Down goes back.
@@ -46,14 +51,36 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var layers: some View {
-        ZStack {
+        #if os(tvOS)
+        layers(PlayerSplit.full)
+        #else
+        // Room for more than the picture (a phone or iPad upright, a tall Mac
+        // window, iPhone Duo folded on a table): the picture on top, the
+        // controls and what's around it below. One tree either way, so the
+        // video view is never rehosted.
+        GeometryReader { proxy in
+            let byShape = PlayerSplit.splits(proxy.size, fold: PlayerSplit.fold(in: proxy))
+            let layout = (splitChoice ?? byShape)
+                ? PlayerSplit(size: proxy.size, fold: PlayerSplit.fold(in: proxy), aspect: controller?.videoAspect)
+                : PlayerSplit.full
+            layers(layout)
+                .onChange(of: byShape) { _, _ in splitChoice = nil }      // a new shape: its own way again
+                .onChange(of: layout.isSplit, initial: true) { _, split in docked = split }
+        }
+        #endif
+    }
+
+    private func layers(_ split: PlayerSplit) -> some View {
+        ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             if let engine = controller?.engine {
-                VideoSurface(view: engine.videoView).ignoresSafeArea()
+                VideoSurface(view: engine.videoView)
+                    .modifier(split.picture)
             }
             if let controller {
                 SubtitleOverlay(cue: controller.currentCue, scale: app.settings.subtitleScale, style: app.settings.subtitleStyle, font: app.settings.subtitleFont,
-                                raised: chromeVisible, videoAspect: controller.videoAspect)
+                                raised: chromeVisible && !split.isSplit, videoAspect: controller.videoAspect, fullBleed: !split.isSplit)
+                    .modifier(split.picture)
                 Text(controller.subtitleStatus)                 // invisible; UI tests read it
                     .foregroundStyle(.clear)
                     .accessibilityIdentifier("player.subtitles")
@@ -69,7 +96,7 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
             }
             ChromeScrim()
-                .opacity(chromeVisible || openMenu != nil ? 1 : 0)
+                .opacity(!split.isSplit && (chromeVisible || openMenu != nil) ? 1 : 0)
             // The video's focus target (a sibling of the controls, so
             // left/right on an icon or menu row move focus, not the video).
             // Presses and swipes on it are read by RemoteGestures.
@@ -77,7 +104,7 @@ struct PlayerView: View {
                 .contentShape(.rect)
                 .focusable(openMenu == nil && !onControls)
                 .focused($focus, equals: .surface)
-                .ignoresSafeArea()
+                .modifier(split.picture)
                 .accessibilityIdentifier("player.surface")
                 #if !os(tvOS)
                 // Tap / click the picture: the controls (or a menu) come and go.
@@ -100,6 +127,7 @@ struct PlayerView: View {
                 .frame(width: 0, height: 0)
             }
             preparingOverlay
+                .modifier(split.picture)                // split: loading in the picture, the controls already below
             #if os(tvOS)
             if chromeVisible, let controller, let engine = controller.engine {
                 TransportBar(controller: controller, engine: engine, scrubTime: controller.transport.head, scrubThumb: scrubThumb,
@@ -107,9 +135,14 @@ struct PlayerView: View {
                     .transition(.opacity)
             }
             #else
-            if chromeVisible, let controller, let engine = controller.engine {
+            if split.isSplit, let controller, let engine = controller.engine {
+                // Below the picture (and the fold): always up, nothing over the video.
+                PlayerPanel(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
+                            fullScreen: { splitChoice = false }, findingSubtitles: $findingSubtitles)
+                    .padding(.top, split.panelTop)
+            } else if chromeVisible, let controller, let engine = controller.engine {
                 TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
-                              findingSubtitles: $findingSubtitles, showsInfo: $showsInfo)
+                              findingSubtitles: $findingSubtitles, showsInfo: $showsInfo, split: { splitChoice = true })
                     .transition(.opacity)
             }
             #endif
@@ -119,7 +152,9 @@ struct PlayerView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
             }
             FlashView(flash: flash)
-            skipButton
+                .modifier(split.pictureArea)
+            skipButton(docked: split.isSplit)
+                .modifier(split.pictureArea)
             if app.showsPerformanceHUD, let engine = controller?.engine {
                 EngineStatsView(stats: engine.stats, format: engine.videoFormat)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -180,7 +215,8 @@ struct PlayerView: View {
             }
             .hidesSystemOverlays()
             #if !os(tvOS)
-            .sheet(isPresented: $findingSubtitles, onDismiss: { controller?.subtitleSearch = .idle; showChrome() }) {
+            .sheet(isPresented: Binding(get: { findingSubtitles && !docked }, set: { findingSubtitles = $0 }),
+                   onDismiss: { if !docked { controller?.subtitleSearch = .idle; showChrome() } }) {
                 if let controller { FindSubtitlesSheet(controller: controller) { findingSubtitles = false } }
             }
             .sheet(isPresented: $showsInfo, onDismiss: { showChrome() }) {
@@ -238,7 +274,7 @@ struct PlayerView: View {
     }
 
     @ViewBuilder
-    private var skipButton: some View {
+    private func skipButton(docked: Bool) -> some View {
         if let controller, let segment = controller.activeSegment {
             Button {
                 Task { await controller.skip(segment) }
@@ -248,7 +284,7 @@ struct PlayerView: View {
             .focused($focus, equals: .skip)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.horizontal, Platform.isTV ? 90 : Layout.horizontalMargin + 8)
-            .padding(.bottom, Platform.isTV ? (chromeVisible ? 300 : 90) : (chromeVisible ? SubtitleOverlay.controlsHeight : 24))
+            .padding(.bottom, Platform.isTV ? (chromeVisible ? 300 : 90) : (chromeVisible && !docked ? SubtitleOverlay.controlsHeight : 16))
             .transition(.opacity)
         }
     }
@@ -433,6 +469,8 @@ struct SubtitleOverlay: View {
     let raised: Bool
     /// Width ÷ height of the picture (nil: not known yet — the whole screen).
     var videoAspect: CGFloat? = nil
+    /// Over the whole screen; false: in the split's picture, inside the safe area.
+    var fullBleed = true
 
     var body: some View {
         GeometryReader { geo in
@@ -458,7 +496,7 @@ struct SubtitleOverlay: View {
                 }
             }
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: fullBleed ? .all : [])
         .allowsHitTesting(false)
         .animation(nil, value: cue)
     }

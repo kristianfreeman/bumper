@@ -22,6 +22,11 @@ struct TouchControls: View {
     /// Owned by the player, so they stay up when the controls hide.
     @Binding var findingSubtitles: Bool
     @Binding var showsInfo: Bool
+    /// Under the split's picture, not over it: stacked, no spacers, and no
+    /// Info (it's right there below).
+    var docked = false
+    /// Switches between the picture full screen and the split.
+    var split: (() -> Void)? = nil
 
     private var playing: Bool { engine.status != .paused }
     private var phone: Bool { Layout.device == .phone }
@@ -29,16 +34,26 @@ struct TouchControls: View {
     private var short: Bool { vertical == .compact }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            Spacer(minLength: 0)
-            transport
-            Spacer(minLength: 0)
-            bottom
+        Group {
+            if docked {
+                VStack(spacing: 16) {
+                    topBar
+                    bottom
+                    transport
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer(minLength: 0)
+                    transport
+                    Spacer(minLength: 0)
+                    bottom
+                }
+            }
         }
         .padding(.horizontal, phone ? 16 : 28)
-        .padding(.top, short ? 8 : 4)
-        .padding(.bottom, short ? 6 : phone ? 4 : 20)
+        .padding(.top, docked ? 14 : short ? 8 : 4)
+        .padding(.bottom, docked ? 0 : short ? 6 : phone ? 4 : 20)
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)                      // glass and menus, dark over the picture
     }
@@ -54,6 +69,10 @@ struct TouchControls: View {
                 Text(controller.item.name ?? "").font(phone ? .headline : .title3.weight(.semibold)).lineLimit(1)
             }
             Spacer(minLength: 0)
+            if let split {
+                glassButton(docked ? "arrow.up.left.and.arrow.down.right" : "rectangle.split.1x2", docked ? "Full Screen" : "Show Details Below", size: 15) { split() }
+                    .accessibilityIdentifier("player.layout")
+            }
             if controller.isBackground {
                 Label("Untracked", systemImage: "infinity")
                     .font(.labelText.weight(.semibold))
@@ -101,8 +120,10 @@ struct TouchControls: View {
                 subtitlesMenu
                 audioMenu
                 playbackMenu
-                glassButton("info.circle", "Info", size: 15) { showsInfo = true }
-                    .accessibilityIdentifier("control.info")
+                if !docked {
+                    glassButton("info.circle", "Info", size: 15) { showsInfo = true }
+                        .accessibilityIdentifier("control.info")
+                }
             }
         }
     }
