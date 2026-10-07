@@ -1,0 +1,80 @@
+#if os(macOS)                    // in-process view tests: the Mac's `swift test`
+import AppKit
+import CoreGraphics
+import JellyfinAPI
+import Observation
+import PlaybackCore
+
+/// A backend that decodes nothing: the player's side of the engine (loading,
+/// playing, paused, the playhead, Picture in Picture) is real; the picture
+/// is an empty view and the test moves the clock. So the player's screens —
+/// chrome, chapters, the split, slow starts — are checked in milliseconds,
+/// with no media and no AVPlayer or VLCKit.
+@Observable
+final class FakeEngine: PlayerEngine {
+    let kind: EngineKind
+    private(set) var status: PlaybackStatus = .idle
+    var currentTime: Duration = .zero
+    var playheadNow: Duration { currentTime }
+    private(set) var duration: Duration?
+    private(set) var rate: Float = 1
+    var audioTracks: [MediaTrack] = []
+    private(set) var selectedAudioTrack: Int?
+    let rendersSubtitles = false
+    var activeSubtitleTrack: String? { nil }
+    var videoFormat: VideoFormatInfo?
+    var stats = EngineStats()
+    @ObservationIgnored private(set) var lastSeekFrameAt: ContinuousClock.Instant?
+    @ObservationIgnored let videoView: PlatformView = NSView()
+    let prefersSerialSeeks = false
+    /// Where the picture could float: the test says when the system would
+    /// allow it (`pictureInPicture?.setPossible`); set nil for a backend
+    /// that can't float at all.
+    @ObservationIgnored var pictureInPicture: PictureInPicture?
+
+    /// A slow start: `load` waits here until `finishLoading()`.
+    @ObservationIgnored var holdsLoading = false
+    @ObservationIgnored private var loading: CheckedContinuation<Void, Never>?
+    /// What it was asked to open.
+    @ObservationIgnored private(set) var plan: PlaybackPlan?
+
+    init(kind: EngineKind) {
+        self.kind = kind
+        stats.engineName = "Fake"
+        // As the system does: asked to float, it floats; asked back, it stops.
+        pictureInPicture = PictureInPicture(start: { [weak self] in self?.pictureInPicture?.started() },
+                                            stop: { [weak self] in self?.pictureInPicture?.stopped() })
+    }
+
+    func load(_ plan: PlaybackPlan, autoplay: Bool) async throws {
+        self.plan = plan
+        status = .loading
+        duration = plan.item.runtime
+        currentTime = plan.startPosition
+        if holdsLoading { await withCheckedContinuation { loading = $0 } }
+        status = autoplay ? .playing : .paused
+    }
+
+    func finishLoading() {
+        loading?.resume()
+        loading = nil
+    }
+
+    func play() { status = .playing }
+    func pause() { status = .paused }
+    func seek(to time: Duration) async {
+        currentTime = time
+        lastSeekFrameAt = .now
+    }
+    func setRate(_ rate: Float) { self.rate = rate }
+    func stop() {
+        finishLoading()
+        status = .idle
+    }
+    func setVolume(_ volume: Float) {}
+    func selectAudio(_ streamIndex: Int) async { selectedAudioTrack = streamIndex }
+    func thumbnail(at time: Duration) async -> CGImage? { nil }
+    func selectSubtitle(_ stream: MediaStream?, external: URL?) async {}
+    func setFillsScreen(_ fill: Bool) {}
+}
+#endif

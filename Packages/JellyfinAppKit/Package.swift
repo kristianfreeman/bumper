@@ -83,5 +83,6 @@ let package = Package(
         .testTarget(name: "InstrumentationTests", dependencies: ["Instrumentation"], swiftSettings: modernSwift),
         .testTarget(name: "CompanionTests", dependencies: ["Companion"], swiftSettings: modernSwift),
         .testTarget(name: "TopShelfTests", dependencies: ["TopShelf"], swiftSettings: modernSwift),
+        .testTarget(name: "AppFeaturesTests", dependencies: ["AppFeatures", "AppCore", "PlaybackCore", "JellyfinAPI", "JellyfinMocks"], swiftSettings: uiSwift),
     ]
 )
