@@ -298,6 +298,8 @@ struct MainTabView: View {
             }
         }
         .profileToolbar(app)
+        // The player takes the window: the places bar would sit over the video.
+        .toolbar(app.playback == nil && !app.showsAudiobook ? .visible : .hidden, for: .windowToolbar)
         .frame(minWidth: 640, idealWidth: 1100, maxWidth: .infinity)
         .onAppear {
             visited.insert(selection)

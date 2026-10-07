@@ -136,7 +136,7 @@ struct TouchControls: View {
         } label: {
             glassFace(controller.selectedSubtitle != nil || controller.foundSubtitle != nil ? "captions.bubble.fill" : "captions.bubble", size: 15)
         }
-        .menuIndicator(.hidden)
+        .bareMenu()
         .accessibilityLabel("Subtitles")
         .accessibilityIdentifier("control.subtitles")
         .simultaneousGesture(TapGesture().onEnded { poke() })
@@ -153,7 +153,7 @@ struct TouchControls: View {
         } label: {
             glassFace("speaker.wave.2", size: 15)
         }
-        .menuIndicator(.hidden)
+        .bareMenu()
         .disabled(controller.audioOptions.count < 2)
         .accessibilityLabel("Audio")
         .accessibilityIdentifier("control.audio")
@@ -188,7 +188,7 @@ struct TouchControls: View {
                 }
             }
         }
-        .menuIndicator(.hidden)
+        .bareMenu()
         .accessibilityLabel("Playback")
         .accessibilityIdentifier("control.playback")
         .simultaneousGesture(TapGesture().onEnded { poke() })

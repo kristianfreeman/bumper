@@ -89,6 +89,9 @@ public final class VLCEngine: PlayerEngine {
         #else
         surface.wantsLayer = true
         surface.layer?.backgroundColor = NSColor.black.cgColor
+        // A size from the start: VLCKit's OpenGL view asserts on drawing at 0×0
+        // (the Mac app aborted); the host resizes it to the window once laid out.
+        surface.frame = CGRect(x: 0, y: 0, width: 1280, height: 720)
         #endif
         player.drawable = surface
         player.timeChangeUpdateInterval = 0.1     // default 1 s: the on-screen clock would lag

@@ -380,10 +380,13 @@ struct VideoSurface: UIViewRepresentable {
 struct VideoSurface: NSViewRepresentable {
     let view: NSView
 
+    /// Never a zero size: VLCKit's OpenGL view on the Mac asserts (and the
+    /// app aborts) when it draws at 0×0 — which a host mid-layout, before
+    /// SwiftUI has sized it, briefly is.
     final class HostView: NSView {
         override func layout() {
             super.layout()
-            hosted?.frame = bounds          // VLCKit sizes its output from the drawable's frame
+            if !bounds.isEmpty { hosted?.frame = bounds }      // VLCKit sizes its output from the drawable's frame
         }
 
         var hosted: NSView? {
@@ -391,7 +394,7 @@ struct VideoSurface: NSViewRepresentable {
                 guard hosted !== oldValue else { return }
                 oldValue?.removeFromSuperview()
                 if let hosted {
-                    hosted.frame = bounds
+                    if !bounds.isEmpty { hosted.frame = bounds }
                     hosted.autoresizingMask = [.width, .height]
                     addSubview(hosted)
                 }

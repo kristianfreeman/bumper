@@ -170,6 +170,17 @@ extension View {
 }
 
 extension View {
+    /// A menu whose label is the whole look (a round glass button): on the
+    /// Mac a menu otherwise draws its own bordered box around the label, and
+    /// the player's menus came out square beside the round Info button.
+    @ViewBuilder public func bareMenu() -> some View {
+        #if os(macOS)
+        menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        #else
+        menuIndicator(.hidden)
+        #endif
+    }
+
     /// No home indicator / system overlays over the video (none on the Mac).
     @ViewBuilder public func hidesSystemOverlays() -> some View {
         #if os(macOS)
