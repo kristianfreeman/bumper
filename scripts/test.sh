@@ -127,7 +127,7 @@ step() {
 CAP="${CAP:-}"
 capped() { local t="$1"; shift; scripts/with-timeout.sh "${CAP:-$t}" "$@"; }
 
-summarize() { grep -E '✔ Test run|✘|error:|Test Case .*(passed|failed)|TEST (SUCCEEDED|FAILED)|measured' || true; }
+summarize() { grep -E '✔ Test run|✘|error:|Test [Cc]ase .*(passed|failed)|TEST (SUCCEEDED|FAILED)|measured' || true; }
 need_vlckit() { [[ -d Vendor/VLCKit.xcframework ]] || scripts/fetch-vlckit.sh; }
 need_project() { [[ -d Bumper.xcodeproj ]] || xcodegen generate; }
 
@@ -141,7 +141,7 @@ perf() { need_vlckit; (cd "$PKG" && ../../scripts/with-timeout.sh "${CAP:-180}" 
 
 unit() {
   need_vlckit
-  (cd "$PKG" && ../../scripts/with-timeout.sh "${CAP:-180}" xcodebuild test -scheme JellyfinAppKit -destination "$DEST" -derivedDataPath "../../$DD/pkg" -quiet 2>&1) | summarize
+  (cd "$PKG" && ../../scripts/with-timeout.sh "${CAP:-180}" xcodebuild test -scheme JellyfinAppKit-Package -destination "$DEST" -derivedDataPath "../../$DD/pkg" -quiet 2>&1) | summarize
 }
 
 # Build the app + UI test bundle once; later runs reuse it with test-without-building.
@@ -167,39 +167,76 @@ build_for_testing_phone() {
 # The same cut-offs as the TV's: a stuck test fails in a minute, not ten.
 phone_run() {
   mkdir -p "$OUT"
+  local rc=0
+  # shellcheck disable=SC2046                         # (workers' words are separate arguments)
   capped 600 xcodebuild test-without-building -project Bumper.xcodeproj -scheme BumperPhone -configuration "$CONFIG" -destination "$PHONE_DEST" \
     -derivedDataPath "$DD/phone" -resultBundlePath "$OUT/phone.xcresult" \
     -test-timeouts-enabled YES -default-test-execution-time-allowance 60 -maximum-test-execution-time-allowance 120 \
-    -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" \
-    "$@" 2>&1 | tee "$OUT/phone.log" | summarize
+    -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" $(workers) \
+    "$@" 2>&1 | tee "$OUT/phone.log" | summarize || rc=$?
+  [[ $rc -eq 0 ]] || why "$OUT/phone.xcresult"
   echo "log: $OUT/phone.log   results: $OUT/phone.xcresult"
+  return $rc
 }
+
+# Test classes side by side, each worker on its own clone of the simulator
+# (the mock's socket takes any free port: -mockPort 0). The tiers with
+# several classes set how many (TIER_WORKERS); WORKERS=n overrides it, and
+# WORKERS=1 runs one at a time on the simulator itself.
+TIER_WORKERS=1
+workers() {
+  local n="${WORKERS:-$TIER_WORKERS}"
+  if [[ "$n" -gt 1 ]]; then echo "-parallel-testing-enabled YES -parallel-testing-worker-count $n"
+  else echo "-parallel-testing-enabled NO"; fi
+}
+
+# A tier's classes; `tier <test>` narrows them to that test (only the class
+# that has it runs it).
+only() { local c; for c in "$@"; do echo "-only-testing:BumperUITests/$c${ARG:+/$ARG}"; done; }
+ARG="${2:-}"
 
 ui_run() {
   mkdir -p "$OUT"
   stop_sim_apps "" all                                # clean slate (and port 8097 free)
   # Raw log kept for diagnosis. Each test is cut off at a minute (a stall
   # fails fast); the whole run at 15 (tiers have grown past 2).
+  local rc=0
+  # shellcheck disable=SC2046                         # (workers' words are separate arguments)
   TEST_RUNNER_PERF_ITERATIONS="${PERF_ITERATIONS:-1}" \
   capped 900 xcodebuild test-without-building -project Bumper.xcodeproj -scheme Bumper -configuration "$CONFIG" -destination "$DEST" \
     -derivedDataPath "$DD/app" -resultBundlePath "$OUT/ui.xcresult" \
     -test-timeouts-enabled YES -default-test-execution-time-allowance 60 -maximum-test-execution-time-allowance 120 \
-    -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" \
-    "$@" 2>&1 | tee "$OUT/ui.log" | summarize
+    -collect-test-diagnostics "${COLLECT_DIAGNOSTICS:-never}" $(workers) \
+    "$@" 2>&1 | tee "$OUT/ui.log" | summarize || rc=$?
+  [[ $rc -eq 0 ]] || why "$OUT/ui.xcresult"
   echo "log: $OUT/ui.log   results: $OUT/ui.xcresult"
+  return $rc
+}
+
+# Why each test failed, from the result bundle: side by side, xcodebuild's
+# log names the tests that failed but not what they said.
+why() {
+  xcrun xcresulttool get test-results tests --path "$1" 2>/dev/null | python3 -c '
+import json, sys
+def walk(node, test=""):
+    if node.get("nodeType") == "Test Case": test = node.get("nodeIdentifier", node.get("name", ""))
+    if node.get("nodeType") == "Failure Message": print("✘ " + test + ": " + node.get("name", ""))
+    for child in node.get("children", []): walk(child, test)
+for node in json.load(sys.stdin).get("testNodes", []): walk(node)' 2>/dev/null || true
 }
 
 case "${1:-fast}" in
   fast) step fast ;;
   perf) step perf ;;
   unit) step unit ;;
-  smoke) step build_for_testing; step ui_run -only-testing:"BumperUITests/SmokeTests${2:+/$2}" -only-testing:"BumperUITests/TabBarTests" -only-testing:"BumperUITests/ScrollTests" ;;
+  # shellcheck disable=SC2046                          # (only's words are separate arguments)
+  smoke) TIER_WORKERS=3; step build_for_testing; step ui_run $(only SmokeTests HomeCardTests OnboardingTests TopShelfTests TabBarTests TabBarPlacesTests ScrollTests) ;;
   profile) step build_for_testing; step ui_run -only-testing:"BumperUITests/ProfileTests${2:+/$2}" ;;
   settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
-  player) step build_for_testing; step ui_run -only-testing:"BumperUITests/PlayerTests${2:+/$2}" ;;
+  player) TIER_WORKERS=3; step build_for_testing; step ui_run $(only PlayerTests PlayerSubtitleTests PlayerScrubTests PlayerChapterTests) ;;
   queue) step build_for_testing; step ui_run -only-testing:"BumperUITests/QueueTests" ;;
   scroll) step build_for_testing; step ui_run -only-testing:"BumperUITests/ScrollTests" ;;
-  tabs|sidebar) step build_for_testing; step ui_run -only-testing:"BumperUITests/TabBarTests${2:+/$2}" ;;
+  tabs|sidebar) TIER_WORKERS=2; step build_for_testing; step ui_run $(only TabBarTests TabBarPlacesTests) ;;
   collection) step build_for_testing; step ui_run -only-testing:"BumperUITests/CollectionTests" ;;
   people) step build_for_testing; step ui_run -only-testing:"BumperUITests/PeopleTests${2:+/$2}" ;;
   search)

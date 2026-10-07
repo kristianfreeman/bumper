@@ -75,6 +75,9 @@ nonisolated struct LaunchOptions: Sendable {
     var route: String?
     /// Serve the mock over a real loopback socket (needed for AVPlayer).
     var mockHTTP = false
+    /// `-mockPort <n>`: that socket's port; 0 is any free one (UI tests
+    /// running side by side, each simulator on the Mac's own loopback).
+    var mockPort: UInt16 = 8097
     /// `-mock -mockOnboarding`: start signed out, with the mock server listed (onboarding tests).
     var mockOnboarding = false
     /// Start a sleep timer of this many seconds (tests).
@@ -108,6 +111,7 @@ nonisolated struct LaunchOptions: Sendable {
         reset = arguments.contains("-reset")
         benchmark = arguments.contains("-benchmark")
         mockHTTP = arguments.contains("-mockHTTP")
+        if let i = arguments.firstIndex(of: "-mockPort"), i + 1 < arguments.count, let port = UInt16(arguments[i + 1]) { mockPort = port }
         mockOnboarding = arguments.contains("-mockOnboarding")
         if let i = arguments.firstIndex(of: "-simulateModel"), i + 1 < arguments.count { simulateModel = arguments[i + 1] }
         if let i = arguments.firstIndex(of: "-simulateModeSwitch"), i + 1 < arguments.count { simulateModeSwitchMs = Int(arguments[i + 1]) }
@@ -255,7 +259,7 @@ final class AppModel {
 
         if !options.mock { accounts.cloud = CloudSignIns() }               // your sign-in on your other devices
         session = accounts.restoreActiveSession()
-        if options.mockHTTP, let url = Self.startMockServer() {
+        if options.mockHTTP, let url = Self.startMockServer(port: options.mockPort) {
             // Fresh session every launch: the loopback URL is what AVPlayer sees.
             let server = ServerRecord(id: "mock-server", name: "Mock Jellyfin (HTTP)", url: url, version: "10.11.11")
             session = accounts.signIn(server: server, result: MockJellyfinProtocol.authenticationResult)
@@ -338,9 +342,9 @@ final class AppModel {
 
     /// The previous app instance may still be releasing :8097 when we launch
     /// (tests relaunch back to back), so retry briefly before giving up.
-    private static func startMockServer() -> URL? {
+    private static func startMockServer(port: UInt16) -> URL? {
         for attempt in 1...20 {
-            do { return try MockHTTPServer.shared.start(port: 8097) } catch {
+            do { return try MockHTTPServer.shared.start(port: port) } catch {
                 if attempt == 20 {
                     log.error("Mock HTTP server failed to start: \(error.localizedDescription, privacy: .public)")
                     TraceFile.write("app", "mock HTTP server failed: \(error.localizedDescription)")

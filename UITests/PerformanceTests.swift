@@ -86,11 +86,16 @@ final class PerformanceTests: XCTestCase {
         return o
     }
 
-    static func readMetrics(_ app: XCUIApplication) throws -> [String: [String: Double]] {
+    /// `key`: until the HUD has it (it refreshes once a second), not a
+    /// second's pause.
+    static func readMetrics(_ app: XCUIApplication, waitingFor key: String? = nil) throws -> [String: [String: Double]] {
         let hud = app.descendants(matching: .any)["perf.hud"]
         XCTAssertTrue(hud.exists(within: 5), "Perf HUD not found (launch with -perfHUD)")
-        // HUD refreshes once a second.
-        Thread.sleep(forTimeInterval: 1.2)
+        if let key {
+            hud.wait(5) { ($0.value as? String)?.contains("\"\(key)\"") == true }
+        } else {
+            Thread.sleep(forTimeInterval: 1.2)                  // the HUD refreshes once a second
+        }
         guard let json = hud.value as? String, let data = json.data(using: .utf8) else {
             throw XCTSkip("HUD exposed no metrics")
         }

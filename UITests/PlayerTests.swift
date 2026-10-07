@@ -1,22 +1,98 @@
 import XCTest
 
-/// Player controls against real media (TestMedia/, served by the mock over
-/// HTTP): the remote, focus, and what the real backends report. What the
-/// player shows off the TV (the chapters list, a slow start's words, the
-/// Untracked tag, Picture in Picture) is checked in-process:
-/// AppFeaturesTests' Player.
+// The player against real media (TestMedia/, served by the mock over HTTP):
+// the remote, focus, and what the real backends report. What the player
+// shows off the TV (the chapters list, a slow start's words, the Untracked
+// tag, Picture in Picture) is checked in-process: AppFeaturesTests' Player.
+// A few classes, so `scripts/test.sh player` runs them side by side.
+
+/// The controls: showing, hiding, Play/Pause, and the Playback card.
 @MainActor
 final class PlayerTests: XCTestCase {
     static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia").path
 
-    /// `clip` of TestMedia/ (5 s each), or of TestMedia/seek (two minutes).
-    func launchPlaying(_ clip: Int, from folder: String = "", extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media + folder, "-autoplay", "media-\(clip)"] + extra
-        app.launch()
-        return app
+    /// Select with the controls down brings them up and the video plays on;
+    /// on the icons, Play/Pause still pauses and plays, and Left from the
+    /// first goes nowhere.
+    func testSelectShowsTheControlsAndPlayPauseWorksFromTheIcons() {
+        let app = launchPlaying(2, from: "/seek", extra: ["-startAt", "40"])     // past the intro; too long to end mid-test
+        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        let subtitles = app.buttons["control.subtitles"]
+        _ = subtitles.exists(within: 2)                              // up at the start…
+        XCTAssertTrue(subtitles.gone(within: 3), "the controls didn't hide")     // …gone in 0.8 s (-quickTimers)
+        remote.press(.select)
+        XCTAssertTrue(subtitles.exists(within: 2), "Select didn't bring the controls up")      // (they go again in 0.8 s)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists, "Select paused instead of only showing the controls")
+        remote.press(.up)
+        XCTAssertTrue(subtitles.waitForFocus(2), "Up didn't reach the icons")
+        remote.press(.playPause)                                     // paused, the controls stay up
+        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].exists(within: 2), "Play/Pause on the icons didn't pause")
+        remote.press(.left)
+        Thread.sleep(forTimeInterval: 0.3)                           // a move would have landed by now
+        XCTAssertTrue(subtitles.hasFocus, "Left from the first icon left the icons")
+        remote.press(.playPause)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists(within: 2), "Play/Pause on the icons didn't resume")
     }
 
+    /// Left alone on the icons while it plays, the controls go: 8 s, 1.6 at
+    /// -quickTimers' pace (from the video, 0.8).
+    func testIdleControlsHideFromTheIcons() {
+        let app = launchPlaying(item: "series-001-s1-e2", extra: ["-startAt", "300"])   // 10 minutes, past its intro
+        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        let subtitles = app.buttons["control.subtitles"]
+        _ = subtitles.exists(within: 2)                              // up at the start; gone (Select now shows, not pauses)
+        XCTAssertTrue(subtitles.gone(within: 3), "the controls didn't hide")
+        remote.press(.select)
+        XCTAssertTrue(subtitles.exists(within: 2), "Select didn't bring the controls up")      // (they go again in 0.8 s)
+        remote.press(.up)
+        XCTAssertTrue(subtitles.waitForFocus(), "Up didn't reach the icons")
+        let onIcons = Date()
+        XCTAssertTrue(subtitles.gone(within: 4), "the controls stayed up, left alone")
+        // From when focus was seen there (a little after it landed): the
+        // video's 0.8 s would be well under a second.
+        let stayed = Date().timeIntervalSince(onIcons)
+        XCTAssertGreaterThan(stayed, 1.2, "the controls went too soon (after \(stayed) s)")
+    }
+
+    /// One press of Play/Pause pauses — and stays paused. (It could arrive
+    /// twice, via SwiftUI and the Now Playing command, and cancel itself.)
+    func testPlayPauseButtonPausesOnce() {
+        let app = launchPlaying(6)   // H.264 + AAC MP4 → AVPlayer, Now Playing active
+        XCTAssertTrue(waitFor(app.staticTexts["player.time"], label: { (Int($0) ?? 0) > 300 }, timeout: 8), "it didn't play")   // (the clip is 5 s)
+        XCUIRemote.shared.press(.playPause)
+        let pausedIcon = app.descendants(matching: .any)["transport.paused"]
+        XCTAssertTrue(pausedIcon.exists(within: 1), "Play/Pause didn't pause")
+        Thread.sleep(forTimeInterval: 0.6)           // a double-delivered press would resume by now
+        XCTAssertTrue(pausedIcon.exists, "Pause undid itself")
+    }
+
+    /// Playback (Background and the sleep timer, only here): the sleep
+    /// timer sets from its card, and the pill then shows the time left.
+    func testSleepTimerFromPlayback() {
+        let app = launchPlaying(6)
+        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        remote.press(.playPause)
+        remote.press(.up)
+        let playback = app.buttons["control.playback"]
+        XCTAssertTrue(playback.exists(within: 2), "no Playback in the player")
+        XCTAssertTrue(remote.press(.right, in: app, atMost: 4) { playback.hasFocus }, "couldn't reach Playback")
+        remote.press(.select)
+        let fifteen = app.buttons["option.sleep-15"]
+        XCTAssertTrue(fifteen.exists(within: 2), "no sleep options")
+        XCTAssertTrue(app.buttons["option.background"].exists, "no Untracked switch")
+        remote.press(.down, in: app, atMost: 4) { fifteen.hasFocus }
+        remote.press(.select)
+        playback.wait { ($0.value as? String ?? "").contains("m") }
+        XCTAssertTrue(["Stops in 15m", "Stops in 14m"].contains(playback.value as? String ?? ""), "the pill doesn't show the time left (\(playback.value ?? "nil"))")
+    }
+}
+
+/// Subtitles, as VLCKit reports them.
+@MainActor
+final class PlayerSubtitleTests: XCTestCase {
     /// MKV + ASS plays on VLCKit with subtitles on by default; the icon
     /// row above the timeline opens the subtitle menu with the remote, and
     /// VLCKit itself reports each change.
@@ -42,6 +118,7 @@ final class PlayerTests: XCTestCase {
         remote.press(.select)
         XCTAssertTrue(waitFor(status, label: { $0 == "off" }, timeout: 2), "VLCKit still shows a subtitle after choosing Off")
         XCTAssertTrue(icon.waitForFocus(2), "focus didn't return to the Subtitles pill")
+        app.focusSettles(quiet: 0.2)                 // the card done closing
         remote.press(.select)                        // menu closed, focus back on the icon → reopen
         XCTAssertTrue(off.exists(within: 2) && off.waitForFocus(2.5), "Reopened menu should focus the chosen option")
         remote.press(.down)
@@ -86,123 +163,46 @@ final class PlayerTests: XCTestCase {
         remote.press(.select)
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 5), "the found subtitle didn't come on (VLCKit reports '\(status.label)')")
     }
+}
 
-    /// Playback (Background and the sleep timer, only here): the sleep
-    /// timer sets from its card, and the pill then shows the time left.
-    func testSleepTimerFromPlayback() {
-        let app = launchPlaying(6)
-        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
-        let remote = XCUIRemote.shared
-        remote.press(.playPause)
-        remote.press(.up)
-        let playback = app.buttons["control.playback"]
-        XCTAssertTrue(playback.exists(within: 2), "no Playback in the player")
-        XCTAssertTrue(remote.press(.right, in: app, atMost: 4) { playback.hasFocus }, "couldn't reach Playback")
-        remote.press(.select)
-        let fifteen = app.buttons["option.sleep-15"]
-        XCTAssertTrue(fifteen.exists(within: 2), "no sleep options")
-        XCTAssertTrue(app.buttons["option.background"].exists, "no Untracked switch")
-        remote.press(.down, in: app, atMost: 4) { fifteen.hasFocus }
-        remote.press(.select)
-        playback.wait { ($0.value as? String ?? "").contains("m") }
-        XCTAssertTrue(["Stops in 15m", "Stops in 14m"].contains(playback.value as? String ?? ""), "the pill doesn't show the time left (\(playback.value ?? "nil"))")
-    }
-
-    /// Select with the controls down brings them up and the video plays on;
-    /// on the icons, Play/Pause still pauses and plays, and Left from the
-    /// first goes nowhere.
-    func testSelectShowsTheControlsAndPlayPauseWorksFromTheIcons() {
-        let app = launchPlaying(2, from: "/seek", extra: ["-startAt", "40"])     // past the intro; too long to end mid-test
-        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
-        let remote = XCUIRemote.shared
-        let subtitles = app.buttons["control.subtitles"]
-        _ = subtitles.exists(within: 2)                              // up at the start…
-        XCTAssertTrue(subtitles.gone(within: 3), "the controls didn't hide")     // …gone in 0.8 s (-quickTimers)
-        remote.press(.select)
-        XCTAssertTrue(subtitles.exists(within: 2), "Select didn't bring the controls up")      // (they go again in 0.8 s)
-        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists, "Select paused instead of only showing the controls")
-        remote.press(.up)
-        XCTAssertTrue(subtitles.waitForFocus(2), "Up didn't reach the icons")
-        remote.press(.playPause)                                     // paused, the controls stay up
-        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].exists(within: 2), "Play/Pause on the icons didn't pause")
-        remote.press(.left)
-        Thread.sleep(forTimeInterval: 0.3)                           // a move would have landed by now
-        XCTAssertTrue(subtitles.hasFocus, "Left from the first icon left the icons")
-        remote.press(.playPause)
-        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists(within: 2), "Play/Pause on the icons didn't resume")
-    }
-
-    /// Left alone on the icons while it plays, the controls go: 8 s, 1.6 at
-    /// -quickTimers' pace (from the video, 0.8).
-    func testIdleControlsHideFromTheIcons() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media, "-autoplay", "series-001-s1-e2", "-startAt", "300"]   // 10 minutes, past its intro
-        app.launch()
-        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
-        let remote = XCUIRemote.shared
-        let subtitles = app.buttons["control.subtitles"]
-        _ = subtitles.exists(within: 2)                              // up at the start; gone (Select now shows, not pauses)
-        XCTAssertTrue(subtitles.gone(within: 3), "the controls didn't hide")
-        remote.press(.select)
-        XCTAssertTrue(subtitles.exists(within: 2), "Select didn't bring the controls up")      // (they go again in 0.8 s)
-        remote.press(.up)
-        XCTAssertTrue(subtitles.waitForFocus(), "Up didn't reach the icons")
-        let onIcons = Date()
-        XCTAssertTrue(subtitles.gone(within: 4), "the controls stayed up, left alone")
-        // From when focus was seen there (a little after it landed): the
-        // video's 0.8 s would be well under a second.
-        let stayed = Date().timeIntervalSince(onIcons)
-        XCTAssertGreaterThan(stayed, 1.2, "the controls went too soon (after \(stayed) s)")
-    }
-
-    /// One press of Play/Pause pauses — and stays paused. (It could arrive
-    /// twice, via SwiftUI and the Now Playing command, and cancel itself.)
-    func testPlayPauseButtonPausesOnce() {
-        let app = launchPlaying(6)   // H.264 + AAC MP4 → AVPlayer, Now Playing active
-        XCTAssertTrue(waitFor(app.staticTexts["player.time"], label: { (Int($0) ?? 0) > 300 }, timeout: 8), "it didn't play")   // (the clip is 5 s)
-        XCUIRemote.shared.press(.playPause)
-        let pausedIcon = app.descendants(matching: .any)["transport.paused"]
-        XCTAssertTrue(pausedIcon.exists(within: 1), "Play/Pause didn't pause")
-        Thread.sleep(forTimeInterval: 0.6)           // a double-delivered press would resume by now
-        XCTAssertTrue(pausedIcon.exists, "Pause undid itself")
-    }
-
+/// Scrubbing with clicks, on each backend.
+@MainActor
+final class PlayerScrubTests: XCTestCase {
     /// Pause, click right three times (the head moves +30 s), Select: playback
     /// resumes exactly at the head — on both backends. (Swipes are covered by
     /// TransportModelTests; XCUIRemote can't swipe.)
-    func testScrubWithClicksResumesExactlyAtTheHead() {
-        let seekMedia = Self.media + "/seek"
-        for clip in [0, 2] {                                  // MKV → VLCKit, MP4 → AVPlayer
-            let app = XCUIApplication()
-            app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", seekMedia, "-autoplay", "media-\(clip)"]
-            app.launch()
-            let time = app.staticTexts["player.time"], head = app.staticTexts["player.head"]
-            XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 1000 }, timeout: 8), "clip \(clip) didn't start")
-            let remote = XCUIRemote.shared
-            remote.press(.playPause)
-            XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].exists(within: 2), "clip \(clip): didn't pause")
-            let paused = Int(time.label) ?? 0
-            for _ in 0..<3 { remote.press(.right) }
-            XCTAssertTrue(waitFor(head, label: { Int($0) == paused + 30_000 }, timeout: 2), "clip \(clip): head \(head.label), expected \(paused + 30_000)")
-            XCTAssertTrue(app.descendants(matching: .any)["scrub.preview"].exists, "clip \(clip): no scrub preview")
-            let target = Int(head.label) ?? 0
-            remote.press(.select)
-            XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists(within: 5), "clip \(clip): didn't play")
-            // Until the clock leaves where it paused, and has had a moment to settle at the head.
-            waitUntil(3) { (Int(time.label) ?? 0) >= target - 600 }
-            let now = Int(time.label) ?? 0
-            XCTAssertTrue(now >= target - 600 && now <= target + 2_500, "clip \(clip): resumed at \(now) ms, head was \(target) ms")
-            app.terminate()
-        }
-    }
+    func testScrubWithClicksResumesExactlyAtTheHeadOnVLCKit() { scrubResumesAtTheHead(clip: 0) }      // MKV → VLCKit
+    func testScrubWithClicksResumesExactlyAtTheHeadOnAVPlayer() { scrubResumesAtTheHead(clip: 2) }    // MP4 → AVPlayer
 
+    private func scrubResumesAtTheHead(clip: Int) {
+        let app = launchPlaying(clip, from: "/seek")
+        let time = app.staticTexts["player.time"], head = app.staticTexts["player.head"]
+        XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 1000 }, timeout: 8), "clip \(clip) didn't start")
+        let remote = XCUIRemote.shared
+        remote.press(.playPause)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.paused"].exists(within: 2), "clip \(clip): didn't pause")
+        let paused = Int(time.label) ?? 0
+        for _ in 0..<3 { remote.press(.right) }
+        XCTAssertTrue(waitFor(head, label: { Int($0) == paused + 30_000 }, timeout: 2), "clip \(clip): head \(head.label), expected \(paused + 30_000)")
+        XCTAssertTrue(app.descendants(matching: .any)["scrub.preview"].exists, "clip \(clip): no scrub preview")
+        let target = Int(head.label) ?? 0
+        remote.press(.select)
+        XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists(within: 5), "clip \(clip): didn't play")
+        // Until the clock leaves where it paused, and has had a moment to settle at the head.
+        waitUntil(3) { (Int(time.label) ?? 0) >= target - 600 }
+        let now = Int(time.label) ?? 0
+        XCTAssertTrue(now >= target - 600 && now <= target + 2_500, "clip \(clip): resumed at \(now) ms, head was \(target) ms")
+    }
+}
+
+/// Chapters on the timeline, in their card, and under the scrub head.
+@MainActor
+final class PlayerChapterTests: XCTestCase {
     /// Chapters (the mock's: 0:30 "The Harbour at Night", 1:00 "Chapter 03",
     /// 1:30 "Landfall"): marked on the timeline; the card from the icon row
     /// starts on the one playing, and choosing another goes there.
     func testChaptersCardGoesToAChapter() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]   // 2 min MP4 → AVPlayer
-        app.launch()
+        let app = launchPlaying(2, from: "/seek")                   // 2 min MP4 → AVPlayer
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 500 }, timeout: 8), "it didn't play")
         let remote = XCUIRemote.shared
@@ -227,9 +227,7 @@ final class PlayerTests: XCTestCase {
 
     /// Scrubbing names the chapter under the head, under the thumbnail.
     func testScrubbingNamesTheChapter() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockMedia", Self.media + "/seek", "-autoplay", "media-2"]
-        app.launch()
+        let app = launchPlaying(2, from: "/seek")
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(waitFor(time, label: { (Int($0) ?? 0) > 500 }, timeout: 8), "it didn't play")
         let remote = XCUIRemote.shared
@@ -242,8 +240,24 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(waitFor(chapter, label: { $0 == "Landfall" }, timeout: 2), "scrub shows \(chapter.exists ? chapter.label : "no chapter")")
         remote.press(.menu)                                          // cancel the scrub
     }
+}
 
-    private func waitFor(_ element: XCUIElement, label matches: (String) -> Bool, timeout: TimeInterval) -> Bool {
+@MainActor
+extension XCTestCase {
+    /// The app playing `clip` of TestMedia/ (5 s each), or of TestMedia/seek
+    /// (two minutes): its timers at a fifth, its mock on any free port.
+    func launchPlaying(_ clip: Int, from folder: String = "", extra: [String] = []) -> XCUIApplication {
+        launchPlaying(item: "media-\(clip)", from: folder, extra: extra)
+    }
+
+    func launchPlaying(item id: String, from folder: String = "", extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-quickTimers", "-mockHTTP", "-mockPort", "0", "-mockMedia", PlayerTests.media + folder, "-autoplay", id] + extra
+        app.launch()
+        return app
+    }
+
+    fileprivate func waitFor(_ element: XCUIElement, label matches: (String) -> Bool, timeout: TimeInterval) -> Bool {
         element.wait(timeout) { matches($0.label) }
     }
 }

@@ -1,6 +1,9 @@
 import XCTest
 
-/// Fast functional checks of the main flows against the mock server.
+// Fast functional checks of the main flows against the mock server, in a
+// few classes so `scripts/test.sh smoke` runs them side by side.
+
+/// Home and a page: where focus starts, and moving between rows.
 @MainActor
 final class SmokeTests: XCTestCase {
     func testDetailAndBackToHome() {
@@ -49,7 +52,12 @@ final class SmokeTests: XCTestCase {
         // Sidebar items are cells; content cards are buttons.
         XCTAssertNotEqual(focused.elementType, .cell, "Launch focus landed on the tab sidebar (\(focused.label))")
     }
+}
 
+/// A card on Home: resting on it fetches its page ahead; holding Select
+/// opens its menu.
+@MainActor
+final class HomeCardTests: XCTestCase {
     /// Resting on a card prefetches its details, so the page opens fully drawn.
     func testFocusedCardIsPrefetchedBeforeOpening() throws {
         let app = XCUIApplication()
@@ -64,10 +72,36 @@ final class SmokeTests: XCTestCase {
         remote.press(.select)
         let play = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play' OR label BEGINSWITH 'Resume'")).firstMatch
         XCTAssertTrue(play.exists(within: 5))
-        let metrics = try PerformanceTests.readMetrics(app)
+        let metrics = try PerformanceTests.readMetrics(app, waitingFor: "detail.prefetchHit")
         XCTAssertEqual(metrics["detail.prefetchHit"]?["last"], 1, "Detail page didn't open from the prefetch")
     }
 
+    /// Select on something in progress resumes it; hold, then Select on the
+    /// first item (See Details) opens its page instead.
+    func testHoldOpensDetailsForThingsThatPlay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        app.focusSettles()
+        let remote = XCUIRemote.shared
+        remote.press(.select, forDuration: 1.2)
+        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'See Details'")).firstMatch
+        if !details.exists(within: 3) {
+            XCTFail("holding didn't open the menu with See Details; menu: \(app.descendants(matching: .any).matching(NSPredicate(format: "elementType == 6 OR elementType == 9")).allElementsBoundByIndex.prefix(12).map(\.label))")
+            return
+        }
+        details.waitForFocus(1)                                      // the menu opens on it
+        remote.press(.select)
+        let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Resume' OR label BEGINSWITH 'Play'")).firstMatch
+        XCTAssertTrue(resume.exists(within: 5), "See Details didn't open the page")
+        XCTAssertFalse(app.descendants(matching: .any)["player.time"].exists, "it played instead of opening the page")
+    }
+}
+
+/// Signing in: no server yet, and Quick Connect.
+@MainActor
+final class OnboardingTests: XCTestCase {
     func testOnboardingWithoutMock() {
         let app = XCUIApplication()
         app.launchArguments = ["-reset"]
@@ -96,28 +130,16 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 12), "Quick Connect didn't sign in")
     }
 
-    /// Select on something in progress resumes it; hold, then Select on the
-    /// first item (See Details) opens its page instead.
-    func testHoldOpensDetailsForThingsThatPlay() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-reset"]
-        app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
-        app.focusSettles()
-        let remote = XCUIRemote.shared
-        remote.press(.select, forDuration: 1.2)
-        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'See Details'")).firstMatch
-        if !details.exists(within: 3) {
-            XCTFail("holding didn't open the menu with See Details; menu: \(app.descendants(matching: .any).matching(NSPredicate(format: "elementType == 6 OR elementType == 9")).allElementsBoundByIndex.prefix(12).map(\.label))")
-            return
-        }
-        details.waitForFocus(1)                                      // the menu opens on it
-        remote.press(.select)
-        let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Resume' OR label BEGINSWITH 'Play'")).firstMatch
-        XCTAssertTrue(resume.exists(within: 5), "See Details didn't open the page")
-        XCTAssertFalse(app.descendants(matching: .any)["player.time"].exists, "it played instead of opening the page")
+    private func shot(_ app: XCUIApplication, _ name: String) {
+        guard let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] else { return }
+        Thread.sleep(forTimeInterval: 1.2)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png"))
     }
+}
 
+/// The Top Shelf's links into the app.
+@MainActor
+final class TopShelfTests: XCTestCase {
     /// The Top Shelf's links: bumper://play/<id> opens straight into the player.
     func testTopShelfLinkPlays() {
         let app = XCUIApplication()
@@ -150,11 +172,5 @@ final class SmokeTests: XCTestCase {
         let ask = XCUIApplication(bundleIdentifier: "com.apple.PineBoard").buttons["Open"]
         waitUntil(5) { ask.exists || page.exists }
         if ask.exists { XCUIRemote.shared.press(.select) }
-    }
-
-    private func shot(_ app: XCUIApplication, _ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] else { return }
-        Thread.sleep(forTimeInterval: 1.2)
-        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png"))
     }
 }

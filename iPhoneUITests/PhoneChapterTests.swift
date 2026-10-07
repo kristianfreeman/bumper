@@ -12,7 +12,7 @@ final class PhoneChapterTests: XCTestCase {
     func testChaptersMenuOnItsSide() {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-reset", "-mockMedia", Self.media, "-autoplay", "media-0"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockPort", "0", "-reset", "-mockMedia", Self.media, "-autoplay", "media-0"]
         app.launch()
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(waitFor(time, timeout: 10) { (Int($0) ?? 0) > 500 }, "it didn't play")

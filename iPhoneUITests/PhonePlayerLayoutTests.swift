@@ -8,7 +8,7 @@ final class PhonePlayerLayoutTests: XCTestCase {
 
     func testPlayerLayout() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-reset", "-mockMedia", Self.media, "-autoplay", ProcessInfo.processInfo.environment["ITEM"] ?? "media-0"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockPort", "0", "-reset", "-mockMedia", Self.media, "-autoplay", ProcessInfo.processInfo.environment["ITEM"] ?? "media-0"]
         app.launch()
         XCTAssertTrue(app.staticTexts["player.time"].exists(within: 10))
         let close = app.buttons["player.close"]

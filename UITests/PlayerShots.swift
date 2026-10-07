@@ -8,7 +8,7 @@ final class PlayerShots: XCTestCase {
         let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] ?? NSTemporaryDirectory()
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-autoplay", "media-1"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockPort", "0", "-mockMedia", PlayerTests.media, "-autoplay", "media-1"]
         app.launch()
         func shot(_ name: String) { try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png")) }
         let remote = XCUIRemote.shared
@@ -29,7 +29,7 @@ final class PlayerShots: XCTestCase {
         let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] ?? NSTemporaryDirectory()
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-autoplay", "series-001-s1-e2"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockPort", "0", "-mockMedia", PlayerTests.media, "-autoplay", "series-001-s1-e2"]
         app.launch()
         let remote = XCUIRemote.shared
         Thread.sleep(forTimeInterval: 2)

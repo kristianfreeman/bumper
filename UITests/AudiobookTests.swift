@@ -8,7 +8,7 @@ final class AudiobookTests: XCTestCase {
     /// move where they say; Smart Speed starts saving on the book's pauses.
     func testListenSkipChapterAndSmartSpeed() {
         let app = XCUIApplication()
-        app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-reset", "-autoplay", "book-0"]
+        app.launchArguments = ["-mock", "-mockHTTP", "-mockPort", "0", "-mockMedia", PlayerTests.media, "-reset", "-autoplay", "book-0"]
         app.launch()
         let position = app.staticTexts["audiobook.position"], state = app.staticTexts["audiobook.state"]
         let saved = app.staticTexts["audiobook.saved"], chapter = app.staticTexts["audiobook.chapter"]

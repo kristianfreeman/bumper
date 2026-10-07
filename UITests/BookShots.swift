@@ -9,7 +9,7 @@ final class BookShots: XCTestCase {
         func shot(_ name: String) { try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png")) }
         let app = XCUIApplication()
         for (name, args) in [("books-library", ["-route", "books:view-books"]), ("books-detail", ["-route", "audiobook:book-0"]), ("books-playing", ["-autoplay", "book-0"])] {
-            app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-reset"] + args
+            app.launchArguments = ["-mock", "-mockHTTP", "-mockPort", "0", "-mockMedia", PlayerTests.media, "-reset"] + args
             app.launch()
             Thread.sleep(forTimeInterval: 3)
             shot(name)
