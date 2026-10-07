@@ -169,6 +169,8 @@ final class PlayerController {
                     try? await Task.sleep(for: .milliseconds(10))
                     guard let current = self.engine else { return }
                     if current !== engine { engine = current; last = current.playheadNow; continue }
+                    // Paused from elsewhere (lock screen, the phone): it won't move, so stop waiting.
+                    if current.status == .paused { self.isStarting = false; return }
                     let now = current.playheadNow
                     defer { last = now }
                     if now > last {
