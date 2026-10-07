@@ -275,8 +275,12 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var preparingOverlay: some View {
-        switch controller?.phase {
-        case .preparing, nil:
+        // Up until the picture moves, not just until it's opened: AVPlayer
+        // says it's playing at once, and a slow server's wait came after,
+        // over a black screen. One branch for both, so the note's second
+        // counts from the start.
+        let phase = controller?.phase
+        if phase == nil || phase == .preparing || phase == .playing && controller?.isStarting == true {
             ZStack {
                 FocusBackdrop(request.item)
                 VStack(spacing: 30) {
@@ -287,15 +291,14 @@ struct PlayerView: View {
                     }
                 }
             }
+            .allowsHitTesting(false)                 // a tap still brings up the controls
             .transition(.opacity)
-        case .failed(let message):
+        } else if case .failed(let message) = phase {
             ContentUnavailableView {
                 Label("Can't play this", systemImage: "exclamationmark.triangle")
             } description: {
                 Text(message)
             }
-        default:
-            EmptyView()
         }
     }
 

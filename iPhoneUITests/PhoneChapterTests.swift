@@ -22,15 +22,20 @@ final class PhoneChapterTests: XCTestCase {
         XCTAssertTrue(waitFor(time, timeout: 5) { abs((Int($0) ?? 0) - 300_000) < 3_000 }, "didn't go to 5:00 (at \(time.label) ms)")
         XCTAssertTrue(waitFor(harbour, timeout: 2) { _ in harbour.value as? String == "playing" }, "the chapter playing isn't marked")
 
+        // Paused, the controls stay up through the turn (playing, they hid
+        // 4 s after the last touch — sometimes mid-test).
+        let playPause = app.buttons["player.playPause"]
+        playPause.tap()
+        XCTAssertTrue(waitFor(playPause, timeout: 2) { $0 == "Play" }, "didn't pause")
         XCUIDevice.shared.orientation = .landscapeLeft
-        Thread.sleep(forTimeInterval: 1.5)
         let menu = app.buttons["control.chapters"]
-        if !menu.exists { app.otherElements["player.surface"].firstMatch.tap(); Thread.sleep(forTimeInterval: 0.6) }
-        XCTAssertTrue(menu.waitForExistence(timeout: 2), "no Chapters beside the timeline")
+        if !menu.waitForExistence(timeout: 3) { app.otherElements["player.surface"].firstMatch.tap() }
+        XCTAssertTrue(menu.waitForExistence(timeout: 3), "no Chapters beside the timeline")
         menu.tap()
         let landfall = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Landfall'")).firstMatch
         XCTAssertTrue(landfall.waitForExistence(timeout: 2), "the Chapters menu didn't open")
         landfall.tap()
+        app.buttons["player.playPause"].tap()
         XCTAssertTrue(waitFor(time, timeout: 5) { abs((Int($0) ?? 0) - 900_000) < 3_000 }, "didn't go to 15:00 (at \(time.label) ms)")
         XCUIDevice.shared.orientation = .portrait
     }

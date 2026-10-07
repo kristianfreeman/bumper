@@ -339,6 +339,9 @@ struct Timeline: View {
                 .padding(.vertical, 4)
                 .background(.white, in: .capsule)
         }
+        // A container of its own: an identifier on the bare stack was
+        // stamped on every piece of it, over the chapter name's.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("scrub.preview")
     }
 

@@ -116,6 +116,9 @@ struct PlayerPanel: View {
         .animation(.easeInOut(duration: 0.2), value: findingSubtitles)
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+        // A container of its own: on the bare stack the identifier was
+        // stamped on every control in it (Close, Pause… all "player.panel").
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.panel")
     }
 }
