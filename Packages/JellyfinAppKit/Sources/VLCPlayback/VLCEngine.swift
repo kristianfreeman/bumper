@@ -56,6 +56,10 @@ public final class VLCEngine: PlayerEngine {
     /// The hardware decoder gave nothing for this item: decode it in software
     /// from here on (see `watchDecoder`).
     @ObservationIgnored private var softwareDecode = false
+    /// The clock follows the audio output (AirPlay, Bluetooth), not the
+    /// system clock: see `load`.
+    @ObservationIgnored private var followsAudio = false
+    @ObservationIgnored private var routeObserver: NSObjectProtocol?
 
     private static let log = Perf.logger("vlc-engine")
 
@@ -98,6 +102,24 @@ public final class VLCEngine: PlayerEngine {
         events.engine = self
         player.delegate = events
         stats.engineName = "VLCKit"
+        if let changed = AudioRoute.changed {
+            routeObserver = NotificationCenter.default.addObserver(forName: changed, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.audioRouteChanged() }
+            }
+        }
+    }
+
+    /// The sound moved to (or off) AirPlay or Bluetooth mid-item: the clock
+    /// it needs changed, so the item again from where it is (about a second).
+    private func audioRouteChanged() {
+        guard AudioRoute.isDelayed != followsAudio, status == .playing || status == .paused, var next = plan else { return }
+        let resume = status == .playing
+        let at = max(currentTime, startTarget ?? .zero)
+        TraceFile.write("vlc", "audio now to \(AudioRoute.description): again from \(Int(at.seconds)) s with the clock \(AudioRoute.isDelayed ? "following the audio" : "on the system clock")")
+        next.startPosition = at
+        statsTask?.cancel()
+        player.stop()
+        Task { [weak self] in try? await self?.load(next, autoplay: resume) }
     }
 
     // MARK: Load
@@ -129,7 +151,13 @@ public final class VLCEngine: PlayerEngine {
         // seek VLC otherwise waits ~1 s for the audio output to restart before
         // the picture moves (measured on an Apple TV 4K: ±10 s skip 1.9 s →
         // 0.76 s). VLC keeps sync by resampling audio slightly when needed.
-        media.addOption(":clock-master=monotonic")
+        // Not over AirPlay or Bluetooth: they hold back a second or two of
+        // audio, far past what resampling covers, and VLC threw the late
+        // audio away again and again (sound cutting on and off to a Sonos).
+        // There the clock follows the audio output, and the picture waits for it.
+        followsAudio = AudioRoute.isDelayed
+        media.addOption(followsAudio ? ":clock-master=audio" : ":clock-master=monotonic")
+        TraceFile.write("vlc", "audio to \(AudioRoute.description); clock \(followsAudio ? "follows the audio" : "system")")
         // Read ahead further and treat forward seeks within it as reads, not
         // new HTTP requests: ±10 s skips 0.96 → 0.70 s on an Apple TV 4K.
         media.addOption(":prefetch-buffer-size=131072")          // KiB (128 MiB)

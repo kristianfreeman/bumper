@@ -59,6 +59,7 @@ targets:
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
         com.apple.developer.icloud-container-identifiers: [iCloud.com.kristianfreeman.bumper]   # the sign-in, end-to-end encrypted (CloudSignIns)
         com.apple.developer.icloud-services: [CloudKit]
+        aps-environment: development                # CloudKit tells devices about changes (required with CloudKit; Distribution signs it production)
     settings:
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
@@ -123,6 +124,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
+        UIRequiredDeviceCapabilities: [arm64]           # App Store Connect requires it of a 64-bit extension too
         NSExtension:
           NSExtensionPointIdentifier: com.apple.tv-top-shelf
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
@@ -146,6 +148,7 @@ targets:
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
         com.apple.developer.icloud-container-identifiers: [iCloud.com.kristianfreeman.bumper]   # the sign-in, end-to-end encrypted (CloudSignIns)
         com.apple.developer.icloud-services: [CloudKit]
+        aps-environment: development                # CloudKit tells devices about changes (required with CloudKit; Distribution signs it production)
     settings:
       base:
         PRODUCT_NAME: Bumper
@@ -197,6 +200,7 @@ targets:
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
         com.apple.developer.icloud-container-identifiers: [iCloud.com.kristianfreeman.bumper]   # the sign-in, end-to-end encrypted (CloudSignIns)
         com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.aps-environment: development                # CloudKit tells devices about changes (required with CloudKit; Distribution signs it production)
     settings:
       base:
         PRODUCT_NAME: Bumper
