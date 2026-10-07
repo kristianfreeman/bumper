@@ -127,6 +127,9 @@ public protocol PlayerEngine: AnyObject, Observable {
     var lastSeekFrameAt: ContinuousClock.Instant? { get }
     /// The backend's video surface.
     var videoView: PlatformView { get }
+    /// Picture in Picture, where this backend can float its picture on this
+    /// device; nil where it can't (the TV; VLCKit on the Mac).
+    var pictureInPicture: PictureInPicture? { get }
 
     /// Opens and buffers up to the first frame. With `autoplay: false` the
     /// clock is held until `play()` — so the player prepares *while* the TV

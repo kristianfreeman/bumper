@@ -9,10 +9,8 @@ public import AppKit
 #endif
 import Instrumentation
 public import JellyfinAPI
-import os
-#if os(tvOS)
 import AVKit
-#endif
+import os
 
 /// The AVPlayer backend: MP4/MOV/HLS with H.264/HEVC and AAC/AC-3/E-AC-3
 /// only (see PlaybackPlanner) — for Picture in Picture, AirPlay and system
@@ -39,6 +37,11 @@ public final class NativeEngine: PlayerEngine {
     @ObservationIgnored private let surface = PlayerLayerView()
     public var videoView: PlatformView { surface }
     private var playerLayer: AVPlayerLayer { surface.playerLayer }
+    /// On the player's own layer (iPhone, iPad, Mac; the TV has none).
+    @ObservationIgnored public private(set) var pictureInPicture: PictureInPicture?
+    #if os(iOS) || os(macOS)
+    @ObservationIgnored private var floating: NativeFloating?
+    #endif
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var firstFrameSpan: Span?
@@ -55,6 +58,13 @@ public final class NativeEngine: PlayerEngine {
         player.automaticallyWaitsToMinimizeStalling = true
         player.appliesMediaSelectionCriteriaAutomatically = false
         stats.engineName = "AVPlayer"
+        #if os(iOS) || os(macOS)
+        if AVPictureInPictureController.isPictureInPictureSupported() {
+            let floating = NativeFloating(layer: playerLayer)
+            self.floating = floating
+            pictureInPicture = floating.pip
+        }
+        #endif
     }
 
     public func load(_ plan: PlaybackPlan, autoplay: Bool) async throws {
@@ -226,6 +236,7 @@ public final class NativeEngine: PlayerEngine {
 
     public func setRate(_ rate: Float) {
         self.rate = rate
+        player.defaultRate = rate                  // what PiP's play button plays at
         if player.rate != 0 { player.rate = rate }
     }
 
@@ -274,6 +285,7 @@ public final class NativeEngine: PlayerEngine {
     public func setVolume(_ volume: Float) { player.volume = volume }
 
     public func stop() {
+        if pictureInPicture?.isActive == true { pictureInPicture?.stop() }
         player.pause()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         timeObserver = nil
@@ -336,6 +348,57 @@ public final class NativeEngine: PlayerEngine {
         return [meta(.commonIdentifierTitle, title), meta(.iTunesMetadataTrackSubTitle, subtitle), meta(.commonIdentifierDescription, item.overview)].compactMap { $0 }
     }
 }
+
+#if os(iOS) || os(macOS)
+/// The system's Picture in Picture controller on the player's layer, and
+/// its delegate. Starts on its own as you leave the app while it plays
+/// (iPhone, iPad; the system's setting decides).
+@MainActor
+private final class NativeFloating: NSObject, AVPictureInPictureControllerDelegate {
+    let controller: AVPictureInPictureController
+    let pip: PictureInPicture
+    private var possible: NSKeyValueObservation?
+
+    init(layer: AVPlayerLayer) {
+        let controller = AVPictureInPictureController(contentSource: .init(playerLayer: layer))
+        self.controller = controller
+        pip = PictureInPicture(start: { controller.startPictureInPicture() }, stop: { controller.stopPictureInPicture() })
+        super.init()
+        controller.delegate = self
+        #if os(iOS)
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        #endif
+        possible = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] controller, _ in
+            let now = controller.isPictureInPicturePossible
+            Task { @MainActor in self?.pip.setPossible(now) }
+        }
+    }
+
+    func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        TraceFile.write("native", "picture in picture on")
+        pip.started()
+    }
+
+    func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: any Error) {
+        TraceFile.write("native", "picture in picture failed: \(error.localizedDescription)")
+        pip.stopped()
+    }
+
+    /// The window's restore button: the player's screen back first, then
+    /// the picture into it.
+    func pictureInPictureController(_ controller: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            await pip.restore()
+            completionHandler(true)
+        }
+    }
+
+    func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+        TraceFile.write("native", "picture in picture off")
+        pip.stopped()
+    }
+}
+#endif
 
 #if canImport(UIKit)
 /// A view whose backing layer *is* the AVPlayerLayer (resizes with the view).

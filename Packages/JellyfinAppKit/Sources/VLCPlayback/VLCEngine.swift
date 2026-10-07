@@ -38,9 +38,16 @@ public final class VLCEngine: PlayerEngine {
 
     public var playheadNow: Duration { Self.duration(player.time) ?? currentTime }
     public var videoView: PlatformView { surface }
+    #if os(iOS)
+    public var pictureInPicture: PictureInPicture? { floating.pip }
+    @ObservationIgnored private let floating: VLCFloating
+    #else
+    /// The TV has none; VLCKit's Mac build has no Picture in Picture.
+    public let pictureInPicture: PictureInPicture? = nil
+    #endif
 
     @ObservationIgnored private let player: VLCMediaPlayer
-    @ObservationIgnored private let surface = PlatformView()
+    @ObservationIgnored private let surface: VLCSurface
     @ObservationIgnored private let events = Events()
     @ObservationIgnored private var plan: PlaybackPlan?
     @ObservationIgnored private var firstFrameSpan: Span?
@@ -69,6 +76,13 @@ public final class VLCEngine: PlayerEngine {
         // without their dashes, which the argument parser would take as flags).
         let extra = (UserDefaults.standard.string(forKey: "vlcPlayerOptions") ?? "").split(separator: " ").map { $0.hasPrefix("-") ? String($0) : "--" + $0 }
         player = VLCMediaPlayer(options: subtitleStyle.options + extra)
+        #if os(iOS)
+        let floating = VLCFloating()
+        self.floating = floating
+        surface = VLCSurface(floating: floating)
+        #else
+        surface = VLCSurface()
+        #endif
         if !extra.isEmpty { TraceFile.write("vlc", "player options: \(extra.joined(separator: " "))") }
         if ProcessInfo.processInfo.arguments.contains("-vlcLog") {   // VLC's own log (diagnostics)
             // `-traceStderr` too: to the console (streams back through a device
@@ -101,6 +115,9 @@ public final class VLCEngine: PlayerEngine {
         player.timeChangeUpdateInterval = 0.1     // default 1 s: the on-screen clock would lag
         events.engine = self
         player.delegate = events
+        #if os(iOS)
+        floating.media.engine = self
+        #endif
         stats.engineName = "VLCKit"
         if let changed = AudioRoute.changed {
             routeObserver = NotificationCenter.default.addObserver(forName: changed, object: nil, queue: .main) { [weak self] _ in
@@ -118,8 +135,30 @@ public final class VLCEngine: PlayerEngine {
         TraceFile.write("vlc", "audio now to \(AudioRoute.description): again from \(Int(at.seconds)) s with the clock \(AudioRoute.isDelayed ? "following the audio" : "on the system clock")")
         next.startPosition = at
         statsTask?.cancel()
+        markReopening()
         player.stop()
         Task { [weak self] in try? await self?.load(next, autoplay: resume) }
+    }
+
+    /// Opening the item again from where it is: a floating picture closes
+    /// with the video output, and the player's screen comes back for it.
+    /// (VLC can keep the output for the next open, and then nothing closes:
+    /// the mark goes after a while.)
+    private func markReopening() {
+        #if os(iOS)
+        floating.reopening = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            self?.floating.reopening = false
+        }
+        #endif
+    }
+
+    /// PiP's window reads the time, length and playing state.
+    private func updateFloating() {
+        #if os(iOS)
+        floating.update(time: currentTime, length: duration, playing: status.isActive)
+        #endif
     }
 
     // MARK: Load
@@ -130,6 +169,9 @@ public final class VLCEngine: PlayerEngine {
         firstFrameSpan = Span(.timeToFirstFrame)
         stats.method = plan.method.rawValue
         stats.notes = plan.reasons
+        #if os(macOS)
+        stats.notes.append("No Picture in Picture: VLCKit's Mac build has none")
+        #endif
         duration = plan.item.runtime
         videoFormat = Self.formatInfo(plan.mediaSource.videoStream)
         stats.video = videoFormat?.summary ?? "—"
@@ -249,6 +291,7 @@ public final class VLCEngine: PlayerEngine {
     public func pause() {
         player.pause()
         status = .paused
+        updateFloating()
     }
 
     public func setRate(_ rate: Float) {
@@ -279,6 +322,10 @@ public final class VLCEngine: PlayerEngine {
     }
 
     public func stop() {
+        #if os(iOS)
+        if floating.pip.isActive { floating.pip.stop() }
+        floating.closed()
+        #endif
         statsTask?.cancel()
         statsTask = nil
         player.delegate = nil
@@ -396,6 +443,7 @@ public final class VLCEngine: PlayerEngine {
 
     fileprivate func stateChanged(_ state: VLCMediaPlayerState) {
         TraceFile.write("vlc", "state \(state.rawValue) at \(player.time.value?.intValue ?? -1) ms")
+        defer { updateFloating() }
         switch state {
         case .opening:
             if hasPlayed, status != .paused { status = .buffering }
@@ -423,6 +471,7 @@ public final class VLCEngine: PlayerEngine {
 
     fileprivate func timeChanged() {
         guard var now = Self.duration(player.time) else { return }
+        defer { updateFloating() }
         // Opened held (`:start-paused`, a prepared item) on the monotonic
         // clock, VLC's `time` after play() can be the system clock's, not the
         // file's — hours into a 20-minute clip (seen in the simulator, and
@@ -514,6 +563,7 @@ public final class VLCEngine: PlayerEngine {
         decoderStall.seconds += 1
         guard decoderStall.seconds >= 4, var next = plan else { return }
         softwareDecode = true
+        markReopening()
         let at = max(currentTime, startTarget ?? .zero)
         TraceFile.write("vlc", "no frames decoded in 4 s with data arriving: the hardware decoder turned it down — again in software from \(Int(at.seconds)) s")
         Self.log.notice("VideoToolbox decoded nothing in 4 s: software decode from \(at.seconds, privacy: .public) s")
