@@ -228,7 +228,7 @@ targets:
   BumperPhoneUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [iPhoneUITests]
+    sources: [iPhoneUITests, UITests/Waiting.swift]        # the waits are shared with the TV's
     dependencies:
       - target: BumperPhone
     settings:

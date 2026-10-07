@@ -10,13 +10,13 @@ final class PhoneLibrariesTests: XCTestCase {
                                "-route", "settings:libraries"]
         app.launch()
         let videosTab = app.tabBars.buttons["Videos"]
-        XCTAssertTrue(videosTab.waitForExistence(timeout: 10), "no Videos tab to begin with")
-        XCTAssertTrue(app.switches["setting.library.view-extra-videos"].waitForExistence(timeout: 3), "the libraries aren't listed")
+        XCTAssertTrue(videosTab.exists(within: 10), "no Videos tab to begin with")
+        XCTAssertTrue(app.switches["setting.library.view-extra-videos"].exists(within: 3), "the libraries aren't listed")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'supported'")).firstMatch.exists, "a library it can't play is listed")
         let toggle = app.switches["setting.library.view-extra-videos"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 3), "no switch for Videos")
+        XCTAssertTrue(toggle.exists(within: 3), "no switch for Videos")
         toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
-        XCTAssertTrue(videosTab.waitForNonExistence(timeout: 3), "hiding Videos left its tab")
+        XCTAssertTrue(videosTab.gone(within: 3), "hiding Videos left its tab")
         XCTAssertTrue(app.staticTexts["Hidden"].exists, "Videos doesn't say it's hidden")
     }
 }

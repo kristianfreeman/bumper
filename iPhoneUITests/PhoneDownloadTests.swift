@@ -9,10 +9,10 @@ final class PhoneDownloadTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0001"]
         app.launch()
         let download = app.buttons["detail.download"]
-        XCTAssertTrue(download.waitForExistence(timeout: 10), "no Download button on the film's page")
+        XCTAssertTrue(download.exists(within: 10), "no Download button on the film's page")
         download.tap()
         let done = app.buttons.matching(NSPredicate(format: "label == 'Downloaded'")).firstMatch
-        XCTAssertTrue(done.waitForExistence(timeout: 20), "never finished downloading (button: \(download.label))")
+        XCTAssertTrue(done.exists(within: 20), "never finished downloading (button: \(download.label))")
         shot(app, "detail-downloaded")
 
         // Downloads (in the profile menu: the iPhone's tab bar holds Home,
@@ -21,19 +21,19 @@ final class PhoneDownloadTests: XCTestCase {
         app.launchArguments = ["-mock"]                                 // same downloads, Home first
         app.launch()
         let avatar = app.buttons["profile.avatar"]
-        XCTAssertTrue(avatar.waitForExistence(timeout: 8), "no profile menu")
+        XCTAssertTrue(avatar.exists(within: 8), "no profile menu")
         avatar.tap()
         let item = app.buttons["menu.downloads"]
-        XCTAssertTrue(item.waitForExistence(timeout: 3), "no Downloads in the profile menu")
+        XCTAssertTrue(item.exists(within: 3), "no Downloads in the profile menu")
         item.tap()
         let card = app.buttons["downloads.film.movie-0001"]
-        XCTAssertTrue(card.waitForExistence(timeout: 5), "the film isn't on the Downloads page")
+        XCTAssertTrue(card.exists(within: 5), "the film isn't on the Downloads page")
         shot(app, "downloads-page")
         card.press(forDuration: 1.2)
         let remove = app.buttons["Remove Download"]
-        XCTAssertTrue(remove.waitForExistence(timeout: 3))
+        XCTAssertTrue(remove.exists(within: 3))
         remove.tap()
-        XCTAssertTrue(card.waitForNonExistence(timeout: 5), "removing didn't take it off the page")
+        XCTAssertTrue(card.gone(within: 5), "removing didn't take it off the page")
     }
 
     static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia").path
@@ -46,12 +46,13 @@ final class PhoneDownloadTests: XCTestCase {
             app.launchArguments = ["-mock", "-reset", "-mockMedia", Self.media, "-route", "item:\(id)"]
             app.launch()
             let download = app.buttons["detail.download"]
-            XCTAssertTrue(download.waitForExistence(timeout: 10), "\(id): no Download button")
+            XCTAssertTrue(download.exists(within: 10), "\(id): no Download button")
             download.tap()
-            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Downloaded'")).firstMatch.waitForExistence(timeout: 60), "\(id): never finished downloading")
+            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label == 'Downloaded'")).firstMatch.exists(within: 60), "\(id): never finished downloading")
             app.buttons["detail.play"].tap()
-            XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 10), "\(id): the downloaded file didn't play")
-            Thread.sleep(forTimeInterval: 2)
+            let time = app.staticTexts["player.time"]
+            XCTAssertTrue(time.exists(within: 10), "\(id): the downloaded file didn't play")
+            time.wait(5) { (Int($0.label) ?? 0) > 1_000 }                       // a picture to show
             shot(app, "playing-\(id)")
             app.terminate()
         }

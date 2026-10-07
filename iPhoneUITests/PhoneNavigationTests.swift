@@ -8,19 +8,19 @@ final class PhoneNavigationTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 10))
         for i in 0..<3 {
             let tiles = app.buttons.matching(identifier: "collection.viewAll")
             var tries = 0
             while tiles.count <= i || !tiles.element(boundBy: i).isHittable, tries < 12 { app.swipeUp(); tries += 1 }
             guard tiles.count > i else { break }
             tiles.element(boundBy: i).tap()
-            Thread.sleep(forTimeInterval: 1.5)
-            XCTAssertEqual(app.state, .runningForeground, "View all #\(i) crashed the app")
             let back = app.navigationBars.buttons["BackButton"]    // (the bar also holds the TV, sleep and profile buttons)
-            XCTAssertTrue(back.waitForExistence(timeout: 3), "View all #\(i): no way back")
+            back.settles()                                         // the page done pushing in
+            XCTAssertEqual(app.state, .runningForeground, "View all #\(i) crashed the app")
+            XCTAssertTrue(back.exists, "View all #\(i): no way back")
             back.tap()
-            Thread.sleep(forTimeInterval: 1)
+            back.gone(within: 3)
         }
     }
 
@@ -29,16 +29,16 @@ final class PhoneNavigationTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 10))
         let tiles = app.buttons.matching(identifier: "collection.viewAll")
         var tries = 0
         while tiles.count < 2 || !tiles.element(boundBy: 1).isHittable, tries < 12 { app.swipeUp(); tries += 1 }
         for i in 0..<min(2, tiles.count) {
             tiles.element(boundBy: i).doubleTap()
-            Thread.sleep(forTimeInterval: 1.5)
-            XCTAssertEqual(app.state, .runningForeground, "double tap on View all #\(i) crashed the app")
             let back = app.navigationBars.buttons["BackButton"]
-            for _ in 0..<4 where back.exists { back.tap(); Thread.sleep(forTimeInterval: 0.8) }
+            back.settles(quiet: 0.5)                                 // a second push, if there was one, landed too
+            XCTAssertEqual(app.state, .runningForeground, "double tap on View all #\(i) crashed the app")
+            for _ in 0..<4 where back.exists { back.tap(); if !back.gone(within: 1) { back.settles() } }
         }
     }
 }

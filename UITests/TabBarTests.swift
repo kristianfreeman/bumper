@@ -4,24 +4,29 @@ import XCTest
 /// with Up and Menu, and left with Down back to the page's cards.
 @MainActor
 final class TabBarTests: XCTestCase {
-    func focused(_ app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
-    }
-
+    /// What has focus, in one look (each property of an element is another).
     func focusedDescription(_ app: XCUIApplication) -> String {
-        let f = focused(app)
-        guard f.exists else { return "nothing" }
+        guard let f = try? app.focused.snapshot() else { return "nothing" }
         // Tab bar items: along the top of the screen, and not the profile corner.
         let inTabBar = f.frame.maxY < 170
         return "\(inTabBar ? "TABBAR " : "")\(f.elementType.rawValue) '\(f.label)' [\(f.identifier)] \(Int(f.frame.minX)),\(Int(f.frame.minY)) \(Int(f.frame.width))x\(Int(f.frame.height))"
+    }
+
+    /// Until focus is on the tabs, and done moving there (a press while
+    /// the bar is still taking it went nowhere).
+    @discardableResult
+    private func onTabs(_ app: XCUIApplication, within timeout: TimeInterval = 2) -> Bool {
+        guard waitUntil(timeout, { focusedDescription(app).hasPrefix("TABBAR") }) else { return false }
+        app.focusSettles(quiet: 0.2)
+        return focusedDescription(app).hasPrefix("TABBAR")
     }
 
     private func launchHome(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"] + extra
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 8))
-        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        app.focusSettles()
         return app
     }
 
@@ -31,19 +36,17 @@ final class TabBarTests: XCTestCase {
         let app = launchHome()
         let remote = XCUIRemote.shared
         remote.press(.up)
-        Thread.sleep(forTimeInterval: 0.8)
+        onTabs(app)
         let afterUp = focusedDescription(app)
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/tabbar.png"))
         }
         XCTAssertTrue(afterUp.hasPrefix("TABBAR"), "Up from the first card: focus on \(afterUp), not the tabs")
         remote.press(.down)
-        Thread.sleep(forTimeInterval: 1)
-        XCTAssertTrue(focused(app).identifier.hasPrefix("card."), "Down from the tabs: focus on \(focusedDescription(app)), not a card")
+        waitUntil(2) { app.focused.identifier.hasPrefix("card.") }
+        XCTAssertTrue(app.focused.identifier.hasPrefix("card."), "Down from the tabs: focus on \(focusedDescription(app)), not a card")
         remote.press(.menu)
-        Thread.sleep(forTimeInterval: 1)
-        let afterMenu = focusedDescription(app)
-        XCTAssertTrue(afterMenu.hasPrefix("TABBAR"), "Menu: focus on \(afterMenu), not the tabs")
+        XCTAssertTrue(onTabs(app), "Menu: focus on \(focusedDescription(app)), not the tabs")
     }
 
     /// Scrolled down the page, Menu goes back up to the tabs (in one press
@@ -51,12 +54,11 @@ final class TabBarTests: XCTestCase {
     func testMenuFromALowerRowReachesTheTabs() {
         let app = launchHome()
         let remote = XCUIRemote.shared
-        for _ in 0..<3 { remote.press(.down); Thread.sleep(forTimeInterval: 0.5) }
+        for _ in 0..<3 { remote.press(.down, movingFocusIn: app) }
         let onCard = focusedDescription(app)
         remote.press(.menu)
-        Thread.sleep(forTimeInterval: 1)
-        if !focusedDescription(app).hasPrefix("TABBAR") { remote.press(.menu); Thread.sleep(forTimeInterval: 1) }
-        XCTAssertTrue(focusedDescription(app).hasPrefix("TABBAR"), "Menu from \(onCard): focus on \(focusedDescription(app))")
+        if !onTabs(app) { remote.press(.menu) }
+        XCTAssertTrue(onTabs(app), "Menu from \(onCard): focus on \(focusedDescription(app))")
     }
 
     /// Moving along the tabs changes the page; Down lands in that page.
@@ -64,14 +66,17 @@ final class TabBarTests: XCTestCase {
         let app = launchHome()
         let remote = XCUIRemote.shared
         remote.press(.up)
-        Thread.sleep(forTimeInterval: 0.8)
-        remote.press(.right)                                    // Home → the first library
-        Thread.sleep(forTimeInterval: 1.5)
+        onTabs(app)
+        remote.press(.right, movingFocusIn: app)                // Home → the first library
         let tab = focusedDescription(app)
         XCTAssertTrue(tab.hasPrefix("TABBAR"), "Right along the tabs: focus on \(tab)")
+        let resume = app.descendants(matching: .any)["collection.resume"]
+        let onHome = { resume.exists && resume.isHittable }     // (isHittable on what's gone looks again for a second)
+        waitUntil(3) { !onHome() }                              // its page in
+        app.focusSettles(quiet: 0.2)
         remote.press(.down)
-        Thread.sleep(forTimeInterval: 1.5)
-        XCTAssertFalse(app.descendants(matching: .any)["collection.resume"].isHittable, "still on Home after moving to \(tab)")
+        waitUntil(3) { !onHome() && !focusedDescription(app).hasPrefix("TABBAR") }
+        XCTAssertFalse(onHome(), "still on Home after moving to \(tab)")
         XCTAssertFalse(focusedDescription(app).hasPrefix("TABBAR"), "Down from \(tab) didn't reach the page")
     }
 
@@ -81,13 +86,11 @@ final class TabBarTests: XCTestCase {
         let app = launchHome()
         let remote = XCUIRemote.shared
         remote.press(.up)
-        Thread.sleep(forTimeInterval: 0.8)
+        onTabs(app)
         let profile = app.buttons["Tester"]
-        for _ in 0..<8 where !profile.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.4) }
-        XCTAssertTrue(profile.hasFocus, "couldn't reach the profile tab (focus: \(focusedDescription(app)))")
-        XCTAssertTrue(app.staticTexts["Episodes watched"].waitForExistence(timeout: 3), "the profile tab didn't show the profile")
-        remote.press(.left)
-        Thread.sleep(forTimeInterval: 0.6)
+        XCTAssertTrue(remote.press(.right, in: app, atMost: 8) { profile.hasFocus }, "couldn't reach the profile tab (focus: \(focusedDescription(app)))")
+        XCTAssertTrue(app.staticTexts["Episodes watched"].exists(within: 3), "the profile tab didn't show the profile")
+        remote.press(.left, movingFocusIn: app)
         XCTAssertTrue(focusedDescription(app).hasPrefix("TABBAR"), "Left from the profile tab: focus on \(focusedDescription(app))")
     }
 
@@ -96,19 +99,18 @@ final class TabBarTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-mockHTTP", "-mockMedia", PlayerTests.media, "-reset", "-autoplay", "media-1"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 8), "player didn't open")
-        Thread.sleep(forTimeInterval: 1)
+        let time = app.staticTexts["player.time"]
+        XCTAssertTrue(time.exists(within: 8), "player didn't open")
         let remote = XCUIRemote.shared
-        for _ in 0..<3 where app.staticTexts["player.time"].exists {    // hide controls, then leave
+        for _ in 0..<3 where time.exists {                          // hide controls, then leave
             remote.press(.menu)
-            Thread.sleep(forTimeInterval: 0.8)
+            time.gone(within: 1)
         }
-        XCTAssertFalse(app.staticTexts["player.time"].exists, "couldn't leave the player")
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
-        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertFalse(time.exists, "couldn't leave the player")
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
+        app.focusSettles()
         remote.press(.up)
-        Thread.sleep(forTimeInterval: 0.8)
-        XCTAssertTrue(focusedDescription(app).hasPrefix("TABBAR"), "After the player, Up: focus on \(focusedDescription(app))")
+        XCTAssertTrue(onTabs(app), "After the player, Up: focus on \(focusedDescription(app))")
     }
 
     /// A real server's spread of libraries (two books libraries, collections,
@@ -116,7 +118,8 @@ final class TabBarTests: XCTestCase {
     func testEveryLibraryTabFits() {
         let app = launchHome(["-mockLibraries", "Books:books,Collections:boxsets,Playlists:playlists,Videos:homevideos,Kids:movies,Anime:tvshows"])
         XCUIRemote.shared.press(.up)
-        Thread.sleep(forTimeInterval: 1)
+        onTabs(app)
+        app.focusSettles()                                          // the bar done growing in
         let window = app.windows.firstMatch.frame
         let tabs = app.descendants(matching: .any).matching(NSPredicate(format: "elementType == %d", XCUIElement.ElementType.button.rawValue)).allElementsBoundByIndex
             .filter { $0.frame.maxY < 170 && $0.frame.width > 0 }

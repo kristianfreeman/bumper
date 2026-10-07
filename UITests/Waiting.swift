@@ -20,10 +20,25 @@ func waitUntil(_ timeout: TimeInterval = 3, _ condition: () -> Bool) -> Bool {
 
 extension XCUIElement {
     /// Until it's there: `waitForExistence`, looking every 50 ms.
+    @discardableResult
     func exists(within timeout: TimeInterval) -> Bool { waitUntil(timeout) { exists } }
 
     /// Until it's gone.
+    @discardableResult
     func gone(within timeout: TimeInterval) -> Bool { waitUntil(timeout) { !exists } }
+
+    /// Until it's there and has stopped moving (the same frame for `quiet`):
+    /// a page done pushing in, a scroll come to rest. A tap or a press
+    /// while it's still on its way can land nowhere.
+    @discardableResult
+    func settles(_ timeout: TimeInterval = 3, quiet: TimeInterval = 0.25) -> Bool {
+        var last = CGRect.null, since = Date()
+        return waitUntil(timeout) {
+            guard let now = (try? snapshot())?.frame else { last = .null; return false }
+            if now != last { last = now; since = Date() }
+            return Date().timeIntervalSince(since) >= quiet
+        }
+    }
 
     /// Until it's there and `condition` holds of it (its label, value, focus).
     @discardableResult
@@ -39,26 +54,45 @@ extension XCUIElement {
 
 #if os(tvOS)
 extension XCUIApplication {
-    /// Whatever has focus, read afresh each time it's asked.
+    /// Whatever has focus, looked up afresh on each use.
     var focused: XCUIElement { descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true")) }
 
-    /// What has focus, as words to compare and to print.
+    /// What has focus and where it is, in one look ("" if nothing has):
+    /// to tell when it's moved, or stopped moving.
     var focusSummary: String {
-        let f = focused
-        return f.exists ? "\(f.identifier)|\(f.label)" : ""
+        guard let f = try? focused.snapshot() else { return "" }
+        return "\(f.identifier)|\(f.label)|\(f.frame)"
+    }
+
+    /// Until something has focus and it's stopped moving (the same element,
+    /// in the same place, for `quiet`): after a launch, or a press that
+    /// scrolls the page.
+    @discardableResult
+    func focusSettles(_ timeout: TimeInterval = 5, quiet: TimeInterval = 0.3) -> Bool {
+        var last = "", since = Date()
+        return waitUntil(timeout) {
+            let now = focusSummary
+            if now != last { last = now; since = Date() }
+            return !now.isEmpty && Date().timeIntervalSince(since) >= quiet
+        }
     }
 }
 
 extension XCUIRemote {
-    /// Presses `button` until `done` holds, at most `times`; after each
-    /// press, waits for focus to move on before looking (not a fixed pause).
+    /// One press, then until focus moves (up to `timeout`): instead of a
+    /// pause before looking at where it went.
+    @MainActor @discardableResult
+    func press(_ button: Button, movingFocusIn app: XCUIApplication, timeout: TimeInterval = 1.5) -> Bool {
+        let before = app.focusSummary
+        press(button)
+        return waitUntil(timeout) { app.focusSummary != before }
+    }
+
+    /// Presses `button` until `done` holds, at most `times`, letting focus
+    /// move after each press before looking.
     @MainActor @discardableResult
     func press(_ button: Button, in app: XCUIApplication, atMost times: Int, until done: () -> Bool) -> Bool {
-        for _ in 0..<times where !done() {
-            let before = app.focusSummary
-            press(button)
-            waitUntil(1) { app.focusSummary != before }
-        }
+        for _ in 0..<times where !done() { press(button, movingFocusIn: app) }
         return done()
     }
 }

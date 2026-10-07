@@ -15,13 +15,13 @@ final class SeasonTests: XCTestCase {
         app.launchArguments = ["-mock", "-route", "item:series-003"]           // four seasons; ten episodes in the first
         app.launch()
         let one = app.buttons["season.1"], two = app.buttons["season.2"]
-        XCTAssertTrue(one.waitForExistence(timeout: 10), "no season bar")
+        XCTAssertTrue(one.exists(within: 10), "no season bar")
         let remote = XCUIRemote.shared
         // Down to the episodes (past the bar), then along into season 2.
         let focusedEpisode = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true AND label CONTAINS 'Chapter'")).firstMatch
-        for _ in 0..<4 where !focusedEpisode.exists { remote.press(.down); Thread.sleep(forTimeInterval: 0.4) }
+        remote.press(.down, in: app, atMost: 4) { focusedEpisode.exists }
         XCTAssertTrue(focusedEpisode.exists, "couldn't reach the episodes")
-        for _ in 0..<14 where !two.isSelected { remote.press(.right); Thread.sleep(forTimeInterval: 0.35) }
+        remote.press(.right, in: app, atMost: 14) { two.isSelected }
         shot("season-following")
         XCTAssertTrue(two.isSelected, "moving into season 2's episodes didn't move the bar")
     }

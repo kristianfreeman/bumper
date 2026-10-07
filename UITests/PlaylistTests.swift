@@ -9,25 +9,31 @@ final class PlaylistTests: XCTestCase {
         app.launchArguments = ["-mock", "-mockPlaylists", "-route", "item:playlist-marathon"]
         app.launch()
         let play = app.buttons["playlist.play"]
-        XCTAssertTrue(play.waitForExistence(timeout: 10), "no playlist page")
-        XCTAssertTrue(app.buttons["playlist.item.5"].waitForExistence(timeout: 5), "not all six items")
+        XCTAssertTrue(play.exists(within: 10), "no playlist page")
+        XCTAssertTrue(app.buttons["playlist.item.5"].exists(within: 5), "not all six items")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/playlist.png"))
         }
         let remote = XCUIRemote.shared
-        for _ in 0..<4 where !play.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.up, in: app, atMost: 4) { play.hasFocus }
         XCTAssertTrue(play.hasFocus, "Play isn't focused")
         remote.press(.select)
-        XCTAssertTrue(app.staticTexts["player.time"].waitForExistence(timeout: 10), "Play didn't play")
+        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 10), "Play didn't play")
         // The info band's Up Next: the playlist's second item.
-        Thread.sleep(forTimeInterval: 5)                              // the controls hide; Select brings them back
-        remote.press(.select); Thread.sleep(forTimeInterval: 0.4)
-        remote.press(.up); Thread.sleep(forTimeInterval: 0.5)
+        let icons = app.buttons["control.subtitles"]
+        icons.exists(within: 2)
+        icons.gone(within: 6)                                        // the controls hide; Select brings them back
+        remote.press(.select)
+        icons.exists(within: 2)
+        remote.press(.up)
+        icons.waitForFocus()
         for _ in 0..<3 { remote.press(.right) }
-        remote.press(.select); Thread.sleep(forTimeInterval: 1)
+        remote.press(.select)
+        let upNext = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'E2 · Chapter 2'")).firstMatch
+        upNext.exists(within: 3)
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/playlist-upnext.png"))
         }
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'E2 · Chapter 2'")).firstMatch.exists, "Up Next isn't the playlist's second item")
+        XCTAssertTrue(upNext.exists, "Up Next isn't the playlist's second item")
     }
 }

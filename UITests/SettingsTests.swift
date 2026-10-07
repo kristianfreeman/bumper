@@ -9,26 +9,25 @@ final class SettingsTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
         let remote = XCUIRemote.shared
-        remote.press(.menu)                                   // content → the tabs (on Home)
-        Thread.sleep(forTimeInterval: 0.8)
+        app.focusSettles()
+        remote.press(.menu, movingFocusIn: app)               // content → the tabs (on Home)
         let settingsTab = app.buttons["gearshape"]
-        XCTAssertTrue(settingsTab.waitForExistence(timeout: 2), "no Settings tab")
-        for _ in 0..<6 where !settingsTab.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.4) }   // along to Settings
+        XCTAssertTrue(settingsTab.exists(within: 2), "no Settings tab")
+        remote.press(.right, in: app, atMost: 6) { settingsTab.hasFocus }   // along to Settings
         let autoplay = app.buttons["setting.autoplay"]
-        XCTAssertTrue(autoplay.waitForExistence(timeout: 3), "Settings didn't open")
-        remote.press(.down)                                   // the tabs → the page
+        XCTAssertTrue(autoplay.exists(within: 3), "Settings didn't open")
+        remote.press(.down, movingFocusIn: app)               // the tabs → the page
         // Steer toward the tile: down while above it, left while beside it.
-        let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        let focused = app.focused
         for _ in 0..<10 where !autoplay.hasFocus {
-            remote.press(focused.frame.maxY < autoplay.frame.minY ? .down : .left)
-            Thread.sleep(forTimeInterval: 0.4)
+            remote.press(focused.frame.maxY < autoplay.frame.minY ? .down : .left, movingFocusIn: app)
         }
         XCTAssertTrue(autoplay.hasFocus, "couldn't reach Play Next Episode")
         let before = autoplay.value as? String
         remote.press(.select)
-        Thread.sleep(forTimeInterval: 0.5)
+        autoplay.wait { $0.value as? String != before }
         XCTAssertNotEqual(autoplay.value as? String, before, "the switch didn't flip")
         XCTAssertTrue(autoplay.hasFocus, "focus left the switch")
     }
@@ -40,14 +39,12 @@ final class SettingsTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset", "-route", "settings:picture"]
         app.launch()
         let bitrate = app.buttons["setting.bitrate"]
-        XCTAssertTrue(bitrate.waitForExistence(timeout: 5))
+        XCTAssertTrue(bitrate.exists(within: 5))
         let remote = XCUIRemote.shared
-        Thread.sleep(forTimeInterval: 1)
-        let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        app.focusSettles()                                    // the page scrolled to its section
+        let focused = app.focused
         for _ in 0..<16 where !bitrate.hasFocus {
-            print("SETTINGS-DEBUG focus \(focused.identifier) '\(focused.label)' \(focused.frame)")
-            remote.press(focused.identifier == "setting.engine" ? .right : .down)      // down to Player, then across
-            Thread.sleep(forTimeInterval: 0.35)
+            remote.press(focused.identifier == "setting.engine" ? .right : .down, movingFocusIn: app)      // down to Player, then across
         }
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/settings-nav.png"))
@@ -55,12 +52,12 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(bitrate.hasFocus, "couldn't reach Maximum Bitrate")
         remote.press(.select)
         let option = app.buttons["setting.bitrate.20000000"]
-        XCTAssertTrue(option.waitForExistence(timeout: 2), "no options row")
-        Thread.sleep(forTimeInterval: 0.6)
-        for _ in 0..<6 where !option.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(option.exists(within: 2), "no options row")
+        app.focusSettles()                                    // the row opened under its section
+        remote.press(.right, in: app, atMost: 6) { option.hasFocus }
         XCTAssertTrue(option.hasFocus, "couldn't reach 20 Mbps")
         remote.press(.select)
-        Thread.sleep(forTimeInterval: 0.6)
+        bitrate.wait { $0.hasFocus && $0.value as? String == "20 Mbps" }
         XCTAssertEqual(bitrate.value as? String, "20 Mbps")
         XCTAssertFalse(option.exists, "the options row didn't close")
         XCTAssertTrue(bitrate.hasFocus, "focus didn't come back to the tile")

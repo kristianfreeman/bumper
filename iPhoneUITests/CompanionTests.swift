@@ -15,7 +15,7 @@ final class CompanionTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset", "-mockMedia", media, "-route", "item:\(item)", "-uiTestNoAnimations"]
         app.launch()
         let castButton = app.buttons["cast.button"]
-        XCTAssertTrue(castButton.waitForExistence(timeout: 20), "no TV button in the navigation bar")
+        XCTAssertTrue(castButton.exists(within: 20), "no TV button in the navigation bar")
         // Found the TV (the button connects straight away when there's one).
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline, castButton.label != "Play on Apple TV" || !castButton.isHittable { Thread.sleep(forTimeInterval: 0.3) }
@@ -26,15 +26,15 @@ final class CompanionTests: XCTestCase {
         // More than one TV on the network (a real one running the app, too):
         // the button offers them — pick the simulator's.
         let simTV = app.buttons[ProcessInfo.processInfo.environment["TV_NAME"] ?? "Apple TV 4K (3rd generation)"]
-        if simTV.waitForExistence(timeout: 1) { simTV.tap() }
+        if simTV.exists(within: 1) { simTV.tap() }
         let bar = app.descendants(matching: .any)["cast.bar"]
-        XCTAssertTrue(bar.waitForExistence(timeout: 10), "no TV bar on connecting")
+        XCTAssertTrue(bar.exists(within: 10), "no TV bar on connecting")
         XCTAssertTrue(bar.label.contains("Connected to"), "the bar says '\(bar.label)'")
         XCTAssertFalse(app.descendants(matching: .any)["cast.notice"].exists, "a notice repeats what the bar says")
         shot("companion-connected")
 
         let play = app.buttons["detail.play"]
-        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        XCTAssertTrue(play.exists(within: 5))
         XCTAssertTrue(play.label.contains(" on "), "Play doesn't say it plays on the TV: '\(play.label)'")
         play.tap()
         let expected = ProcessInfo.processInfo.environment["EXPECT_TITLE"] ?? "Long"
@@ -44,7 +44,7 @@ final class CompanionTests: XCTestCase {
         shot("companion-playing")
 
         let playPause = app.buttons["cast.playPause"]
-        XCTAssertTrue(playPause.waitForExistence(timeout: 5), "no play/pause on the TV bar")
+        XCTAssertTrue(playPause.exists(within: 5), "no play/pause on the TV bar")
         playPause.tap()
         let pauseDeadline = Date().addingTimeInterval(8)
         while Date() < pauseDeadline, !bar.label.contains("Paused") { Thread.sleep(forTimeInterval: 0.3) }
@@ -53,7 +53,7 @@ final class CompanionTests: XCTestCase {
 
         bar.tap()
         let title = app.staticTexts["phone.playingTitle"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5), "the bar didn't open Now Playing")
+        XCTAssertTrue(title.exists(within: 5), "the bar didn't open Now Playing")
         XCTAssertTrue(title.label.contains(expected), "Now Playing shows '\(title.label)'")
         let sheetPlay = app.buttons["phone.playPause"]
         XCTAssertEqual(sheetPlay.label, "Play", "Now Playing doesn't show the TV paused")
@@ -68,10 +68,10 @@ final class CompanionTests: XCTestCase {
         // match goes on.
         app.buttons["phone.subtitles"].tap()
         let find = app.buttons["Find Subtitles…"]
-        XCTAssertTrue(find.waitForExistence(timeout: 3), "no Find Subtitles in the subtitles menu")
+        XCTAssertTrue(find.exists(within: 3), "no Find Subtitles in the subtitles menu")
         find.tap()
         let best = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Best match'")).firstMatch
-        XCTAssertTrue(best.waitForExistence(timeout: 15), "no results from the TV")
+        XCTAssertTrue(best.exists(within: 15), "no results from the TV")
         shot("companion-find-subtitles")
         best.tap()
         let subtitles = app.buttons["phone.subtitles"]

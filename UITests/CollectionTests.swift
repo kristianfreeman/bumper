@@ -8,14 +8,15 @@ final class CollectionTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset", "-route", "grid:view-movies"]
         app.launch()
         let ask = app.buttons["filter.ask"]
-        XCTAssertTrue(ask.waitForExistence(timeout: 5), "collection page didn't open")
+        XCTAssertTrue(ask.exists(within: 5), "collection page didn't open")
+        app.focusSettles()
         let remote = XCUIRemote.shared
-        for _ in 0..<6 where !ask.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
-        for _ in 0..<3 where !ask.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.right, in: app, atMost: 6) { ask.hasFocus }
+        remote.press(.up, in: app, atMost: 3) { ask.hasFocus }
         XCTAssertTrue(ask.hasFocus, "couldn't reach Ask")
         remote.press(.select)
         let field = app.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 3), "no text field to ask in")
+        XCTAssertTrue(field.exists(within: 3), "no text field to ask in")
         remote.press(.select)                                   // open the keyboard
         Thread.sleep(forTimeInterval: 1)
         app.typeText("something funny I haven't seen")
@@ -24,9 +25,9 @@ final class CollectionTests: XCTestCase {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/collection-ask.png"))
         }
         let done = app.buttons.matching(NSPredicate(format: "label ==[c] 'done'")).firstMatch   // the keyboard's Done applies it
-        for _ in 0..<5 where !done.hasFocus { remote.press(.down); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.down, in: app, atMost: 5) { done.hasFocus }
         remote.press(.select)
-        XCTAssertTrue(app.buttons["filter.watched"].waitForExistence(timeout: 3), "“haven't seen” didn't become an unwatched pill")
+        XCTAssertTrue(app.buttons["filter.watched"].exists(within: 3), "“haven't seen” didn't become an unwatched pill")
         XCTAssertTrue(app.buttons["filter.genre"].exists, "“funny” didn't become a genre pill")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             Thread.sleep(forTimeInterval: 1.5)
@@ -41,29 +42,29 @@ final class CollectionTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset", "-route", "grid:view-movies"]
         app.launch()
         let add = app.buttons["filter.add"]
-        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        XCTAssertTrue(add.exists(within: 5))
+        app.focusSettles()
         let remote = XCUIRemote.shared
-        for _ in 0..<4 where !add.hasFocus { remote.press(.up); Thread.sleep(forTimeInterval: 0.3) }
-        for _ in 0..<4 where !add.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.up, in: app, atMost: 4) { add.hasFocus }
+        remote.press(.left, in: app, atMost: 4) { add.hasFocus }
         XCTAssertTrue(add.hasFocus, "couldn't reach Filter")
         remote.press(.select)
         let whenAdded = app.buttons["filter.option.add.added"]
-        XCTAssertTrue(whenAdded.waitForExistence(timeout: 2), "Filter didn't open its row")
+        XCTAssertTrue(whenAdded.exists(within: 2), "Filter didn't open its row")
         XCTAssertTrue(add.hasFocus, "opening the row took focus off Filter")
-        remote.press(.down); Thread.sleep(forTimeInterval: 0.4)        // into the row
-        for _ in 0..<6 where !whenAdded.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.down, movingFocusIn: app)                         // into the row
+        remote.press(.left, in: app, atMost: 6) { whenAdded.hasFocus }
         remote.press(.select)
         let week = app.buttons["filter.option.added.week"]
-        XCTAssertTrue(week.waitForExistence(timeout: 2), "no When added choices")
-        for _ in 0..<6 where !week.hasFocus { remote.press(.left); Thread.sleep(forTimeInterval: 0.3) }
+        XCTAssertTrue(week.exists(within: 2), "no When added choices")
+        remote.press(.left, in: app, atMost: 6) { week.hasFocus }
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/filter-week.png"))
         }
         remote.press(.select)
         let pill = app.buttons["filter.added"]
-        XCTAssertTrue(pill.waitForExistence(timeout: 2), "no 'added this week' pill")
-        Thread.sleep(forTimeInterval: 0.5)
-        XCTAssertTrue(pill.hasFocus, "focus didn't come back to the new pill")
+        XCTAssertTrue(pill.exists(within: 2), "no 'added this week' pill")
+        XCTAssertTrue(pill.waitForFocus(), "focus didn't come back to the new pill")
         XCTAssertFalse(week.exists, "the choice row didn't close")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             remote.press(.select)                                       // reopen it, for the screenshot

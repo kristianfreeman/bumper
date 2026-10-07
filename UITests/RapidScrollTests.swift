@@ -13,7 +13,7 @@ final class RapidScrollTests: XCTestCase {
         // TEST_RUNNER_EXTRA_ARGS="-mockLatency 700": a slow server.
         app.launchArguments = args + ["-metricsFile"] + (ProcessInfo.processInfo.environment["EXTRA_ARGS"]?.split(separator: " ").map(String.init) ?? [])
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)[identifier].exists(within: 10))
         Thread.sleep(forTimeInterval: 2)
         let remote = XCUIRemote.shared
         for _ in 0..<24 { remote.press(.down) }          // as fast as the remote API goes

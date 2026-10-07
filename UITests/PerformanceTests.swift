@@ -33,7 +33,7 @@ final class PerformanceTests: XCTestCase {
     /// Flick through every home shelf and assert smoothness + image budgets.
     func testHomeBrowsingBudgets() throws {
         let app = launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5), "Home never showed content")
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5), "Home never showed content")
 
         let remote = XCUIRemote.shared
         measure(metrics: [XCTCPUMetric(application: app), XCTMemoryMetric(application: app)], options: Self.options(iterations: 3)) {
@@ -58,7 +58,7 @@ final class PerformanceTests: XCTestCase {
     /// Deep-link into the 600-title Movies grid and page through it.
     func testLibraryGridPaging() throws {
         let app = launch(["-route", "grid:view-movies"])
-        XCTAssertTrue(app.staticTexts["600 titles"].waitForExistence(timeout: 5), "Grid didn't load")
+        XCTAssertTrue(app.staticTexts["600 titles"].exists(within: 5), "Grid didn't load")
         let remote = XCUIRemote.shared
         for _ in 0..<40 { remote.press(.down) }
 
@@ -71,7 +71,7 @@ final class PerformanceTests: XCTestCase {
     func testDetailLoad() throws {
         let app = launch(["-route", "item:movie-0001"])
         let play = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play' OR label BEGINSWITH 'Resume'")).firstMatch
-        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        XCTAssertTrue(play.exists(within: 5))
         let metrics = try Self.readMetrics(app)
         try Self.assertBudget(metrics, "detail.load", stat: "p95", under: 400)
     }
@@ -88,7 +88,7 @@ final class PerformanceTests: XCTestCase {
 
     static func readMetrics(_ app: XCUIApplication) throws -> [String: [String: Double]] {
         let hud = app.descendants(matching: .any)["perf.hud"]
-        XCTAssertTrue(hud.waitForExistence(timeout: 5), "Perf HUD not found (launch with -perfHUD)")
+        XCTAssertTrue(hud.exists(within: 5), "Perf HUD not found (launch with -perfHUD)")
         // HUD refreshes once a second.
         Thread.sleep(forTimeInterval: 1.2)
         guard let json = hud.value as? String, let data = json.data(using: .utf8) else {

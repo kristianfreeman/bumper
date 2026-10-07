@@ -9,6 +9,7 @@ import XCTest
 final class PeopleTests: XCTestCase {
     private func shot(_ name: String) {
         guard let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] else { return }
+        Thread.sleep(forTimeInterval: 0.6)                              // a still screen, for the picture
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(name).png"))
     }
 
@@ -22,25 +23,30 @@ final class PeopleTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0001"]
         app.launch()
-        XCTAssertTrue(app.buttons["detail.play"].waitForExistence(timeout: 10), "no detail page")
+        XCTAssertTrue(app.buttons["detail.play"].exists(within: 10), "no detail page")
         let remote = XCUIRemote.shared
         let focus = focused(app)
         // Past the actions and the extras to the cast.
-        for _ in 0..<6 where !focus.identifier.hasPrefix("person.") { remote.press(.down); Thread.sleep(forTimeInterval: 0.5) }
+        remote.press(.down, in: app, atMost: 6) { focus.identifier.hasPrefix("person.") }
         XCTAssertTrue(focus.identifier.hasPrefix("person."), "couldn't reach the cast (focus: \(focus.identifier))")
+        let card = focus.identifier
         remote.press(.select)
-        XCTAssertTrue(app.staticTexts["person.name"].waitForExistence(timeout: 5), "the cast card didn't open their page")
+        XCTAssertTrue(app.staticTexts["person.name"].exists(within: 5), "the cast card didn't open their page")
         let titles = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'person.item.'"))
-        XCTAssertTrue(titles.firstMatch.waitForExistence(timeout: 5), "no films or shows on their page")
-        Thread.sleep(forTimeInterval: 0.6)
+        XCTAssertTrue(titles.firstMatch.exists(within: 5), "no films or shows on their page")
+        // Their page pushed in: focus over on it (it stays on the card a
+        // moment), and done moving. A press before then went nowhere.
+        waitUntil(3) { focus.identifier != card }
+        app.focusSettles()
         shot("person")
-        for _ in 0..<3 where !focus.identifier.hasPrefix("person.item.") { remote.press(.down); Thread.sleep(forTimeInterval: 0.4) }
+        remote.press(.down, in: app, atMost: 3) { focus.identifier.hasPrefix("person.item.") }
         XCTAssertTrue(focus.identifier.hasPrefix("person.item."), "focus isn't on their films (focus: \(focus.identifier))")
+        app.focusSettles(quiet: 0.2)
         let opened = focus.identifier
         remote.press(.select)
-        XCTAssertTrue(app.buttons["detail.play"].waitForExistence(timeout: 5), "their film didn't open")
+        XCTAssertTrue(app.buttons["detail.play"].exists(within: 5), "their film didn't open")
         remote.press(.menu)
-        Thread.sleep(forTimeInterval: 1)
+        waitUntil(3) { focus.identifier == opened }
         XCTAssertEqual(focus.identifier, opened, "Menu didn't come back to their page")
     }
 
@@ -50,8 +56,10 @@ final class PeopleTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset", "-route", "item:movie-0003"]
         app.launch()
-        XCTAssertTrue(app.buttons["detail.play"].waitForExistence(timeout: 10), "no detail page")
-        Thread.sleep(forTimeInterval: 1.5)                              // trailers and extras arrive after the page
+        XCTAssertTrue(app.buttons["detail.play"].exists(within: 10), "no detail page")
+        // Trailers and extras arrive after the page, with More Like This.
+        XCTAssertTrue(app.staticTexts["More Like This"].exists(within: 5), "the page didn't finish loading")
+        Thread.sleep(forTimeInterval: 0.3)                              // (the extras' answer comes with it)
         XCTAssertFalse(app.buttons["detail.trailer"].exists, "a Trailer button for a trailer only online")
     }
 }

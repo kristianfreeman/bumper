@@ -24,7 +24,7 @@ final class SearchTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset", "-route", "search", "-searchQuery", words] + extra
         app.launch()
         let understood = app.descendants(matching: .any).matching(identifier: "search.understood").firstMatch
-        XCTAssertTrue(understood.waitForExistence(timeout: 6), "nothing understood from “\(words)”")
+        XCTAssertTrue(understood.exists(within: 6), "nothing understood from “\(words)”")
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             XCUIRemote.shared.press(.right)                          // sidebar → the keyboard: the pill shows
             Thread.sleep(forTimeInterval: 1.5)

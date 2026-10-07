@@ -10,17 +10,17 @@ final class ProfileTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
         let remote = XCUIRemote.shared
-        remote.press(.up)
-        Thread.sleep(forTimeInterval: 0.6)
+        app.focusSettles()
+        remote.press(.up, movingFocusIn: app)
         let profile = app.buttons["Tester"]
-        for _ in 0..<8 where !profile.hasFocus { remote.press(.right); Thread.sleep(forTimeInterval: 0.3) }
+        remote.press(.right, in: app, atMost: 8) { profile.hasFocus }
         XCTAssertTrue(profile.hasFocus, "couldn't reach the profile tab")
         XCTAssertFalse(app.buttons["profile.sleep"].exists, "the sleep timer belongs in the player")
         // Not the first tile's label: focus lands on that tile as the page
         // opens, and while it's focused it drops out of the accessibility tree.
-        XCTAssertTrue(app.staticTexts["Episodes watched"].waitForExistence(timeout: 3), "Profile didn't open")
+        XCTAssertTrue(app.staticTexts["Episodes watched"].exists(within: 3), "Profile didn't open")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "profile-tab"
         shot.lifetime = .keepAlways
