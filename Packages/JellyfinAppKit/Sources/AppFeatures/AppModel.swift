@@ -212,6 +212,10 @@ final class AppModel {
         // Your preferences from your other devices (iCloud), before they're read.
         let sync = options.mock ? nil : SettingsSync(defaults: defaults)
         sync?.pull()
+        if sync != nil {
+            let found = SettingsSync.keys.filter { NSUbiquitousKeyValueStore.default.object(forKey: $0) != nil }.count
+            TraceFile.write("settings", "iCloud settings: \(found) of \(SettingsSync.keys.count); iCloud account: \(FileManager.default.ubiquityIdentityToken != nil)")
+        }
         settings = AppSettings(defaults: defaults)
         settings.sync = sync
         sync?.seed()
@@ -241,9 +245,7 @@ final class AppModel {
             let server = ServerRecord(id: "mock-server", name: "Mock Jellyfin", url: MockJellyfinProtocol.baseURL, version: "10.11.11")
             session = accounts.signIn(server: server, result: MockJellyfinProtocol.authenticationResult)
         }
-        if !options.mock, session != nil {
-            if accounts.signedOutElsewhere { signOutHere(reason: "signed out on another device") } else { accounts.shareActive() }
-        }
+        if !options.mock, session != nil { Task { await self.checkCloudSignIn() } }
         Self.configureAudioSession()
         InputTrace.install()
         if let session { queue.attach(account: session.id, sleepTimer: sleepTimer, defaults: defaults); startQueueSync(session) }
@@ -372,7 +374,10 @@ final class AppModel {
     /// Connect code approved with the shared one — or, with Quick Connect
     /// off on the server, the shared sign-in itself.
     func signInFromCloud() async {
-        guard session == nil, cloudSignIn == nil, let entry = accounts.cloud?.load().first else { return }
+        guard session == nil, cloudSignIn == nil, let cloud = accounts.cloud else { return }
+        let list = await cloud.load()
+        TraceFile.write("accounts", "iCloud sign-ins: \(list.map { String($0.count) } ?? "unknown")\(await cloud.lastError.map { " (\($0))" } ?? "")")
+        guard session == nil, cloudSignIn == nil, let entry = list?.first else { return }
         cloudSignIn = "\(entry.account.userName) on \(entry.server.name)"
         defer { cloudSignIn = nil }
         TraceFile.write("accounts", "signing in from iCloud as \(entry.account.userName) on \(entry.server.name)")
@@ -398,6 +403,20 @@ final class AppModel {
             TraceFile.write("accounts", "signed in from iCloud with the shared sign-in (\(error))")
             didSignIn(accounts.adopt(entry))
         }
+    }
+
+    /// Signed in here: signed out on another device since (so here too), or
+    /// not in iCloud yet (put it there for the others).
+    func checkCloudSignIn() async {
+        guard let cloud = accounts.cloud, session != nil else { return }
+        guard let list = await cloud.load() else {                     // iCloud couldn't say: change nothing
+            TraceFile.write("accounts", "iCloud sign-ins unknown: \(await cloud.lastError ?? "?")")
+            return
+        }
+        TraceFile.write("accounts", "iCloud sign-ins: \(list.count)")
+        if accounts.signedOutElsewhere(list) { signOutHere(reason: "signed out on another device"); return }
+        await accounts.shareActive(list)
+        if let error = await cloud.lastError { TraceFile.write("accounts", "sharing the sign-in failed: \(error)") }
     }
 
     /// Signed out on another device: here too.
@@ -604,8 +623,9 @@ final class AppModel {
     #endif
 
     func refreshFromOtherDevices() {
-        if !options.mock, session != nil, accounts.signedOutElsewhere { signOutHere(reason: "signed out on another device"); return }
-        if session == nil { Task { await signInFromCloud() } }
+        if !options.mock {
+            if session == nil { Task { await signInFromCloud() } } else { Task { await checkCloudSignIn() } }
+        }
         Task { await queueSync?.pull() }
         if let outbox, let client = session?.client { Task { await outbox.deliver(with: client) } }
         Task { await refreshProfile() }

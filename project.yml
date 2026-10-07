@@ -57,6 +57,8 @@ targets:
       properties:
         com.apple.security.application-groups: [group.com.kristianfreeman.bumper]
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.kristianfreeman.bumper]   # the sign-in, end-to-end encrypted (CloudSignIns)
+        com.apple.developer.icloud-services: [CloudKit]
     settings:
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
@@ -142,6 +144,8 @@ targets:
       path: iPhone/Bumper.entitlements
       properties:
         com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.kristianfreeman.bumper   # settings sync (SettingsSync), one store for every device
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.kristianfreeman.bumper]   # the sign-in, end-to-end encrypted (CloudSignIns)
+        com.apple.developer.icloud-services: [CloudKit]
     settings:
       base:
         PRODUCT_NAME: Bumper

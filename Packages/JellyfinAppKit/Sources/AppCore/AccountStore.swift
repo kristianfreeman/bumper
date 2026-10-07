@@ -65,7 +65,7 @@ public final class AccountStore {
     @ObservationIgnored private let keychain: Keychain
     @ObservationIgnored private let protocolClasses: [AnyClass]
     @ObservationIgnored private var sessions: [String: URLSession] = [:]
-    /// Your sign-ins on your other devices (iCloud Keychain); nil in tests.
+    /// Your sign-ins on your other devices (CloudKit); nil in tests.
     @ObservationIgnored public var cloud: CloudSignIns?
 
     private enum Keys {
@@ -153,8 +153,10 @@ public final class AccountStore {
         keychain.set(result.accessToken, for: tokenKey(account.id))
         activeAccountId = account.id
         persist()
-        cloud?.upsert(CloudSignIn(server: server, account: account, token: result.accessToken))
-        markSeenInCloud(account.id)
+        if let cloud {
+            let entry = CloudSignIn(server: server, account: account, token: result.accessToken)
+            Task { if await cloud.upsert(entry) { self.markSeenInCloud(account.id) } }
+        }
         return session(for: account, token: result.accessToken, server: server)
     }
 
@@ -170,28 +172,29 @@ public final class AccountStore {
         keychain.set(entry.token, for: tokenKey(account.id))
         activeAccountId = account.id
         persist()
-        markSeenInCloud(account.id)
+        markSeenInCloud(account.id)                                     // it came from iCloud
         return session(for: account, token: entry.token, server: entry.server)
     }
 
-    /// Signed out on another device: the account was in iCloud, and isn't now.
-    public var signedOutElsewhere: Bool {
-        guard let cloud, let id = activeAccountId, let account = accounts.first(where: { $0.id == id }),
-              defaults.bool(forKey: "cloud.seen.\(id)") else { return false }
-        return !cloud.load().contains { $0.server.id == account.serverId && $0.account.userId == account.userId }
+    /// Signed out on another device: the account was in iCloud (`list`, just
+    /// read), and isn't now.
+    public func signedOutElsewhere(_ list: [CloudSignIn]) -> Bool {
+        guard cloud != nil, let id = activeAccountId, let account = accounts.first(where: { $0.id == id }),
+              defaults.bool(forKey: "cloud.seen.v2.\(id)") else { return false }
+        return !list.contains { $0.server.id == account.serverId && $0.account.userId == account.userId }
     }
 
     /// Signed in before iCloud sign-in existed: put it there for the others.
-    public func shareActive() {
+    public func shareActive(_ list: [CloudSignIn]) async {
         guard let cloud, let id = activeAccountId, let account = accounts.first(where: { $0.id == id }),
               let server = servers.first(where: { $0.id == account.serverId }), let token = keychain.get(tokenKey(id)) else { return }
-        if !cloud.load().contains(where: { $0.server.id == server.id && $0.account.userId == account.userId }) {
-            cloud.upsert(CloudSignIn(server: server, account: account, token: token))
-        }
-        markSeenInCloud(id)
+        let there = list.contains(where: { $0.server.id == server.id && $0.account.userId == account.userId })
+        if there { markSeenInCloud(id) }
+        else if await cloud.upsert(CloudSignIn(server: server, account: account, token: token)) { markSeenInCloud(id) }
     }
 
-    private func markSeenInCloud(_ accountId: String) { defaults.set(cloud != nil, forKey: "cloud.seen.\(accountId)") }
+    /// Only once it's really in iCloud: then its going means signed out elsewhere.
+    private func markSeenInCloud(_ accountId: String) { defaults.set(true, forKey: "cloud.seen.v2.\(accountId)") }
 
     /// The server's current name and picture for an account (they change
     /// there: a new profile picture has a new tag). Returns whether it changed.
@@ -208,9 +211,9 @@ public final class AccountStore {
 
     public func signOut(_ accountId: String) {
         if let account = accounts.first(where: { $0.id == accountId }) {
-            cloud?.remove(serverId: account.serverId, userId: account.userId)          // everywhere
+            if let cloud { Task { await cloud.remove(serverId: account.serverId, userId: account.userId) } }   // everywhere
         }
-        defaults.removeObject(forKey: "cloud.seen.\(accountId)")
+        defaults.removeObject(forKey: "cloud.seen.v2.\(accountId)")
         accounts.removeAll { $0.id == accountId }
         keychain.remove(tokenKey(accountId))
         if activeAccountId == accountId { activeAccountId = nil }
