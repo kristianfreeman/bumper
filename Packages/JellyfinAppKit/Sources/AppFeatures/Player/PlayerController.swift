@@ -24,6 +24,9 @@ final class PlayerController {
     enum Phase: Equatable { case preparing, playing, failed(String), finished }
 
     private(set) var phase: Phase = .preparing
+    /// Not moving yet: the open isn't over until the picture is (or it's
+    /// paused). `.playing` comes first — AVPlayer's load returns at once.
+    private(set) var isStarting = true
     private(set) var engine: (any PlayerEngine)?
     var plan: PlaybackPlan?
     private(set) var segments: [MediaSegment] = []
@@ -152,22 +155,27 @@ final class PlayerController {
             Self.log.info("Tap → playing in \(ready.milliseconds, privacy: .public) ms (mode switch overlapped)")
             TraceFile.write("player", "Tap → playing in \(Int(ready.milliseconds)) ms")
             // What the viewer sees: the press until the picture is actually
-            // moving (play() returns before AVPlayer has a frame).
+            // moving (play() returns before AVPlayer has a frame). Until then
+            // the open isn't over (`isStarting`): AVPlayer's load returns at
+            // once, and a slow server's wait all comes after it.
             let tapSpan = totalSpan
             Task { [weak self] in
-                guard let self, let engine = self.engine else { return }
                 // Moving = the backend's clock rising (its starting value can be
                 // a stream offset, e.g. MPEG-TS PTS; VLCKit reports every 100 ms).
-                var last = engine.playheadNow
-                for _ in 0..<500 {
+                // The engine is read each time: AVPlayer can hand over to VLCKit.
+                var engine = self?.engine
+                var last = engine?.playheadNow ?? .zero
+                while let self, self.isStarting, self.phase == .playing {
                     try? await Task.sleep(for: .milliseconds(10))
-                    let now = engine.playheadNow
+                    guard let current = self.engine else { return }
+                    if current !== engine { engine = current; last = current.playheadNow; continue }
+                    let now = current.playheadNow
                     defer { last = now }
                     if now > last {
+                        self.isStarting = false
                         let ms = tapSpan.start.duration(to: .now).milliseconds
                         Metrics.shared.record("playback.tapToMoving", value: ms)
                         TraceFile.write("player", "Tap → moving in \(Int(ms)) ms")
-                        return
                     }
                 }
             }
@@ -739,6 +747,7 @@ extension PlayerController: TransportTarget {
 
     func pause() {
         engine?.pause()
+        isStarting = false                  // paused before it got going: nothing more to wait for
         reportState()
     }
 }
