@@ -34,7 +34,7 @@ public struct PlaybackPlanner: Sendable {
     public func needsSoftwareDecode(_ video: MediaStream) -> Bool {
         if video.isInterlaced == true { return true }
         switch (video.codec ?? "").lowercased() {
-        case "h264": return false
+        case "h264": return (video.bitDepth ?? 8) > 8              // no Apple decoder does 10-bit H.264
         case "hevc": return !capabilities.hevc
         case "av1": return !capabilities.av1Hardware
         case "vp9": return !capabilities.vp9Hardware
@@ -49,7 +49,8 @@ public struct PlaybackPlanner: Sendable {
         let w = video.width ?? 1920, h = video.height ?? 1080
         var fps = video.realFrameRate ?? video.averageFrameRate ?? 24
         if video.isInterlaced == true { fps *= 2 }            // deinterlacing emits one frame per field
-        let codec = (video.codec ?? "").lowercased()
+        var codec = (video.codec ?? "").lowercased()
+        if codec == "h264", (video.bitDepth ?? 8) > 8 { codec = "h264-10bit" }
         return check(codec, w, h, fps) ? nil : "Software \(codec) \(h)p\(Int(fps.rounded())) too heavy for this Apple TV"
     }
 

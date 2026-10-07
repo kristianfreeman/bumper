@@ -101,6 +101,17 @@ struct SettingsView: View {
         (app.libraryPlan?.libraries ?? []).filter { !$0.placement.canShow }
     }
 
+    /// What the switch does — and, when the Apple TV itself has Match
+    /// Content off, that nothing will switch until it's on there too.
+    static func matchDetail(on: Bool) -> String {
+        #if os(tvOS)
+        if on && !DisplayModeManager.matchingEnabled {
+            return "Turn on Match Frame Rate in the Apple TV's Settings → Video and Audio first."
+        }
+        #endif
+        return "Switches the TV to each video's frame rate and HDR format."
+    }
+
     static func whereItIs(_ p: SidebarPlan.Placement) -> String {
         switch p {
         case .tab: "Its own tab"
@@ -237,7 +248,7 @@ struct SettingsView: View {
             .choice("bitrate", "Maximum Bitrate", "speedometer", "Above this, the server lowers the quality to fit.",
                     options: bitrateOptions.map { (bitrateKey($0), bitrateTitle($0)) },
                     current: bitrateKey(settings.maxBitrate)) { settings.maxBitrate = Int($0) },
-            .toggle("match", "Match Frame Rate and Range", "tv", "Switches the TV to each video's frame rate and HDR format.", $settings.matchContent),
+            .toggle("match", "Match Frame Rate and Range", "tv", Self.matchDetail(on: settings.matchContent), $settings.matchContent),
             .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio to your receiver as is.", $settings.preferPassthrough),
         ]
     }

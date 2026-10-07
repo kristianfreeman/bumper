@@ -26,6 +26,8 @@ public struct SoftwareDecodeBudget: Sendable {
                 "av1": px(1920, 1080, 30), "vp9": px(1920, 1080, 30),
                 "mpeg2video": px(1920, 1080, 60), "vc1": px(1920, 1080, 30), "mpeg4": px(1920, 1080, 30),
                 "h264": px(1920, 1080, 60), "hevc": px(1920, 1080, 30),
+                // 10-bit (Hi10P, much anime): 1080p30 showed 24 of 30 fps (measured).
+                "h264-10bit": px(1920, 1080, 24),
             ], fallback: px(1920, 1080, 30))
         case "AppleTV11,1":                              // Apple TV 4K (2021), A12
             return .init(limits: ["av1": px(2560, 1440, 30), "vp9": px(3840, 2160, 30)], fallback: px(3840, 2160, 30))

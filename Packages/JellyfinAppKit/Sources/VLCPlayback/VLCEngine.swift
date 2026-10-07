@@ -151,8 +151,12 @@ public final class VLCEngine: PlayerEngine {
         // field at a time, twice the frame rate, and most were dropped (a
         // 1080i25 film at 20 fps); in software, every frame.
         let video = plan.mediaSource.videoStream
-        let interlacedH264 = video?.isInterlaced == true && (video?.codec ?? "").lowercased() == "h264"
-        if Self.isMPEG4Part2(video?.codec) || interlacedH264 || softwareDecode { media.addOption(":codec=avcodec") }
+        let h264 = (video?.codec ?? "").lowercased() == "h264"
+        let interlacedH264 = h264 && video?.isInterlaced == true
+        // 10-bit H.264: no Apple decoder has it; VLC found that out after ~8 s
+        // of trying (and a restart in software from there failed to show).
+        let tenBitH264 = h264 && (video?.bitDepth ?? 8) > 8
+        if Self.isMPEG4Part2(video?.codec) || interlacedH264 || tenBitH264 || softwareDecode { media.addOption(":codec=avcodec") }
         // Diagnostics: `-vlcMediaOptions ":opt1 :opt2"` (A/B-testing VLC options on a device).
         for option in (UserDefaults.standard.string(forKey: "vlcMediaOptions") ?? "").split(separator: " ") {
             media.addOption(String(option))
@@ -178,6 +182,13 @@ public final class VLCEngine: PlayerEngine {
             }
         }
         startStats()
+    }
+
+    /// Already decoded in software (the watchdog has nothing to switch to).
+    nonisolated static func decodesInSoftware(_ plan: PlaybackPlan?) -> Bool {
+        guard let v = plan?.mediaSource.videoStream else { return false }
+        let h264 = (v.codec ?? "").lowercased() == "h264"
+        return isMPEG4Part2(v.codec) || (h264 && (v.isInterlaced == true || (v.bitDepth ?? 8) > 8))
     }
 
     nonisolated static func isMPEG4Part2(_ codec: String?) -> Bool {
@@ -319,8 +330,12 @@ public final class VLCEngine: PlayerEngine {
         // field at a time, twice the frame rate, and most were dropped (a
         // 1080i25 film at 20 fps); in software, every frame.
         let video = plan.mediaSource.videoStream
-        let interlacedH264 = video?.isInterlaced == true && (video?.codec ?? "").lowercased() == "h264"
-        if Self.isMPEG4Part2(video?.codec) || interlacedH264 || softwareDecode { media.addOption(":codec=avcodec") }   // see load()
+        let h264 = (video?.codec ?? "").lowercased() == "h264"
+        let interlacedH264 = h264 && video?.isInterlaced == true
+        // 10-bit H.264: no Apple decoder has it; VLC found that out after ~8 s
+        // of trying (and a restart in software from there failed to show).
+        let tenBitH264 = h264 && (video?.bitDepth ?? 8) > 8
+        if Self.isMPEG4Part2(video?.codec) || interlacedH264 || tenBitH264 || softwareDecode { media.addOption(":codec=avcodec") }   // see load()
         media.addOption(":no-audio")
         thumbnailer?.cancel()
         thumbnailWaiter?.resume(returning: nil)
@@ -463,7 +478,7 @@ public final class VLCEngine: PlayerEngine {
     /// frame decoded in 4 s: the item again from where it is, decoded in
     /// software (once; FFmpeg managed every such file on an Apple TV 4K).
     private func watchDecoder(decoded: Int, bitrate: Double) {
-        guard !softwareDecode, status == .playing, plan?.mediaSource.videoStream != nil else { decoderStall = (decoded, 0); return }
+        guard !softwareDecode, !Self.decodesInSoftware(plan), status == .playing, plan?.mediaSource.videoStream != nil else { decoderStall = (decoded, 0); return }
         if decoded != decoderStall.decoded || bitrate < 0.2 { decoderStall = (decoded, 0); return }
         decoderStall.seconds += 1
         guard decoderStall.seconds >= 4, var next = plan else { return }
