@@ -1,4 +1,7 @@
 public import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// What differs between the TV, the Mac and the phone/tablet, in one place.
 public enum Platform {
@@ -140,7 +143,8 @@ extension View {
     /// the whole window (a window can't be covered; the player fills it).
     @ViewBuilder public func fullScreen<Item: Identifiable, Content: View>(item: Binding<Item?>, @ViewBuilder content: @escaping (Item) -> Content) -> some View {
         #if os(macOS)
-        overlay {
+        modifier(CoveredWhile(covered: item.wrappedValue != nil))
+        .overlay {
             if let value = item.wrappedValue {
                 content(value)
                     .transition(.opacity)
@@ -168,6 +172,27 @@ extension View {
         #endif
     }
 }
+
+#if os(macOS)
+/// What's under the Mac's full-window cover (the player over the pages):
+/// kept built (its state and scroll positions survive), but held at the size
+/// it had and not drawn. Laid out at the window's size it re-laid out the
+/// whole page under the video at every step of a window resize.
+private struct CoveredWhile: ViewModifier {
+    let covered: Bool
+    @State private var size: CGSize?
+
+    func body(content: Content) -> some View {
+        content
+            .frame(width: covered ? size?.width : nil, height: covered ? size?.height : nil, alignment: .topLeading)
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { if !covered { size = $0 } }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .opacity(covered ? 0 : 1)
+            .allowsHitTesting(!covered)
+            .clipped()
+    }
+}
+#endif
 
 extension View {
     /// A menu whose label is the whole look (a round glass button): on the
@@ -219,17 +244,49 @@ extension EnvironmentValues {
 /// themselves and keep the width as state: a beat behind every resize, so a
 /// window resize or the Mac's sidebar opening laid out the page twice (or,
 /// when the content widened the column, never settled).
+///
+/// While a Mac window is being dragged to a new size the width moves in
+/// steps (`LiveResize.step`): every change of `\.pageWidth` re-evaluates and
+/// re-lays out every card on the page, and doing that each frame of a drag
+/// cost 13–18 ms a frame. Between steps a frame is only the window's own
+/// layout; when the drag ends the page takes its exact width.
 private struct PageWidthReader: ViewModifier {
     func body(content: Content) -> some View {
         GeometryReader { geo in
-            content.environment(\.pageWidth, Self.usable(geo))
+            content.environment(\.pageWidth, Self.usable(geo, resizing: LiveResize.shared.isActive))
         }
     }
 
-    private static func usable(_ geo: GeometryProxy) -> CGFloat {
+    private static func usable(_ geo: GeometryProxy, resizing: Bool) -> CGFloat {
         // The TV's scroll views run under its sideways safe area (the
         // screen's overscan), so its pages lay out from the full width.
         let width = Platform.isTV ? geo.size.width + geo.safeAreaInsets.leading : geo.size.width
-        return max(0, (width - 2 * Layout.horizontalMargin).rounded(.down))
+        let usable = max(0, (width - 2 * Layout.horizontalMargin).rounded(.down))
+        guard resizing else { return usable }
+        return max(LiveResize.step, (usable / LiveResize.step).rounded(.down) * LiveResize.step)
+    }
+}
+
+/// Whether a window is being resized by a drag (the Mac's live resize;
+/// elsewhere never). Pages and the player use it to do expensive
+/// size-dependent work once the drag settles instead of every frame.
+@MainActor @Observable
+public final class LiveResize {
+    public static let shared = LiveResize()
+    /// The width step pages lay out in during a drag.
+    public static let step: CGFloat = 80
+
+    public private(set) var isActive = false
+
+    private init() {
+        #if os(macOS)
+        let center = NotificationCenter.default
+        center.addObserver(forName: NSWindow.willStartLiveResizeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { LiveResize.shared.isActive = true }
+        }
+        center.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { LiveResize.shared.isActive = false }
+        }
+        #endif
     }
 }

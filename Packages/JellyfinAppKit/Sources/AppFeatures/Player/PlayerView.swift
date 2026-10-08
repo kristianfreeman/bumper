@@ -494,10 +494,30 @@ struct VideoSurface: NSViewRepresentable {
     /// Never a zero size: VLCKit's OpenGL view on the Mac asserts (and the
     /// app aborts) when it draws at 0×0 — which a host mid-layout, before
     /// SwiftUI has sized it, briefly is.
+    ///
+    /// VLCKit sizes its output from the drawable's frame, and each new size
+    /// re-creates it (and re-renders subtitles at that size): a window being
+    /// dragged to a new size did that every frame, 40 ms each. Mid-drag the
+    /// video keeps its size, centred, and takes the new one when the drag
+    /// pauses (100 ms without a change) or ends.
     final class HostView: NSView {
+        private var settle = 0
+
         override func layout() {
             super.layout()
-            if !bounds.isEmpty { hosted?.frame = bounds }      // VLCKit sizes its output from the drawable's frame
+            guard let hosted, !bounds.isEmpty else { return }
+            if inLiveResize || LiveResize.shared.isActive, !hosted.frame.isEmpty {
+                hosted.setFrameOrigin(NSPoint(x: ((bounds.width - hosted.frame.width) / 2).rounded(),
+                                              y: ((bounds.height - hosted.frame.height) / 2).rounded()))
+                settle += 1
+                let mine = settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    guard let self, self.settle == mine, let hosted = self.hosted, !self.bounds.isEmpty else { return }
+                    hosted.frame = self.bounds
+                }
+                return
+            }
+            hosted.frame = bounds
         }
 
         var hosted: NSView? {
@@ -506,7 +526,7 @@ struct VideoSurface: NSViewRepresentable {
                 oldValue?.removeFromSuperview()
                 if let hosted {
                     if !bounds.isEmpty { hosted.frame = bounds }
-                    hosted.autoresizingMask = [.width, .height]
+                    hosted.autoresizingMask = []                // sized in layout()
                     addSubview(hosted)
                 }
             }
@@ -516,6 +536,7 @@ struct VideoSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> HostView {
         let host = HostView()
         host.wantsLayer = true
+        host.clipsToBounds = true
         host.layer?.backgroundColor = NSColor.black.cgColor
         host.hosted = view
         return host
