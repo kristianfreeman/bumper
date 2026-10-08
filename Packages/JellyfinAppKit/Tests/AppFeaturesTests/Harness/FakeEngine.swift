@@ -26,6 +26,10 @@ final class FakeEngine: PlayerEngine {
     private(set) var activeSubtitleTrack: String?
     /// Every subtitle it was asked for, in turn (nil: off).
     @ObservationIgnored private(set) var subtitleRequests: [MediaStream?] = []
+    /// As VLCKit does with an MKV's default ASS: draws the file's first
+    /// subtitle on opening, asked for nothing (until asked for something).
+    @ObservationIgnored var picksItsOwnSubtitle = false
+    @ObservationIgnored private(set) var drawnSubtitleStream: Int?
     var videoFormat: VideoFormatInfo?
     var stats = EngineStats()
     @ObservationIgnored private(set) var lastSeekFrameAt: ContinuousClock.Instant?
@@ -55,6 +59,10 @@ final class FakeEngine: PlayerEngine {
         status = .loading
         duration = plan.item.runtime
         currentTime = plan.startPosition
+        if picksItsOwnSubtitle, rendersSubtitles, let first = plan.mediaSource.subtitleStreams.first {
+            activeSubtitleTrack = first.displayTitle
+            drawnSubtitleStream = first.index
+        }
         if holdsLoading { await withCheckedContinuation { loading = $0 } }
         status = autoplay ? .playing : .paused
     }
@@ -80,7 +88,10 @@ final class FakeEngine: PlayerEngine {
     func thumbnail(at time: Duration) async -> CGImage? { nil }
     func selectSubtitle(_ stream: MediaStream?, external: URL?) async {
         subtitleRequests.append(stream)
-        if rendersSubtitles { activeSubtitleTrack = stream.map { $0.displayTitle ?? "#\($0.index)" } }
+        if rendersSubtitles {
+            activeSubtitleTrack = stream.map { $0.displayTitle ?? "#\($0.index)" }
+            drawnSubtitleStream = stream?.index
+        }
     }
     func setFillsScreen(_ fill: Bool) {}
 }

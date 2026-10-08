@@ -1,5 +1,6 @@
 #if os(macOS)                    // in-process view tests: the Mac's `swift test`
 @testable import AppFeatures
+import AppCore
 import CoreGraphics
 import JellyfinAPI
 import JellyfinMocks
@@ -127,6 +128,20 @@ extension OnScreen {
             engine.currentTime = .seconds(1)
             try await screen.wait(for: "subtitle.text") { $0.text == "Plain words, no typesetting." }
             try await screen.wait(for: "player.subtitles") { $0.text == "WebVTT" }
+        }
+
+        /// As a real MKV did: subtitles set to off here, VLCKit turns the
+        /// file's default ASS on by itself — and that one's watched too.
+        @Test func lowMemoryCatchesTheASSVLCKitTurnedOnByItself() async throws {
+            let screen = Screen.player(Self.lowMemory, size: Screen.wide)
+            screen.app.settings.subtitleMode = .off
+            screen.nextEngine = { $0.picksItsOwnSubtitle = true }
+            try await screen.wait(for: "player.notice") { $0.text == "Simpler subtitles, so playback keeps going" }
+            let engine = try #require(screen.engine)
+            #expect(engine.subtitleRequests.first.map { $0 == nil } == true, "the app should have asked for none: VLCKit picked it")
+            #expect(engine.drawnSubtitleStream == nil, "VLCKit's track should be off")
+            engine.currentTime = .seconds(1)
+            try await screen.wait(for: "subtitle.text") { $0.text == "Plain words, no typesetting." }
         }
 
         @Test func lowMemoryWithNoWebVTTTurnsSubtitlesOffSayingSo() async throws {

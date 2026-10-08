@@ -32,6 +32,7 @@ public final class NativeEngine: PlayerEngine {
     public let rendersSubtitles = false
     public let prefersSerialSeeks = true
     public var activeSubtitleTrack: String? { nil }
+    public var drawnSubtitleStream: Int? { nil }
 
     @ObservationIgnored public let player = AVPlayer()
     @ObservationIgnored private let surface = PlayerLayerView()

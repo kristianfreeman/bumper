@@ -543,11 +543,15 @@ final class PlayerController {
 
     // MARK: Memory
 
-    /// VLCKit is drawing one of the item's ASS/SSA tracks: what the memory guard watches.
-    private var drawsASS: Bool {
-        guard !plainSubtitles, foundSubtitle == nil, let engine, let index = selectedSubtitle else { return false }
+    /// The item's ASS/SSA track VLCKit is drawing, if it is: what the memory
+    /// guard watches. What VLCKit says it draws, not only what was asked
+    /// for — it turns an MKV's default ASS on by itself, with none chosen
+    /// here (subtitles set to off or forced only), and that one grew too.
+    private var drawnASS: MediaStream? {
+        guard !plainSubtitles, foundSubtitle == nil, let engine else { return nil }
+        let index = engine.drawnSubtitleStream ?? selectedSubtitle
         let stream = subtitleOptions.first { $0.index == index }
-        return MemoryGuard.covers(stream, engine: engine.kind, rendersSubtitles: engine.rendersSubtitles)
+        return MemoryGuard.covers(stream, engine: engine.kind, rendersSubtitles: engine.rendersSubtitles) ? stream : nil
     }
 
     /// Twice a second while VLCKit draws ASS/SSA; on low memory, once, plain
@@ -556,24 +560,26 @@ final class PlayerController {
         let threshold = MemoryGuard.threshold(override: app.options.memoryGuardMB)
         memoryWatch = Task { [weak self] in
             var memory = MemoryGuard(threshold: threshold)
-            guard let left = await memory.watch(covered: { self?.drawsASS }), let self else { return }
-            await self.memoryRanLow(left: left, threshold: threshold, available: memory.available)
+            guard let left = await memory.watch(covered: { self.map { $0.drawnASS != nil } }), let self, let stream = self.drawnASS else { return }
+            await self.memoryRanLow(drawing: stream, left: left, threshold: threshold, available: memory.available)
         }
     }
 
-    private func memoryRanLow(left: Int, threshold: Int, available: @Sendable () -> Int?) async {
+    private func memoryRanLow(drawing stream: MediaStream, left: Int, threshold: Int, available: @Sendable () -> Int?) async {
         let mb = { (bytes: Int) in bytes / 1_048_576 }
-        let codec = subtitleOptions.first { $0.index == selectedSubtitle }?.codec ?? "?"
+        let footprint = { AvailableMemory.footprint().map { " (the app: \(mb($0)) MB)" } ?? "" }
+        let codec = stream.codec ?? "?"
+        let own = stream.index != selectedSubtitle ? ", turned on by VLCKit itself" : ""
         Self.log.notice("Memory guard: \(mb(left), privacy: .public) MB left drawing \(codec, privacy: .public): plain subtitles")
-        TraceFile.write("memory", "\(mb(left)) MB left (under \(mb(threshold)) MB) with VLCKit drawing \(codec) subtitles at \(Int(displayTime.seconds))s: plain subtitles for the rest of this item")
+        TraceFile.write("memory", "\(mb(left)) MB left\(footprint()) under \(mb(threshold)) MB, VLCKit drawing \(codec) #\(stream.index)\(own) at \(Int(displayTime.seconds))s: plain subtitles for the rest of this item")
         plainSubtitles = true
-        await selectSubtitle(selectedSubtitle)
+        await selectSubtitle(stream.index)
         let plain = subtitleTrack != nil
         TraceFile.write("memory", plain ? "VLCKit's track off; the server's WebVTT drawn by the app" : "VLCKit's track off; the server had no WebVTT: subtitles off")
         show(notice: plain ? "Simpler subtitles, so playback keeps going" : "Subtitles off, so playback keeps going")
         // Whether letting go of the track gave the memory back (read on the device).
         try? await Task.sleep(for: .seconds(5))
-        if let after = available() { TraceFile.write("memory", "5 s later: \(mb(after)) MB left") }
+        if let after = available() { TraceFile.write("memory", "5 s later: \(mb(after)) MB left\(footprint())") }
     }
 
     private func show(notice words: String) {

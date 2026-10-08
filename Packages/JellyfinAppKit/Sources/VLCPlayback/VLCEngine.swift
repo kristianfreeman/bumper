@@ -358,6 +358,7 @@ public final class VLCEngine: PlayerEngine {
             return
         }
         if let external {
+            sidecarStream = stream.index
             let before = player.textTracks.count
             player.addPlaybackSlave(external, type: .subtitle, enforce: true)
             // VLC adds the file's track a moment later (later still when
@@ -374,6 +375,17 @@ public final class VLCEngine: PlayerEngine {
         let embedded = (plan?.mediaSource.subtitleStreams ?? []).filter { $0.isExternal != true }
         guard let n = embedded.firstIndex(where: { $0.index == stream.index }), n < player.textTracks.count else { return }
         player.textTracks[n].isSelectedExclusively = true
+    }
+
+    /// A sidecar file's stream, once added (VLC lists it after the file's own tracks).
+    @ObservationIgnored private var sidecarStream: Int?
+
+    /// Read from VLC each time: it can select a track by itself (an MKV's
+    /// default ASS, with `:sub-track=-1` and nothing asked for).
+    public var drawnSubtitleStream: Int? {
+        guard let n = player.textTracks.firstIndex(where: { $0.isSelected }) else { return nil }
+        let embedded = (plan?.mediaSource.subtitleStreams ?? []).filter { $0.isExternal != true }
+        return n < embedded.count ? embedded[n].index : sidecarStream
     }
 
     /// What VLC itself says is selected (tracks can appear a moment after open).
