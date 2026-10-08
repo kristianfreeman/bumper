@@ -100,6 +100,9 @@ nonisolated struct LaunchOptions: Sendable {
     var simulateModeSwitchMs: Int?
     /// Pretend to be another Apple TV model (e.g. AppleTV6,2) for capability rules.
     var simulateModel: String?
+    /// `-memoryGuardAt <MB>`: the subtitle memory guard trips with this much
+    /// left (a very high one trips at once: checking the swap on a device).
+    var memoryGuardMB: Int?
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         mock = arguments.contains("-mock")
@@ -131,6 +134,7 @@ nonisolated struct LaunchOptions: Sendable {
         autoplayBackground = arguments.contains("-autoplayBackground")
         if let i = arguments.firstIndex(of: "-autoplaySubtitles"), i + 1 < arguments.count { autoplaySubtitles = arguments[i + 1] }
         libraryMatrix = arguments.contains("-libraryMatrix")
+        if let i = arguments.firstIndex(of: "-memoryGuardAt"), i + 1 < arguments.count { memoryGuardMB = Int(arguments[i + 1]) }
     }
 }
 

@@ -179,6 +179,8 @@ struct PlayerView: View {
             }
             FlashView(flash: flash)
                 .modifier(split.pictureArea)
+            PlayerNotice(words: controller?.notice)
+                .modifier(split.pictureArea)
             skipButton(docked: split.isSplit)
                 .modifier(split.pictureArea)
             if app.showsPerformanceHUD, let engine = controller?.engine {
@@ -527,8 +529,9 @@ struct VideoSurface: NSViewRepresentable {
 }
 #endif
 
-/// WebVTT text over AVPlayer, in the user's subtitle preset. (VLCKit draws
-/// its own subtitles, with the preset passed to its text renderer.)
+/// WebVTT text over AVPlayer, in the user's subtitle preset — and over
+/// VLCKit once the memory guard has swapped its ASS for plain subtitles.
+/// (Otherwise VLCKit draws its own, with the preset passed to its text renderer.)
 struct SubtitleOverlay: View {
     let cue: String?
     let scale: Double

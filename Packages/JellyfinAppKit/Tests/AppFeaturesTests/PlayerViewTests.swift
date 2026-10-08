@@ -1,7 +1,10 @@
 #if os(macOS)                    // in-process view tests: the Mac's `swift test`
 @testable import AppFeatures
 import CoreGraphics
+import JellyfinAPI
+import JellyfinMocks
 import PlaybackCore
+import Synchronization
 import Testing
 
 extension OnScreen {
@@ -104,6 +107,38 @@ extension OnScreen {
             try await screen.press("detail.background")
             try await screen.wait(for: "player.backgroundTag")
             #expect(screen.app.playback?.background == true)
+        }
+
+        // MARK: Low memory (VLCKit's ASS)
+
+        /// The typeset clip, with a threshold no device has: the memory
+        /// guard trips at its first reading (`-memoryGuardAt`, as on a device).
+        static let lowMemory = ["-autoplay", "media-1", "-memoryGuardAt", "100000"]
+
+        @Test func lowMemorySwapsVLCKitsASSForThePlainWordsAndSaysSo() async throws {
+            let screen = Screen.player(Self.lowMemory, size: Screen.wide)
+            try await screen.wait(for: "player.notice") { $0.text == "Simpler subtitles, so playback keeps going" }
+            let engine = try #require(screen.engine)
+            #expect(engine.kind == .vlc)
+            #expect(engine.subtitleRequests.first??.codec == "ass", "VLCKit should have drawn the ASS first")
+            #expect(engine.subtitleRequests.last.map { $0 == nil } == true, "VLCKit's track should be off")
+            #expect(engine.activeSubtitleTrack == nil)
+            #expect(engine.status == .playing, "playback should carry on")
+            engine.currentTime = .seconds(1)
+            try await screen.wait(for: "subtitle.text") { $0.text == "Plain words, no typesetting." }
+            try await screen.wait(for: "player.subtitles") { $0.text == "WebVTT" }
+        }
+
+        @Test func lowMemoryWithNoWebVTTTurnsSubtitlesOffSayingSo() async throws {
+            MockMedia.webVTTFails.withLock { $0 = true }
+            defer { MockMedia.webVTTFails.withLock { $0 = false } }
+            let screen = Screen.player(Self.lowMemory, size: Screen.wide)
+            try await screen.wait(for: "player.notice") { $0.text == "Subtitles off, so playback keeps going" }
+            screen.engine?.currentTime = .seconds(1)
+            try await screen.settle()
+            #expect(screen.element("subtitle.text") == nil)
+            #expect(screen.engine?.activeSubtitleTrack == nil)
+            #expect(screen.element("player.subtitles")?.text == "off")
         }
 
         // MARK: Picture in Picture

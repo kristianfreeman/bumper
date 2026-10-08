@@ -107,6 +107,31 @@ struct FlashView: View {
     }
 }
 
+/// A few plain words at the top of the picture for a few seconds (the
+/// player changed something by itself: simpler subtitles).
+struct PlayerNotice: View {
+    let words: String?
+
+    var body: some View {
+        VStack {
+            if let words {
+                Text(words)
+                    .font(Platform.isTV ? .callout : .subheadline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Platform.isTV ? 28 : 16)
+                    .padding(.vertical, Platform.isTV ? 14 : 9)
+                    .overVideoPanel(cornerRadius: Platform.isTV ? 24 : 16)
+                    .accessibilityIdentifier("player.notice")
+                    .transition(.opacity)
+            }
+        }
+        .padding(.top, Platform.isTV ? 70 : 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.easeInOut(duration: 0.25), value: words)
+        .allowsHitTesting(false)
+    }
+}
+
 /// Legibility gradient behind the controls (bottom-heavy; top for the title).
 struct ChromeScrim: View {
     var body: some View {

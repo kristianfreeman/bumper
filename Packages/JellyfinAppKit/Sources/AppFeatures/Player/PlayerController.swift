@@ -42,6 +42,12 @@ final class PlayerController {
     /// The item's chapters, named and in order: from the item handed over
     /// when it has them, else the full item once it's in.
     private(set) var chapters: [PlayerChapter] = []
+    /// Memory ran low while VLCKit drew ASS/SSA (`MemoryGuard`): for the
+    /// rest of this item those tracks are the server's WebVTT, drawn by the
+    /// app's overlay.
+    private(set) var plainSubtitles = false
+    /// A few words over the picture for a few seconds (the subtitle swap).
+    private(set) var notice: String?
 
     @ObservationIgnored let request: PlaybackRequest
     @ObservationIgnored let app: AppModel
@@ -50,6 +56,8 @@ final class PlayerController {
     @ObservationIgnored private var skippedSegments: Set<String> = []
     @ObservationIgnored private var sleepFading = false
     @ObservationIgnored private var remoteTargets: [(MPRemoteCommand, Any)] = []
+    @ObservationIgnored private var memoryWatch: Task<Void, Never>?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
     @ObservationIgnored private let totalSpan = Span("playback.tapToFrame")
     private static let log = Perf.logger("player")
 
@@ -199,6 +207,7 @@ final class PlayerController {
             Task { await loadSidecars(client: client, plan: plan) }
             await applyInitialSubtitles(plan: plan, client: client)
             runLoop()
+            watchMemory()
             if app.options.seekBench { Task { await SeekBench.run(self) } }
         } catch {
             phase = .failed(error.localizedDescription)
@@ -233,6 +242,7 @@ final class PlayerController {
         guard phase != .finished else { return }
         phase = .finished
         loop?.cancel()
+        memoryWatch?.cancel()
         if let engine { detachPictureInPicture(engine) }
         let position = engine?.currentTime ?? .zero
         engine?.stop()
@@ -491,7 +501,12 @@ final class PlayerController {
             await switchToVLC(reason: "Subtitles \(stream.codec ?? "?")")
         }
         guard let engine = self.engine, let client = app.session?.client else { return }
-        if engine.rendersSubtitles {
+        if plainSubtitles, let stream, MemoryGuard.covers(stream, engine: engine.kind, rendersSubtitles: engine.rendersSubtitles) {
+            // Memory ran low drawing it: VLCKit lets go of the track (and
+            // libass with it), and the app draws the server's WebVTT of it.
+            await engine.selectSubtitle(nil, external: nil)
+            subtitleTrack = await webVTT(of: stream, plan: plan, client: client)
+        } else if engine.rendersSubtitles {
             // VLCKit draws them (ASS styling, PGS bitmaps). Sidecar files go
             // by URL in their own format.
             let external = stream.flatMap { s -> URL? in
@@ -514,6 +529,62 @@ final class PlayerController {
     }
 
     static func fileExtension(for codec: String?) -> String { DownloadStore.subtitleExtension(codec) }
+
+    /// The server's WebVTT of a stream (a download's saved copy first),
+    /// its styling gone; nil when there's none to be had.
+    private func webVTT(of stream: MediaStream, plan: PlaybackPlan, client: JellyfinClient) async -> SubtitleTrack? {
+        let url = app.downloads?.subtitleFile(itemId: plan.item.id, index: stream.index, format: "vtt")
+            ?? client.subtitleURL(itemId: plan.item.id, mediaSourceId: plan.mediaSource.id, streamIndex: stream.index, format: "vtt")
+        guard let (data, response) = try? await client.session.data(from: url) else { return nil }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
+        let track = SubtitleParser.parse(data, format: "vtt")
+        return track.cues.isEmpty ? nil : track
+    }
+
+    // MARK: Memory
+
+    /// VLCKit is drawing one of the item's ASS/SSA tracks: what the memory guard watches.
+    private var drawsASS: Bool {
+        guard !plainSubtitles, foundSubtitle == nil, let engine, let index = selectedSubtitle else { return false }
+        let stream = subtitleOptions.first { $0.index == index }
+        return MemoryGuard.covers(stream, engine: engine.kind, rendersSubtitles: engine.rendersSubtitles)
+    }
+
+    /// Twice a second while VLCKit draws ASS/SSA; on low memory, once, plain
+    /// subtitles for the rest of the item — playback never stops for it.
+    private func watchMemory() {
+        let threshold = MemoryGuard.threshold(override: app.options.memoryGuardMB)
+        memoryWatch = Task { [weak self] in
+            var memory = MemoryGuard(threshold: threshold)
+            guard let left = await memory.watch(covered: { self?.drawsASS }), let self else { return }
+            await self.memoryRanLow(left: left, threshold: threshold, available: memory.available)
+        }
+    }
+
+    private func memoryRanLow(left: Int, threshold: Int, available: @Sendable () -> Int?) async {
+        let mb = { (bytes: Int) in bytes / 1_048_576 }
+        let codec = subtitleOptions.first { $0.index == selectedSubtitle }?.codec ?? "?"
+        Self.log.notice("Memory guard: \(mb(left), privacy: .public) MB left drawing \(codec, privacy: .public): plain subtitles")
+        TraceFile.write("memory", "\(mb(left)) MB left (under \(mb(threshold)) MB) with VLCKit drawing \(codec) subtitles at \(Int(displayTime.seconds))s: plain subtitles for the rest of this item")
+        plainSubtitles = true
+        await selectSubtitle(selectedSubtitle)
+        let plain = subtitleTrack != nil
+        TraceFile.write("memory", plain ? "VLCKit's track off; the server's WebVTT drawn by the app" : "VLCKit's track off; the server had no WebVTT: subtitles off")
+        show(notice: plain ? "Simpler subtitles, so playback keeps going" : "Subtitles off, so playback keeps going")
+        // Whether letting go of the track gave the memory back (read on the device).
+        try? await Task.sleep(for: .seconds(5))
+        if let after = available() { TraceFile.write("memory", "5 s later: \(mb(after)) MB left") }
+    }
+
+    private func show(notice words: String) {
+        notice = words
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: Pace.of(.seconds(5)))
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
+        }
+    }
 
     private func applyInitialSubtitles(plan: PlaybackPlan, client: JellyfinClient) async {
         let streams = plan.mediaSource.mediaStreams ?? []
@@ -579,7 +650,8 @@ final class PlayerController {
         return await trickplay?.thumbnail(at: chapter.start)
     }
 
-    /// Text cue the player overlays (AVPlayer path); VLCKit draws its own.
+    /// Text cue the player overlays (AVPlayer, or plain subtitles over
+    /// VLCKit); otherwise VLCKit draws its own.
     var currentCue: String? { subtitleText }
 
     /// The picture's width ÷ height: what's decoding, else what the server says.
@@ -593,8 +665,8 @@ final class PlayerController {
     /// "WebVTT" for the overlay. (Read by UI tests.)
     var subtitleStatus: String {
         guard let engine else { return "off" }
-        if engine.rendersSubtitles { return engine.activeSubtitleTrack ?? "off" }
-        return subtitleTrack == nil ? "off" : "WebVTT"
+        if subtitleTrack != nil { return "WebVTT" }               // the overlay: AVPlayer's, or plain subtitles over VLCKit
+        return engine.rendersSubtitles ? engine.activeSubtitleTrack ?? "off" : "off"
     }
 
     // MARK: Backends
