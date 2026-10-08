@@ -25,13 +25,13 @@ struct MemoryGuardTests {
 
     static func stream(_ codec: String?) -> MediaStream { MediaStream(index: 2, type: .subtitle, codec: codec) }
 
-    @Test func theThresholdIsAnEighthOfTheDevicesMemoryWithinBounds() {
+    @Test func theThresholdIsASixthOfTheDevicesMemoryWithinBounds() {
         let gb: UInt64 = 1_073_741_824
-        #expect(MemoryGuard.threshold(physicalMemory: 3 * gb) == 384 * Self.mb, "a 2017 Apple TV 4K: about 400 MB")
-        #expect(MemoryGuard.threshold(physicalMemory: 1 * gb) == 256 * Self.mb)
-        #expect(MemoryGuard.threshold(physicalMemory: 16 * gb) == 512 * Self.mb)
+        #expect(MemoryGuard.threshold(physicalMemory: 3 * gb) == 512 * Self.mb, "a 2017 Apple TV 4K: 512 MB")
+        #expect(MemoryGuard.threshold(physicalMemory: 1 * gb) == 320 * Self.mb)
+        #expect(MemoryGuard.threshold(physicalMemory: 16 * gb) == 768 * Self.mb)
         #expect(MemoryGuard.threshold(physicalMemory: 3 * gb, override: 100_000) == 100_000 * Self.mb, "-memoryGuardAt")
-        #expect(MemoryGuard.interval == .milliseconds(500), "twice a second")
+        #expect(MemoryGuard.interval == .milliseconds(250), "four times a second")
     }
 
     @Test func itTripsOnceWhenWhatsLeftFallsUnderTheThreshold() {

@@ -8,13 +8,15 @@ import os
 /// karaoke make libass's caches grow without bound (an anime episode took
 /// the Mac from ~380 MB to ~1.8 GB in two minutes), and on a 2017 Apple TV
 /// 4K the system ended the app — no crash, no report. While VLCKit draws
-/// ASS, memory is sampled twice a second; once what's left falls under
+/// ASS, memory is sampled four times a second; once what's left falls under
 /// `threshold`, it trips (once per item) and the player swaps to plain
 /// subtitles drawn by the app.
 public struct MemoryGuard: Sendable {
-    /// Two samples a second: libass grew ~12 MB/s on the Mac, so the
-    /// headroom covers far more than half a second of it.
-    public static let interval: Duration = .milliseconds(500)
+    /// Four samples a second: the opening song of a typeset episode grew
+    /// ~550 MB in 2 s on the Mac (more at the TV's 4K), and letting go of
+    /// the track stops the growth but doesn't give memory back, so the trip
+    /// has to come early.
+    public static let interval: Duration = .milliseconds(250)
 
     /// Bytes left before the system ends the app (nil: can't tell).
     public let available: @Sendable () -> Int?
@@ -29,16 +31,16 @@ public struct MemoryGuard: Sendable {
         self.available = available
     }
 
-    /// ~400 MB of headroom on a 3 GB Apple TV 4K (an eighth of the device's
-    /// memory): enough to swap subtitles before the jetsam limit, without
-    /// tripping on a 2 GB phone that runs closer to it all the time; never
-    /// under 256 MB nor over 512 MB. `override` is `-memoryGuardAt <MB>` (a
+    /// 512 MB of headroom on a 3 GB Apple TV 4K (a sixth of the device's
+    /// memory): a second or more of the steepest growth seen, before the
+    /// jetsam limit, without tripping on a 2 GB phone that runs closer to it
+    /// all the time; never under 320 MB nor over 768 MB. `override` is `-memoryGuardAt <MB>` (a
     /// very high one trips at once: for checking the swap on a device).
     public static func threshold(physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory,
                                  override megabytes: Int? = nil) -> Int {
         if let megabytes, megabytes > 0 { return megabytes * 1_048_576 }
-        let eighth = Int(physicalMemory / 8)
-        return min(max(eighth, 256 * 1_048_576), 512 * 1_048_576)
+        let sixth = Int(physicalMemory / 6)
+        return min(max(sixth, 320 * 1_048_576), 768 * 1_048_576)
     }
 
     /// Only what libass draws: an ASS/SSA track VLCKit renders. Plain text
