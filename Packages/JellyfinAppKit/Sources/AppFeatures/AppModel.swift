@@ -215,6 +215,7 @@ final class AppModel {
         self.standIns = standIns
         let built = (Bundle.main.executableURL.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.modificationDate] as? Date })
             .map { $0.formatted(.iso8601) } ?? "?"
+        MainThreadWatch.start()
         TraceFile.write("app", "launch \(PerfRecorder.deviceModel) build \(built) args: \(ProcessInfo.processInfo.arguments.dropFirst().joined(separator: " "))")
         let defaults = standIns?.defaults ?? (options.mock ? UserDefaults(suiteName: "mock")! : .standard)
         downloads = Self.makeDownloads(mock: options.mock, reset: options.reset, directory: standIns?.downloads)

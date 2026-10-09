@@ -13,6 +13,8 @@ struct EndCardView: View {
     let controller: PlayerController
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
     @Environment(\.theme) private var theme
+    /// Focus is on the first choice: from here a move is you, not the card.
+    @State private var settled = false
 
     private var tv: Bool { Platform.isTV }
     private var phone: Bool { Layout.device == .phone }
@@ -30,9 +32,9 @@ struct EndCardView: View {
             layout {
                 if let next = card.next {
                     let words = ItemAbout.nextLines(next, after: item)
-                    EndChoice(kicker: card.countdown > 0 ? "Keep going · in \(card.countdown) s" : "Keep going",
+                    EndChoice(kicker: card.countdown > 0 && !card.held ? "Keep going · in \(card.countdown) s" : "Keep going",
                               title: words.title, detail: words.detail, art: next, accent: theme.accent,
-                              progress: Double(card.countdown) / Double(EndCard.seconds), id: "end-next", focus: focus) {
+                              progress: card.held ? nil : Double(card.countdown) / Double(EndCard.seconds), id: "end-next", focus: focus) {
                         Task { await controller.keepGoing() }
                     }
                 }
@@ -74,7 +76,13 @@ struct EndCardView: View {
                 focus.wrappedValue = .option(card.next != nil ? "end-next" : card.instead != nil ? "end-instead" : "end-done")
                 try? await Task.sleep(for: .milliseconds(40))
             }
+            settled = true
         }
+        // Moving the remote (or the arrow keys) stops the countdown: you're choosing.
+        .onChange(of: focus.wrappedValue) { _, _ in if settled { controller.holdCountdown() } }
+        #if !os(iOS)
+        .onMoveCommand { _ in controller.holdCountdown() }
+        #endif
     }
 
     private static func isChoice(_ f: PlayerView.PlayerFocus?) -> Bool {
