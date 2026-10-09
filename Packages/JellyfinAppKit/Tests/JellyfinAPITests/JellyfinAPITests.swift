@@ -99,6 +99,19 @@ struct MockServerTests {
                               session: JellyfinClient.makeSession(protocolClasses: [MockJellyfinProtocol.self]))
     }()
 
+    /// Search asks for each kind on its own: a show is found by its name
+    /// first among the shows, and no kind takes more than its share.
+    @Test func searchFindsAShowByItsNameEachKindOnItsOwn() async throws {
+        let shows = try await client.items(ItemQuery(includeItemTypes: [.series], limit: 5)).items
+        let show = try #require(shows.first)
+        let name = try #require(show.name)
+        let found = try await client.search(name, limit: 6).items
+        #expect(found.first { $0.kind == .series }?.id == show.id)
+        for kind in [ItemKind.movie, .series, .episode, .boxSet] {
+            #expect(found.filter { $0.kind == kind }.count <= 6)
+        }
+    }
+
     @Test func homeEndpoints() async throws {
         async let views = client.userViews()
         async let resume = client.resumeItems()
@@ -298,5 +311,21 @@ struct SegmentTests {
         #expect(segs[1].startTicks == 40 * t && segs[1].endTicks == 130 * t)
         #expect(segs[2].endTicks == 1380 * t)                  // last chapter runs to the end
         #expect(MediaSegment.kind(forChapter: "Operation") == nil)  // "op" only as a word
+    }
+}
+
+@Suite("Search order")
+struct SearchOrderTests {
+    static func titles(_ names: [String]) -> [BaseItem] { names.enumerated().map { BaseItem(id: "\($0.offset)", name: $0.element, kind: .series) } }
+
+    @Test func theNameThatIsTheTermComesFirstIgnoringTheThe() {
+        let items = Self.titles(["Simpsons Roasting on an Open Fire", "Homer's Simpsons Trip", "The Simpsons", "Something Else"])
+        #expect(JellyfinClient.bestFirst(items, for: "simpsons").map(\.name) ==
+                ["The Simpsons", "Simpsons Roasting on an Open Fire", "Homer's Simpsons Trip", "Something Else"])
+    }
+
+    @Test func equalMatchesKeepTheServersOrder() {
+        let items = Self.titles(["Café Society", "Cafe Racer", "Le Café"])
+        #expect(JellyfinClient.bestFirst(items, for: "cafe").map(\.name) == ["Café Society", "Cafe Racer", "Le Café"])
     }
 }
