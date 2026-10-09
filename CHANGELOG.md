@@ -25,6 +25,9 @@ TestFlight.
 - Apple TV with its sound on AirPlay speakers (a Sonos, a HomePod): no more
   sound cutting in and out on files VLCKit plays. The TV only says it's
   AirPlaying once sound plays; Bumper checks then, and remembers.
+- Mac: resizing the window is smooth — pages lay out in steps while you
+  drag, the video settles when you pause, and nothing re-lays out under the
+  player (a typical step 13 ms → 6 ms; Home's half-second freeze is gone).
 - Search finds a show by its name even when lots of its episodes match too,
   and puts the closest name first ("Simpsons" finds "The Simpsons").
 
