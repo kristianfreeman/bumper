@@ -16,6 +16,8 @@ TestFlight.
   the left and Up Next down the right.
 - The chapter row under the picture is gone; About has what it's about and
   who's in it.
+- Search finds a show by its name even when lots of its episodes match too,
+  and puts the closest name first ("Simpsons" finds "The Simpsons").
 
 ## 0.2.1
 
