@@ -9,7 +9,8 @@ TestFlight.
 
 - Up Next under the picture: what plays after this one and when each ends,
   with Add to Up Next for the rest of the show, things like it, and what's
-  next in your other shows. On the Apple TV it's in the player's menu row.
+  next in your other shows. On the Apple TV and the iPhone remote, Up Next
+  is only what you've lined up yourself, and isn't there when you haven't.
 - At the credits: keep going (it counts down, then goes on by itself),
   something different, or done for tonight. Keep the Credits lets them roll.
 - iPad on its side and wide Mac windows: Show Details puts the picture on

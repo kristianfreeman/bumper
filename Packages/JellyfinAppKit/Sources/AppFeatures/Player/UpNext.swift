@@ -35,6 +35,17 @@ extension PlayerController {
         return list
     }
 
+    /// What you've lined up after this one — your picks in the queue, not
+    /// its suggestions nor the next episode that plays by itself. The TV's
+    /// Up Next card and the phone remote show only these, and nothing (no
+    /// card) when there are none; adding more is the phone app's.
+    var chosenUpNext: [BaseItem] {
+        guard request.sequence.isEmpty, !isBackground else { return [] }
+        let entries = app.queue.plan.entries
+        guard let i = entries.firstIndex(where: { $0.id == item.id }) else { return [] }
+        return entries.dropFirst(i + 1).filter { !$0.ambient }.map(\.item)
+    }
+
     /// Added by the queue's suggestions, not by you.
     func isSuggested(_ id: String) -> Bool { app.queue.plan.entries.first { $0.id == id }?.ambient == true }
 
@@ -84,11 +95,12 @@ extension PlayerController {
         return sections
     }
 
-    /// When each of `upNextList` ends, back to back from the end of this one.
-    func upNextEnds(now: Date = .now) -> [Date] {
+    /// When each of `list` (`upNextList` unless said) ends, back to back
+    /// from the end of this one.
+    func upNextEnds(_ list: [BaseItem]? = nil, now: Date = .now) -> [Date] {
         let left = engine.map { max(.zero, ($0.duration ?? item.runtime ?? .zero) - $0.currentTime) } ?? item.runtime ?? .zero
         var t = now.addingTimeInterval(left.seconds)
-        return upNextList.map { next in
+        return (list ?? upNextList).map { next in
             t = t.addingTimeInterval(QueuePlan.remaining(next))
             return t
         }

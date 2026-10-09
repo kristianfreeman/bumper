@@ -119,11 +119,8 @@ final class CompanionBridge {
         p.audio = player.audioOptions.map { CompanionTrack(id: $0.id, title: $0.title, detail: $0.detail) }
         p.audioTrack = player.engine?.selectedAudioTrack
         p.untracked = player.isBackground
-        var next: [BaseItem] = player.upNext.map { [$0] } ?? []
-        for slot in app.queue.timeline where slot.entry.item.id != info.item.id && !next.contains(where: { $0.id == slot.entry.item.id }) {
-            next.append(slot.entry.item)
-        }
-        p.upNext = next.prefix(6).map { Self.item($0, client: client) }
+        // Only what you've lined up: none, and the remote shows no Up Next.
+        p.upNext = player.chosenUpNext.prefix(6).map { Self.item($0, client: client) }
         return p
     }
 

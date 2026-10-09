@@ -79,6 +79,18 @@ extension OnScreen {
                     "this one, what was next, then the new one")
         }
 
+        /// The TV's Up Next card and the phone remote: only what you've lined
+        /// up — nothing for the next episode that plays by itself.
+        @Test func onlyWhatYouLinedUpIsChosen() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.tall)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("films like it") { !player.similarItems.isEmpty && player.nextEpisode != nil }
+            #expect(player.chosenUpNext.isEmpty, "the next episode plays by itself: nothing chosen")
+            let film = player.similarItems[0]
+            player.addToUpNext(film)
+            #expect(player.chosenUpNext.map(\.id) == ["series-000-s1-e3", film.id])
+        }
+
         @Test func addToUpNextOffersTheRestOfTheShowFirstAndTakesItBackOut() async throws {
             let screen = Screen.player(Self.episode, size: Screen.tall)
             let player = try await screen.playerController()
