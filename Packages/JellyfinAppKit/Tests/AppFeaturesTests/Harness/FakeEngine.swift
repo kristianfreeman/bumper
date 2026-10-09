@@ -73,6 +73,8 @@ final class FakeEngine: PlayerEngine {
     }
 
     func play() { status = .playing }
+    /// The item played to its end (what the player waits for to go on).
+    func reachEnd() { currentTime = duration ?? currentTime; status = .ended }
     func pause() { status = .paused }
     func seek(to time: Duration) async {
         currentTime = time

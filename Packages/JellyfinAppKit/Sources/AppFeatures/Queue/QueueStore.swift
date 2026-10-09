@@ -52,6 +52,7 @@ final class QueueStore {
     var timeline: [QueuePlan.Slot] { plan.timeline(now: now) }
 
     func add(_ item: BaseItem) { change { $0.add(item) }; TraceFile.write("queue", "add \(item.name ?? item.id)") }
+    func insert(_ item: BaseItem, at index: Int) { change { $0.insert(item, at: index) }; TraceFile.write("queue", "insert \(item.name ?? item.id) at \(index)") }
     func remove(_ id: String) { change { $0.remove(id) } }
     func move(_ id: String, by offset: Int) { change { $0.move(id, by: offset) } }
     func finished(_ id: String) { change { $0.finished(id) } }

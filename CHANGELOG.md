@@ -5,6 +5,18 @@ newest release is first. `scripts/release.sh` won't upload a version that
 has no entry here, and the entry becomes the build's "What to Test" in
 TestFlight.
 
+## Unreleased
+
+- Up Next under the picture: what plays after this one and when each ends,
+  with Add to Up Next for the rest of the show, things like it, and what's
+  next in your other shows. On the Apple TV it's in the player's menu row.
+- At the credits: keep going (it counts down, then goes on by itself),
+  something different, or done for tonight. Keep the Credits lets them roll.
+- iPad on its side and wide Mac windows: Show Details puts the picture on
+  the left and Up Next down the right.
+- The chapter row under the picture is gone; About has what it's about and
+  who's in it.
+
 ## 0.2.1
 
 - Fixed: playback could stop and close Bumper partway through episodes

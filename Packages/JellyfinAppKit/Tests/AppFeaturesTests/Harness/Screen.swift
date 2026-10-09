@@ -168,6 +168,12 @@ final class Screen {
 
     /// Until `condition` holds, polling every few milliseconds; past the
     /// deadline, fails saying what was on screen.
+    /// The player once it's going (it says so a moment after it starts).
+    func playerController() async throws -> PlayerController {
+        try await waitUntil("the player to start") { app.player != nil }
+        return try #require(app.player)
+    }
+
     func waitUntil(_ what: String, timeout: Duration = .seconds(3), _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         while !condition() {

@@ -37,6 +37,8 @@ struct PlayerView: View {
     @State private var docked = false
     /// The space can take a split (no split button on a phone on its side).
     @State private var canSplit = false
+    /// The split here is side by side (an iPad on its side, a wide Mac window).
+    @State private var splitsBeside = false
     @FocusState private var focus: PlayerFocus?
     /// Focus is on the icon row: the video isn't a place to move to (Left
     /// from the first icon went onto it, invisibly). Down goes back.
@@ -70,6 +72,7 @@ struct PlayerView: View {
                 .onChange(of: byShape) { _, _ in splitChoice = nil }      // a new shape: its own way again
                 .onChange(of: layout.isSplit, initial: true) { _, split in docked = split }
                 .onChange(of: allowed, initial: true) { _, can in canSplit = can }
+                .onChange(of: PlayerSplit.sideBySide(proxy.size, fold: PlayerSplit.fold(in: proxy)), initial: true) { _, beside in splitsBeside = beside }
         }
         #endif
     }
@@ -161,14 +164,26 @@ struct PlayerView: View {
                         .modifier(split.pictureArea)
                         .transition(.opacity)
                 }
-                // Below the picture (and the fold): the menus and what's around it, always up.
+                // Below the picture (and the fold), or beside it: the menus
+                // and what's around it, always up.
                 PlayerPanel(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
-                            fullScreen: { splitChoice = false }, findingSubtitles: $findingSubtitles)
+                            fullScreen: { splitChoice = false }, findingSubtitles: $findingSubtitles, sideBySide: split.isSideBySide)
                     .padding(.top, split.panelTop)
+                    .padding(.leading, split.pictureWidth ?? 0)
+                if let width = split.pictureWidth, let height = split.pictureHeight {
+                    // Side by side: what it is, under the picture.
+                    WatchHeader(controller: controller)
+                        .padding(.horizontal, 28)
+                        .padding(.top, 18)
+                        .frame(width: width, alignment: .topLeading)
+                        .padding(.top, height)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .foregroundStyle(.white)
+                }
             } else if chromeVisible, let controller, let engine = controller.engine {
                 TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
                               findingSubtitles: $findingSubtitles, showsInfo: $showsInfo,
-                              split: canSplit ? { splitChoice = true } : nil)
+                              split: canSplit ? { splitChoice = true } : nil, splitsBeside: splitsBeside)
                     .transition(.opacity)
             }
             #endif
@@ -183,6 +198,10 @@ struct PlayerView: View {
                 .modifier(split.pictureArea)
             skipButton(docked: split.isSplit)
                 .modifier(split.pictureArea)
+            if let controller, let card = controller.endCard {
+                EndCardView(card: card, controller: controller, focus: $focus)
+                    .transition(.opacity)
+            }
             if app.showsPerformanceHUD, let engine = controller?.engine {
                 EngineStatsView(stats: engine.stats, format: engine.videoFormat)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -208,6 +227,7 @@ struct PlayerView: View {
             #endif
             .animation(.easeInOut(duration: 0.22), value: chromeVisible)
             .animation(.spring(duration: 0.28), value: openMenu)
+            .animation(.easeInOut(duration: 0.3), value: controller?.endCard == nil)
             .task {
                 // Back from Picture in Picture: the same playback, where it is.
                 if let floating = app.floatingPlayer {
@@ -237,6 +257,10 @@ struct PlayerView: View {
                 if id != nil { focus = .skip } else if focus == .skip { focus = .surface }
             }
             .onChange(of: focus) { _, now in focusChanged(now) }
+            // The end card: the controls and any open menu make way for it.
+            .onChange(of: controller?.endCard == nil) { _, gone in
+                if !gone { openMenu = nil; chromeVisible = false } else { showChrome() }
+            }
             .onChange(of: controller?.transport.head) { _, head in updateThumbnail(for: head) }
             .onChange(of: controller?.transport.feedback) { _, feedback in
                 guard let feedback else { return }
@@ -321,7 +345,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func skipButton(docked: Bool) -> some View {
-        if let controller, let segment = controller.activeSegment {
+        if let controller, let segment = controller.activeSegment, controller.endCard == nil {
             Button {
                 Task { await controller.skip(segment) }
             } label: {
@@ -362,6 +386,11 @@ struct PlayerView: View {
     /// Menu/Back: close a menu → cancel a scrub → leave the icons → hide the
     /// controls → leave the player.
     private func handleExit() {
+        // The end card: over the credits, Menu lets them roll; at the end, it leaves.
+        if let card = controller?.endCard {
+            if card.atCredits { controller?.keepCredits(); focus = .surface } else { Task { await controller?.doneForTonight() } }
+            return
+        }
         // Found subtitles → back to the list (not out of the card).
         if openMenu == .subtitles, let controller, controller.subtitleSearch != .idle { controller.subtitleSearch = .idle; return }
         if openMenu != nil { closeMenu(); return }
