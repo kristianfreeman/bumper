@@ -250,12 +250,58 @@ extension JellyfinClient {
         ]))
     }
 
-    public func search(_ term: String, limit: Int = 40) async throws -> ItemsPage {
-        var q = ItemQuery(includeItemTypes: [.movie, .series, .episode, .boxSet], limit: limit)
-        q.searchTerm = term
-        q.sortBy = []
-        q.enableTotalRecordCount = false
-        return try await items(q)
+    /// Titles matching `term`: films, shows, episodes and collections, each
+    /// kind asked for on its own (as Jellyfin's web client does) — in one
+    /// shared request, a show's matching episodes could fill the limit and
+    /// leave the show out. Within a kind, the best-matching name first.
+    /// One kind failing leaves the others; all failing throws.
+    public func search(_ term: String, limit: Int = 24) async throws -> ItemsPage {
+        let kinds: [ItemKind] = [.movie, .series, .episode, .boxSet]
+        var found = Array(repeating: [BaseItem](), count: kinds.count)
+        var failure: (any Error)?
+        await withTaskGroup(of: (Int, Result<[BaseItem], any Error>).self) { group in
+            for (i, kind) in kinds.enumerated() {
+                group.addTask {
+                    var q = ItemQuery(includeItemTypes: [kind], limit: limit)
+                    q.searchTerm = term
+                    q.sortBy = []
+                    q.enableTotalRecordCount = false
+                    do { return (i, .success(try await self.items(q).items)) } catch { return (i, .failure(error)) }
+                }
+            }
+            for await (i, result) in group {
+                switch result {
+                case .success(let items): found[i] = Self.bestFirst(items, for: term)
+                case .failure(let error): failure = failure ?? error
+                }
+            }
+        }
+        if let failure, found.allSatisfy(\.isEmpty) { throw failure }
+        let items = found.flatMap { $0 }
+        return ItemsPage(items: items, totalRecordCount: items.count)
+    }
+
+    /// The name that is the term ("Simpsons" → "The Simpsons"), then names
+    /// starting with it, then names with a word starting with it, then the
+    /// rest — each in the server's order. Case, accents and a leading "The",
+    /// "A" or "An" don't count.
+    static func bestFirst(_ items: [BaseItem], for term: String) -> [BaseItem] {
+        func clean(_ s: String) -> String {
+            var s = s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).trimmingCharacters(in: .whitespaces)
+            for article in ["the ", "a ", "an "] where s.hasPrefix(article) { s.removeFirst(article.count); break }
+            return s
+        }
+        let t = clean(term)
+        func rank(_ item: BaseItem) -> Int {
+            let name = clean(item.name ?? "")
+            if name == t { return 0 }
+            if name.hasPrefix(t) { return 1 }
+            if name.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains(where: { $0.hasPrefix(t) }) { return 2 }
+            return 3
+        }
+        return items.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
     }
 
     /// Trailers in the library beside the item (a `trailers` folder, or
