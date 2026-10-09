@@ -27,6 +27,8 @@ struct TouchControls: View {
     var style: Style = .full
     /// Switches between the picture full screen and the split.
     var split: (() -> Void)? = nil
+    /// The split here goes side by side (a wide space): the button says so.
+    var splitsBeside = false
 
     enum Style { case full, overPicture, menus }
 
@@ -71,7 +73,8 @@ struct TouchControls: View {
             }
             Spacer(minLength: 0)
             if let split {
-                glassButton(docked ? "arrow.up.left.and.arrow.down.right" : "rectangle.split.1x2", docked ? "Full Screen" : "Show Details Below", size: 15) { split() }
+                glassButton(docked ? "arrow.up.left.and.arrow.down.right" : (splitsBeside ? "rectangle.split.2x1" : "rectangle.split.1x2"),
+                            docked ? "Full Screen" : (splitsBeside ? "Show Details Beside" : "Show Details Below"), size: 15) { split() }
                     .accessibilityIdentifier("player.layout")
             }
             // Only where this item's player can float its picture here.

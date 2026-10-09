@@ -109,23 +109,7 @@ final class DetailModel {
         item.kind == .series ? (selectedEpisode ?? nextUp ?? episodes.first) : (item.kind.isPlayable ? item : nil)
     }
 
-    var badges: [String] {
-        guard let source = item.mediaSources?.first else { return [] }
-        var out: [String] = []
-        if let v = source.videoStream {
-            if (v.width ?? 0) >= 3800 { out.append("4K") } else if (v.height ?? 0) >= 1000 { out.append("HD") }
-            if v.isDolbyVision { out.append("DOLBY VISION") }
-            else if v.videoRangeType == "HDR10Plus" { out.append("HDR10+") }
-            else if v.videoRange == "HDR" { out.append(v.videoRangeType == "HLG" ? "HLG" : "HDR10") }
-        }
-        if let a = source.audioStreams.first(where: { $0.isDefault == true }) ?? source.audioStreams.first {
-            if a.isAtmos { out.append("DOLBY ATMOS") }
-            else if (a.profile ?? "").contains("DTS:X") || a.audioSpatialFormat == "DTSX" { out.append("DTS:X") }
-            if let ch = a.channels, ch > 2 { out.append(ch >= 8 ? "7.1" : ch >= 6 ? "5.1" : "\(ch)CH") }
-        }
-        if !source.subtitleStreams.isEmpty { out.append("CC") }
-        return out
-    }
+    var badges: [String] { MediaSource.badges(item.mediaSources?.first) }
 }
 
 struct ItemDetailView: View {
@@ -682,5 +666,26 @@ private struct SeasonTab: View {
             .scaleEffect(focused ? 1.06 : 1)
             .animation(.spring(duration: 0.25, bounce: 0.15), value: focused)
             .contentShape(.capsule)
+    }
+}
+
+extension MediaSource {
+    /// "4K", "DOLBY VISION", "5.1", "CC": what the file is, for the detail page and the player.
+    static func badges(_ source: MediaSource?) -> [String] {
+        guard let source else { return [] }
+        var out: [String] = []
+        if let v = source.videoStream {
+            if (v.width ?? 0) >= 3800 { out.append("4K") } else if (v.height ?? 0) >= 1000 { out.append("HD") }
+            if v.isDolbyVision { out.append("DOLBY VISION") }
+            else if v.videoRangeType == "HDR10Plus" { out.append("HDR10+") }
+            else if v.videoRange == "HDR" { out.append(v.videoRangeType == "HLG" ? "HLG" : "HDR10") }
+        }
+        if let a = source.audioStreams.first(where: { $0.isDefault == true }) ?? source.audioStreams.first {
+            if a.isAtmos { out.append("DOLBY ATMOS") }
+            else if (a.profile ?? "").contains("DTS:X") || a.audioSpatialFormat == "DTSX" { out.append("DTS:X") }
+            if let ch = a.channels, ch > 2 { out.append(ch >= 8 ? "7.1" : ch >= 6 ? "5.1" : "\(ch)CH") }
+        }
+        if !source.subtitleStreams.isEmpty { out.append("CC") }
+        return out
     }
 }

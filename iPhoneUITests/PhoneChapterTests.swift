@@ -2,9 +2,8 @@ import XCTest
 
 /// Chapters on the iPhone after a turn, on the 20-minute clip (the mock's
 /// chapters: 5:00 "The Harbour at Night", 10:00 "Chapter 03", 15:00
-/// "Landfall"). Upright, the row of them under the picture is checked
-/// in-process (AppFeaturesTests' Player); on its side, they're a menu
-/// beside the timeline.
+/// "Landfall"): on its side, a menu beside the timeline. (Upright, Up
+/// Next is under the picture, not chapters.)
 @MainActor
 final class PhoneChapterTests: XCTestCase {
     static let media = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "TestMedia/long").path
@@ -16,7 +15,7 @@ final class PhoneChapterTests: XCTestCase {
         app.launch()
         let time = app.staticTexts["player.time"]
         XCTAssertTrue(waitFor(time, timeout: 10) { (Int($0) ?? 0) > 500 }, "it didn't play")
-        XCTAssertTrue(app.buttons["panel.chapter.1"].exists(within: 5), "no chapters under the picture")
+        XCTAssertTrue(app.buttons["upnext.add"].exists(within: 5), "no Up Next under the picture")
 
         // Paused, the controls stay up through the turn (playing, they hid
         // 4 s after the last touch — sometimes mid-test).
