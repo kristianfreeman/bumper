@@ -368,6 +368,7 @@ final class AppModel {
         try? audio.setCategory(.playback, mode: .moviePlayback)
         try? audio.setSupportsMultichannelContent(true)
         try? audio.setActive(true)
+        AudioSessionReport.start()
         #endif
     }
 
