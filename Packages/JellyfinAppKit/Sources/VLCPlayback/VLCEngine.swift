@@ -66,7 +66,7 @@ public final class VLCEngine: PlayerEngine {
     /// The clock follows the audio output (AirPlay, Bluetooth), not the
     /// system clock: see `load`.
     @ObservationIgnored private var followsAudio = false
-    @ObservationIgnored private var routeObserver: NSObjectProtocol?
+    @ObservationIgnored private var routeObservers: [NSObjectProtocol] = []
 
     private static let log = Perf.logger("vlc-engine")
 
@@ -120,20 +120,25 @@ public final class VLCEngine: PlayerEngine {
         floating.media.engine = self
         #endif
         stats.engineName = "VLCKit"
-        if let changed = AudioRoute.changed {
-            routeObserver = NotificationCenter.default.addObserver(forName: changed, object: nil, queue: .main) { [weak self] _ in
+        routeObservers = AudioRoute.changes.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.audioRouteChanged() }
             }
         }
     }
 
-    /// The sound moved to (or off) AirPlay or Bluetooth mid-item: the clock
-    /// it needs changed, so the item again from where it is (about a second).
+    /// Where the sound goes, read while it plays (only then is it true): the
+    /// sound moved to (or off) AirPlay or Bluetooth, or turned out to be
+    /// there all along. Kept for the next item; if the clock it needs
+    /// changed, the item again from where it is (about a second).
     private func audioRouteChanged() {
-        guard AudioRoute.isDelayed != followsAudio, status == .playing || status == .paused, var next = plan else { return }
+        guard status == .playing else { return }
+        let delayed = AudioRoute.isDelayed
+        AudioRoute.lastPlayedDelayed = delayed
+        guard delayed != followsAudio, var next = plan else { return }
         let resume = status == .playing
         let at = max(currentTime, startTarget ?? .zero)
-        TraceFile.write("vlc", "audio now to \(AudioRoute.description): again from \(Int(at.seconds)) s with the clock \(AudioRoute.isDelayed ? "following the audio" : "on the system clock")")
+        TraceFile.write("vlc", "audio now to \(AudioRoute.description): again from \(Int(at.seconds)) s with the clock \(delayed ? "following the audio" : "on the system clock")")
         next.startPosition = at
         statsTask?.cancel()
         markReopening()
@@ -198,9 +203,10 @@ public final class VLCEngine: PlayerEngine {
         // audio, far past what resampling covers, and VLC threw the late
         // audio away again and again (sound cutting on and off to a Sonos).
         // There the clock follows the audio output, and the picture waits for it.
-        followsAudio = AudioRoute.isDelayed
+        followsAudio = AudioRoute.isDelayed || AudioRoute.lastPlayedDelayed
         media.addOption(followsAudio ? ":clock-master=audio" : ":clock-master=monotonic")
-        TraceFile.write("vlc", "audio to \(AudioRoute.description); clock \(followsAudio ? "follows the audio" : "system")")
+        TraceFile.write("vlc", "audio to \(AudioRoute.description); clock \(followsAudio ? (AudioRoute.isDelayed ? "follows the audio" : "follows the audio (delayed when sound last played)") : "system")")
+        AudioSessionReport.write("opening")
         // Read ahead further and treat forward seeks within it as reads, not
         // new HTTP requests: ±10 s skips 0.96 → 0.70 s on an Apple TV 4K.
         media.addOption(":prefetch-buffer-size=131072")          // KiB (128 MiB)
@@ -467,6 +473,12 @@ public final class VLCEngine: PlayerEngine {
             guard !(startsPaused && started != nil) else { return }   // the held pause follows
             status = .playing
             finishStart()
+            // The route is only true once sound plays (AirPlay reads as HDMI
+            // before): read it again then, in case no notification says so.
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(800))
+                self?.audioRouteChanged()
+            }
         case .paused:
             status = .paused
             finishStart()

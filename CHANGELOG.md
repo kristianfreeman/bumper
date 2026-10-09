@@ -21,6 +21,9 @@ TestFlight.
 - Apple TV: the season bar, episodes and cast stop at the page's right
   margin, and a long-running show's 30-odd seasons scroll inside the bar.
 - At the credits, moving the remote stops the countdown: it waits for you.
+- Apple TV with its sound on AirPlay speakers (a Sonos, a HomePod): no more
+  sound cutting in and out on files VLCKit plays. The TV only says it's
+  AirPlaying once sound plays; Bumper checks then, and remembers.
 - Search finds a show by its name even when lots of its episodes match too,
   and puts the closest name first ("Simpsons" finds "The Simpsons").
 
