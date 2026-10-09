@@ -27,6 +27,9 @@ public struct AppRoot: View {
             .onOpenURL { app.open($0) }                     // the Top Shelf: bumper://play/<id>
             .onAppear { app.cast = cast; app.applyRemoteSetting() }   // Play while connected goes to the TV (the views read it from the environment)
             .onChange(of: app.settings.allowRemote) { _, _ in app.applyRemoteSetting() }
+            #if os(macOS)
+            .task { await ResizeBench.run() }
+            #endif
     }
 
     /// Call from the App's init, as early as possible.

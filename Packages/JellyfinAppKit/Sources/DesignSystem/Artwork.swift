@@ -280,7 +280,12 @@ public struct Artwork: View {
         // The same artwork at its last size while a resize's loads (a window
         // being resized otherwise flashes every card back to its placeholder).
         let stale = loaded.flatMap { $0.source == source ? $0.image : nil }
-        let image = fresh ?? request.flatMap { ImagePipeline.shared.cachedImage(for: $0) } ?? stale
+        let cached = fresh ?? request.flatMap { ImagePipeline.shared.cachedImage(for: $0) }
+        let image = cached ?? stale
+        // Mid-drag (a Mac window being resized) a card that has its art keeps
+        // it and fetches its new size once the drag ends: crossing a size
+        // step fetched and decoded every card on the page in one frame.
+        let settling = cached == nil && stale != nil && LiveResize.shared.isActive
         ZStack {
             if kind != .logo {
                 if let hash = source?.blurHash, let blur = hidden ? BlurHashCache.shared.decode(hash) : BlurHashCache.shared.cached(hash) {
@@ -296,8 +301,8 @@ public struct Artwork: View {
                     .transition(.opacity)
             }
         }
-        .task(id: request) {
-            guard let request, let source, fresh == nil, ImagePipeline.shared.cachedImage(for: request) == nil else { return }
+        .task(id: settling ? nil : request) {
+            guard !settling, let request, let source, fresh == nil, ImagePipeline.shared.cachedImage(for: request) == nil else { return }
             if let fetched = try? await ImagePipeline.shared.image(for: request) {
                 // Ease in rather than pop.
                 withAnimation(.easeOut(duration: 0.2)) { loaded = (request.key, source, fetched) }
