@@ -203,13 +203,13 @@ struct TransportBar: View {
         .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
     }
 
-    /// Chapters only for an item with more than one; Up Next when something's
-    /// next or there's room to add.
+    /// Chapters only for an item with more than one; Up Next only when you've
+    /// lined something up.
     private var menus: [PlayerMenu] {
         PlayerMenu.allCases.filter {
             switch $0 {
             case .chapters: controller.chapters.count > 1
-            case .upNext: controller.canAddToUpNext || !controller.upNextList.isEmpty
+            case .upNext: !controller.chosenUpNext.isEmpty
             default: true
             }
         }
@@ -674,57 +674,34 @@ struct MenuCard: View {
             case .minutes(let m): .option(SleepTimer.presets.contains(m) ? "sleep-\(m)" : "sleep-off")
             }
         case .info: .option("info")
-        case .upNext: .option(controller.upNextList.first.map { "next-\($0.id)" } ?? UpNextCard.firstAddID(controller) ?? "next-none")
+        case .upNext: .option(controller.chosenUpNext.first.map { "next-\($0.id)" } ?? "next-none")
         // The one playing, so Up and Down go to the ones either side.
         case .chapters: .option((controller.currentChapter ?? controller.chapters.first).map { "chapter-\($0.index)" } ?? "chapters-none")
         }
     }
 }
 
-/// The TV's Up Next: what plays after this one (select one to play it now),
-/// then Add to Up Next — the rest of the show, things like it, what's next
-/// in your other shows — checked when it's in.
+/// The TV's Up Next: what you've lined up after this one, each with when it
+/// ends; select one to play it now. (Adding is the phone app's.)
 private struct UpNextCard: View {
     let controller: PlayerController
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
     let close: () -> Void
     @Environment(AppModel.self) private var app
 
-    static func firstAddID(_ controller: PlayerController) -> String? {
-        controller.addSections.first?.items.first.map { "add-\($0.id)" }
-    }
-
     var body: some View {
-        let list = controller.upNextList
-        let ends = controller.upNextEnds(now: app.queue.now)
+        let list = controller.chosenUpNext
+        let ends = controller.upNextEnds(list, now: app.queue.now)
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, next in
                     let words = ItemAbout.nextLines(next, after: controller.item)
                     let end = i < ends.count ? "ends \(ends[i].formatted(date: .omitted, time: .shortened))" : nil
-                    OptionRow(title: words.title, detail: [i == 0 ? "Next" : nil, words.detail, end].compactMap { $0 }.joined(separator: " · "),
+                    OptionRow(title: words.title, detail: [words.detail, end].compactMap { $0 }.joined(separator: " · "),
                               selected: false, id: "next-\(next.id)", focus: focus,
                               thumbnail: AnyView(Artwork(item: next, kind: .landscape, width: 144).frame(width: 144, height: 81).clipShape(.rect(cornerRadius: 8)))) {
                         app.play(next)
                         close()
-                    }
-                }
-                if list.isEmpty {
-                    Text("Nothing's next").font(.callout).foregroundStyle(.white.opacity(0.6)).padding(.horizontal, 26)
-                }
-                if controller.canAddToUpNext {
-                    ForEach(controller.addSections, id: \.title) { section in
-                        Text(section.title).font(.headline).foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, 26).padding(.top, 18)
-                        ForEach(section.items, id: \.id) { other in
-                            let words = ItemAbout.nextLines(other, after: controller.item)
-                            let automatic = controller.isAutomatic(other.id)
-                            OptionRow(title: words.title, detail: automatic ? "Plays next" : words.detail,
-                                      selected: controller.isUpNext(other.id), id: "add-\(other.id)", focus: focus,
-                                      symbol: controller.isUpNext(other.id) ? nil : "plus") {
-                                if !automatic { controller.toggleUpNext(other) }
-                            }
-                        }
                     }
                 }
             }
@@ -732,7 +709,7 @@ private struct UpNextCard: View {
             .padding(.vertical, 6)
         }
         .tvScrollClipDisabled()
-        .frame(maxHeight: 640)
+        .frame(maxHeight: min(560, CGFloat(list.count) * 112 + 12))
     }
 }
 
