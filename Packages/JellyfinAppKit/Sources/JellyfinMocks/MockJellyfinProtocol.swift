@@ -187,6 +187,10 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
             }
             return json(MockMedia.remoteSubtitles(itemId: parts[1]))
         }
+        if parts.count >= 6, parts[0] == "Videos", parts[3] == "Subtitles", parts.last == "Stream.vtt" {
+            if MockMedia.webVTTFails.withLock({ $0 }) { return (500, Data(), "text/plain") }
+            return (200, MockMedia.webVTT(), "text/vtt")
+        }
         if parts.count >= 6, parts[0] == "Videos", parts[3] == "Subtitles", parts.last?.hasPrefix("Stream") == true {
             return (200, MockMedia.subtitleFile(), "application/x-subrip")
         }

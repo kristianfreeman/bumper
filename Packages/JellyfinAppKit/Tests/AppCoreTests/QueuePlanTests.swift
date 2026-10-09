@@ -35,4 +35,20 @@ struct QueuePlanTests {
         plan.finished("episode")
         #expect(plan.entries.map(\.id) == ["late", "next1"])
     }
+
+    /// The watch page puts what's playing and what it showed as next at the
+    /// front; a suggestion picked or put in place becomes yours, where you put it.
+    @Test func insertingOrAddingASuggestionMakesItAPick() {
+        var plan = QueuePlan()
+        plan.add(Self.item("film", minutes: 90))
+        plan.suggest([Self.item("next", minutes: 40), Self.item("other", minutes: 30)])
+        #expect(plan.entries.map(\.ambient) == [false, true, true])
+        plan.insert(Self.item("playing", minutes: 45), at: 0)
+        plan.insert(Self.item("next", minutes: 40), at: 1)
+        #expect(plan.entries.map(\.id) == ["playing", "next", "film", "other"])
+        #expect(plan.entries[1].ambient == false)
+        plan.add(Self.item("other", minutes: 30))
+        #expect(plan.entries.map(\.id) == ["playing", "next", "film", "other"])
+        #expect(plan.entries.allSatisfy { !$0.ambient })
+    }
 }

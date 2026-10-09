@@ -94,7 +94,9 @@ final class DetailModel {
 
     /// Every season's episodes, in one row: the season bar follows along.
     func loadEpisodes(client: JellyfinClient) async {
+        let asked = ContinuousClock.now
         episodes = (try? await client.episodes(seriesId: item.id, seasonId: nil).items) ?? []
+        TraceFile.write("detail", "\(item.name ?? item.id): \(episodes.count) episodes in \(Int((ContinuousClock.now - asked) / .milliseconds(1))) ms")
         if let selectedEpisode, episodes.contains(where: { $0.id == selectedEpisode.id }) { return }
         let inSeason = episodes.filter { $0.seasonId == selectedSeason }
         selectedEpisode = episodes.first { $0.id == nextUp?.id } ?? inSeason.first { !$0.isPlayed } ?? inSeason.first ?? episodes.first
@@ -109,23 +111,7 @@ final class DetailModel {
         item.kind == .series ? (selectedEpisode ?? nextUp ?? episodes.first) : (item.kind.isPlayable ? item : nil)
     }
 
-    var badges: [String] {
-        guard let source = item.mediaSources?.first else { return [] }
-        var out: [String] = []
-        if let v = source.videoStream {
-            if (v.width ?? 0) >= 3800 { out.append("4K") } else if (v.height ?? 0) >= 1000 { out.append("HD") }
-            if v.isDolbyVision { out.append("DOLBY VISION") }
-            else if v.videoRangeType == "HDR10Plus" { out.append("HDR10+") }
-            else if v.videoRange == "HDR" { out.append(v.videoRangeType == "HLG" ? "HLG" : "HDR10") }
-        }
-        if let a = source.audioStreams.first(where: { $0.isDefault == true }) ?? source.audioStreams.first {
-            if a.isAtmos { out.append("DOLBY ATMOS") }
-            else if (a.profile ?? "").contains("DTS:X") || a.audioSpatialFormat == "DTSX" { out.append("DTS:X") }
-            if let ch = a.channels, ch > 2 { out.append(ch >= 8 ? "7.1" : ch >= 6 ? "5.1" : "\(ch)CH") }
-        }
-        if !source.subtitleStreams.isEmpty { out.append("CC") }
-        return out
-    }
+    var badges: [String] { MediaSource.badges(item.mediaSources?.first) }
 }
 
 struct ItemDetailView: View {
@@ -239,31 +225,40 @@ struct ItemDetailView: View {
 
     @ViewBuilder
     private func header(_ item: BaseItem) -> some View {
-        if item.kind == .series, let episode = model.selectedEpisode {
-            seriesHeader(item, episode: episode)
+        // A show's page keeps one header while its episode loads (a second
+        // one swapped in took Play with it, and focus fell off).
+        if item.kind == .series {
+            seriesHeader(item, episode: model.selectedEpisode)
         } else {
             itemHeader(item)
         }
     }
 
     /// Series page: show identity up top (small), then the selected episode.
-    private func seriesHeader(_ series: BaseItem, episode: BaseItem) -> some View {
+    private func seriesHeader(_ series: BaseItem, episode: BaseItem?) -> some View {
         VStack(alignment: .leading, spacing: Self.phone ? 12 : 18) {
             TitleArt(item: series, small: true)
             VStack(alignment: .leading, spacing: 10) {
-                Text([episode.episodeLabel, episode.name].compactMap { $0 }.joined(separator: " · "))
-                    .font(Self.phone ? .headline : .title3.weight(.semibold)).foregroundStyle(theme.primaryText).lineLimit(1)
-                MetadataLine(item: episodeMetadata(episode))
-                Text(episode.overview ?? "")
-                    .font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(3)
-                    .spoilerBlur(episode.spoils(hidingSpoilers: app.settings.hideSpoilers), revealable: true)
-                    .frame(maxWidth: 1100, minHeight: Self.phone ? 0 : 90, alignment: .topLeading)   // fixed height: focus moves don't shift the buttons
+                if let episode {
+                    Text([episode.episodeLabel, episode.name].compactMap { $0 }.joined(separator: " · "))
+                        .font(Self.phone ? .headline : .title3.weight(.semibold)).foregroundStyle(theme.primaryText).lineLimit(1)
+                    MetadataLine(item: episodeMetadata(episode))
+                    Text(episode.overview ?? "")
+                        .font(.detailText).foregroundStyle(theme.secondaryText).lineLimit(3)
+                        .spoilerBlur(episode.spoils(hidingSpoilers: app.settings.hideSpoilers), revealable: true)
+                        .frame(maxWidth: 1100, minHeight: Self.phone ? 0 : 90, alignment: .topLeading)   // fixed height: focus moves don't shift the buttons
+                } else {
+                    // Its place kept while the episodes load: Play doesn't move when they're in.
+                    Text(" ").font(Self.phone ? .headline : .title3.weight(.semibold))
+                    MetadataLine(item: episodeMetadata(series)).hidden()
+                    Color.clear.frame(height: Self.phone ? 0 : 90)
+                }
             }
-            .id(episode.id)
+            .id(episode?.id ?? "loading")
             .transition(.opacity)
             actionButtons(series)
         }
-        .animation(.easeOut(duration: 0.15), value: episode.id)
+        .animation(.easeOut(duration: 0.15), value: episode?.id)
     }
 
     /// The episode line already names the episode; drop it from metadata.
@@ -312,12 +307,20 @@ struct ItemDetailView: View {
             .environment(\.pillCaptions, true)
         } else {
             HStack(spacing: 22) {
-                if let target = model.playTarget {
-                    Pill(playLabel(target), systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill", prominent: true) { app.play(target) }
-                        .pillCaption(castLink?.connectedTo.map { "On \($0)" } ?? (target.resumePosition != nil ? "Resume" : "Play"))
-                        .focused($playFocused)
-                        .onChange(of: playFocused) { _, focused in if focused { app.prepare(target) } }
-                        .accessibilityIdentifier("detail.play")
+                // There from the start, focused, before a show's page knows
+                // which episode it plays ("Play", then "Play S1 · E1"): it
+                // used to appear once the episodes were in, focus going to
+                // More first and jumping across when it did.
+                let target = model.playTarget
+                if target != nil || item.kind == .series {
+                    Pill(target.map(playLabel) ?? "Play", systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill", prominent: true) {
+                        if let target { app.play(target) }
+                    }
+                    .pillCaption(castLink?.connectedTo.map { "On \($0)" } ?? (target?.resumePosition != nil ? "Resume" : "Play"))
+                    .focused($playFocused)
+                    .onChange(of: playFocused) { _, focused in if focused, let target { app.prepare(target) } }
+                    .onChange(of: target?.id) { _, _ in if playFocused, let target { app.prepare(target) } }
+                    .accessibilityIdentifier("detail.play")
                 }
                 secondaryRow(item, size: .regular)
             }
@@ -434,10 +437,9 @@ struct ItemDetailView: View {
                 .scrollTargetLayout()
                 .padding(.vertical, 28)
             }
-            .contentMargins(.horizontal, Layout.horizontalMargin, for: .scrollContent)   // a jump lands inside the margin
+            .rowInMargins()                                   // a jump lands inside the margin
             .scrollPosition(id: $episodeScroll, anchor: .leading)
             .scrollIndicators(.hidden)
-            .tvScrollClipDisabled()
             // Touch and the Mac: the first episode in view says which season
             // you're in (the TV says it by focus). A jump's passing seasons don't.
             .onScrollTargetVisibilityChange(idType: BaseItem.ID.self, threshold: 0.6) { visible in
@@ -483,10 +485,10 @@ struct CastShelf: View {
                             .accessibilityIdentifier("person.\(person.id)")
                     }
                 }
-                .padding(.horizontal, Layout.horizontalMargin)
                 .padding(.vertical, 28)
             }
-            .tvScrollClipDisabled()
+            .rowInMargins()
+            .scrollIndicators(.hidden)
         }
         .tvFocusSection()
     }
@@ -642,24 +644,43 @@ struct SeasonBar: View {
     let pick: (BaseItem) -> Void
     @Environment(\.theme) private var theme
 
+    /// The seasons in their capsule, as wide as they need; more than fit
+    /// (35 seasons of a long-runner) scroll inside it, the capsule ending
+    /// at the page's margin and the selected one kept in view.
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: Platform.isTV ? 6 : 2) {
-                ForEach(seasons) { season in
-                    Button { pick(season) } label: { SeasonTab(title: season.name ?? "Season", selected: selected == season.id) }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("season.\(season.indexNumber ?? 0)")
-                        .accessibilityAddTraits(selected == season.id ? .isSelected : [])
+        ViewThatFits(in: .horizontal) {
+            tabs.padding(Platform.isTV ? 8 : 4)
+                .background(theme.primaryText.opacity(0.08), in: .capsule)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    tabs.padding(Platform.isTV ? 8 : 4)
+                }
+                .scrollIndicators(.hidden)
+                .background(theme.primaryText.opacity(0.08), in: .capsule)
+                .clipShape(.capsule)
+                .onAppear { if let selected { proxy.scrollTo(selected, anchor: .center) } }
+                .onChange(of: selected) { _, now in
+                    guard let now else { return }
+                    withAnimation(.smooth(duration: 0.3)) { proxy.scrollTo(now, anchor: .center) }
                 }
             }
-            .padding(Platform.isTV ? 8 : 4)
-            .background(theme.primaryText.opacity(0.08), in: .capsule)
-            .padding(.vertical, Platform.isTV ? 12 : 4)
         }
-        .scrollIndicators(.hidden)
-        .tvScrollClipDisabled()
+        .padding(.vertical, Platform.isTV ? 12 : 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .tvFocusSection()
         .animation(.spring(duration: 0.3, bounce: 0.12), value: selected)
+    }
+
+    private var tabs: some View {
+        HStack(spacing: Platform.isTV ? 6 : 2) {
+            ForEach(seasons) { season in
+                Button { pick(season) } label: { SeasonTab(title: season.name ?? "Season", selected: selected == season.id) }
+                    .buttonStyle(PillButtonStyle())
+                    .id(season.id)
+                    .accessibilityIdentifier("season.\(season.indexNumber ?? 0)")
+                    .accessibilityAddTraits(selected == season.id ? .isSelected : [])
+            }
+        }
     }
 }
 
@@ -682,5 +703,26 @@ private struct SeasonTab: View {
             .scaleEffect(focused ? 1.06 : 1)
             .animation(.spring(duration: 0.25, bounce: 0.15), value: focused)
             .contentShape(.capsule)
+    }
+}
+
+extension MediaSource {
+    /// "4K", "DOLBY VISION", "5.1", "CC": what the file is, for the detail page and the player.
+    static func badges(_ source: MediaSource?) -> [String] {
+        guard let source else { return [] }
+        var out: [String] = []
+        if let v = source.videoStream {
+            if (v.width ?? 0) >= 3800 { out.append("4K") } else if (v.height ?? 0) >= 1000 { out.append("HD") }
+            if v.isDolbyVision { out.append("DOLBY VISION") }
+            else if v.videoRangeType == "HDR10Plus" { out.append("HDR10+") }
+            else if v.videoRange == "HDR" { out.append(v.videoRangeType == "HLG" ? "HLG" : "HDR10") }
+        }
+        if let a = source.audioStreams.first(where: { $0.isDefault == true }) ?? source.audioStreams.first {
+            if a.isAtmos { out.append("DOLBY ATMOS") }
+            else if (a.profile ?? "").contains("DTS:X") || a.audioSpatialFormat == "DTSX" { out.append("DTS:X") }
+            if let ch = a.channels, ch > 2 { out.append(ch >= 8 ? "7.1" : ch >= 6 ? "5.1" : "\(ch)CH") }
+        }
+        if !source.subtitleStreams.isEmpty { out.append("CC") }
+        return out
     }
 }

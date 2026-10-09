@@ -40,6 +40,15 @@ public enum MockMedia {
     static func subtitleFile() -> Data {
         Data("1\n00:00:00,500 --> 00:00:04,500\nA subtitle the server found.\n\n2\n00:00:05,000 --> 00:00:09,000\nStill in sync.\n".utf8)
     }
+
+    /// A subtitle stream as the server converts it to WebVTT (any of a
+    /// clip's tracks, ASS included: its styling gone).
+    static func webVTT() -> Data {
+        Data("WEBVTT\n\n00:00:00.500 --> 00:00:04.500\nPlain words, no typesetting.\n\n00:00:05.000 --> 00:00:09.000\nStill in sync.\n".utf8)
+    }
+
+    /// Tests: the server can't convert subtitles to WebVTT (it answers 500).
+    public static let webVTTFails = Mutex(false)
     private static let state = Mutex<(URL?, [MockMediaFixture])>((nil, []))
 
     /// Media served by another machine (`mock-media-server` on the Mac):

@@ -20,8 +20,16 @@ final class FakeEngine: PlayerEngine {
     private(set) var rate: Float = 1
     var audioTracks: [MediaTrack] = []
     private(set) var selectedAudioTrack: Int?
-    let rendersSubtitles = false
-    var activeSubtitleTrack: String? { nil }
+    /// As the real ones: VLCKit draws subtitles itself, AVPlayer leaves them to the overlay.
+    var rendersSubtitles: Bool { kind == .vlc }
+    /// The subtitle it's drawing (VLCKit), by its title.
+    private(set) var activeSubtitleTrack: String?
+    /// Every subtitle it was asked for, in turn (nil: off).
+    @ObservationIgnored private(set) var subtitleRequests: [MediaStream?] = []
+    /// As VLCKit does with an MKV's default ASS: draws the file's first
+    /// subtitle on opening, asked for nothing (until asked for something).
+    @ObservationIgnored var picksItsOwnSubtitle = false
+    @ObservationIgnored private(set) var drawnSubtitleStream: Int?
     var videoFormat: VideoFormatInfo?
     var stats = EngineStats()
     @ObservationIgnored private(set) var lastSeekFrameAt: ContinuousClock.Instant?
@@ -51,6 +59,10 @@ final class FakeEngine: PlayerEngine {
         status = .loading
         duration = plan.item.runtime
         currentTime = plan.startPosition
+        if picksItsOwnSubtitle, rendersSubtitles, let first = plan.mediaSource.subtitleStreams.first {
+            activeSubtitleTrack = first.displayTitle
+            drawnSubtitleStream = first.index
+        }
         if holdsLoading { await withCheckedContinuation { loading = $0 } }
         status = autoplay ? .playing : .paused
     }
@@ -61,6 +73,8 @@ final class FakeEngine: PlayerEngine {
     }
 
     func play() { status = .playing }
+    /// The item played to its end (what the player waits for to go on).
+    func reachEnd() { currentTime = duration ?? currentTime; status = .ended }
     func pause() { status = .paused }
     func seek(to time: Duration) async {
         currentTime = time
@@ -74,7 +88,13 @@ final class FakeEngine: PlayerEngine {
     func setVolume(_ volume: Float) {}
     func selectAudio(_ streamIndex: Int) async { selectedAudioTrack = streamIndex }
     func thumbnail(at time: Duration) async -> CGImage? { nil }
-    func selectSubtitle(_ stream: MediaStream?, external: URL?) async {}
+    func selectSubtitle(_ stream: MediaStream?, external: URL?) async {
+        subtitleRequests.append(stream)
+        if rendersSubtitles {
+            activeSubtitleTrack = stream.map { $0.displayTitle ?? "#\($0.index)" }
+            drawnSubtitleStream = stream?.index
+        }
+    }
     func setFillsScreen(_ fill: Bool) {}
 }
 #endif

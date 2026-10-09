@@ -126,6 +126,17 @@ final class PlayerSubtitleTests: XCTestCase {
         XCTAssertTrue(waitFor(status, label: { $0 != "off" }, timeout: 2), "Subtitle didn't come back")
     }
 
+    /// Memory running low while VLCKit draws ASS (forced: a threshold no
+    /// device has): VLCKit lets go of the track and the server's WebVTT of
+    /// it is drawn over the picture, saying so — playback carries on.
+    func testLowMemorySwapsVLCKitsASSForPlainSubtitles() {
+        let app = launchPlaying(1, extra: ["-memoryGuardAt", "100000"])   // MKV · H.264 + DTS + ASS → VLCKit
+        XCTAssertTrue(app.staticTexts["player.notice"].exists(within: 6), "no notice of the swap")
+        let status = app.staticTexts["player.subtitles"]
+        XCTAssertTrue(waitFor(status, label: { $0 == "WebVTT" }, timeout: 2), "still VLCKit's subtitles ('\(status.label)')")
+        XCTAssertTrue(app.staticTexts["subtitle.text"].exists(within: 3), "no plain words over the picture")
+    }
+
     /// Subtitles → Find Subtitles: the server's subtitle search, best fit
     /// first (the hash match), and picking it puts it on at once.
     func testFindSubtitlesUsesTheBestMatch() throws {

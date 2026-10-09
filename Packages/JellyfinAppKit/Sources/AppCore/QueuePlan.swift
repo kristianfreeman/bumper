@@ -37,10 +37,19 @@ public struct QueuePlan: Sendable, Codable, Equatable {
     public func contains(_ id: String) -> Bool { entries.contains { $0.id == id } }
 
     public mutating func add(_ item: BaseItem) {
+        entries.removeAll { $0.id == item.id && $0.ambient }        // a suggestion you pick is yours
         guard !contains(item.id) else { return }
         // Picks go before the suggestions.
         let at = entries.firstIndex(where: \.ambient) ?? entries.count
         entries.insert(Entry(item: item), at: at)
+    }
+
+    /// In a place of its own choosing (the watch page puts what's playing,
+    /// and what it showed as next, at the front).
+    public mutating func insert(_ item: BaseItem, at index: Int) {
+        entries.removeAll { $0.id == item.id && $0.ambient }        // a suggestion put in place is yours
+        guard !contains(item.id) else { return }
+        entries.insert(Entry(item: item), at: max(0, min(index, entries.count)))
     }
 
     public mutating func remove(_ id: String) { entries.removeAll { $0.id == id } }

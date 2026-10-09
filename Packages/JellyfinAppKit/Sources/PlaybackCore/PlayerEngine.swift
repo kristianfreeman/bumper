@@ -121,6 +121,10 @@ public protocol PlayerEngine: AnyObject, Observable {
     /// The subtitle track the backend reports as showing (read back from the
     /// backend, not what was asked for). nil = none, or not applicable.
     var activeSubtitleTrack: String? { get }
+    /// The Jellyfin stream index of the subtitle the backend is drawing,
+    /// read back from it now — VLCKit can turn a file's default track on
+    /// by itself, with none asked for. nil = none, or it draws none itself.
+    var drawnSubtitleStream: Int? { get }
     var videoFormat: VideoFormatInfo? { get }
     var stats: EngineStats { get }
     /// When the first frame at the latest seek target was ready (benchmarks).

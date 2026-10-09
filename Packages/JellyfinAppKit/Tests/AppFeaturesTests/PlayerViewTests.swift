@@ -1,7 +1,11 @@
 #if os(macOS)                    // in-process view tests: the Mac's `swift test`
 @testable import AppFeatures
+import AppCore
 import CoreGraphics
+import JellyfinAPI
+import JellyfinMocks
 import PlaybackCore
+import Synchronization
 import Testing
 
 extension OnScreen {
@@ -24,7 +28,7 @@ extension OnScreen {
 
         @Test func aWideSpaceShowsThePictureFullScreen() async throws {
             let screen = Screen.player(Self.play, size: Screen.wide)
-            try await screen.wait(for: "player.layout") { $0.text == "Show Details Below" }
+            try await screen.wait(for: "player.layout") { $0.text == "Show Details Beside" }
             #expect(screen.element("player.panel") == nil)
         }
 
@@ -51,26 +55,115 @@ extension OnScreen {
             // A fold: the picture above it, the panel below it.
             let folded = PlayerSplit(size: CGSize(width: 900, height: 800), fold: CGRect(x: 0, y: 380, width: 900, height: 40), aspect: 16 / 9)
             #expect(folded.pictureHeight == 380 && folded.panelTop == 420)
+            // Split by choice in a wide space: side by side, the panel down the right.
+            let side = PlayerSplit(size: CGSize(width: 1180, height: 780), fold: nil, aspect: 16 / 9)
+            #expect(side.isSideBySide && side.pictureWidth == 802 && side.pictureHeight == 451)
+            #expect(!PlayerSplit(size: CGSize(width: 720, height: 1280), fold: nil, aspect: 16 / 9).isSideBySide)
         }
 
-        // MARK: Chapters
+        // MARK: Up Next
 
-        @Test func thePanelListsTheChaptersByNameWithTheOnePlayingMarked() async throws {
-            let screen = Screen.player(Self.play, size: Screen.tall)
-            try await screen.wait(forText: "Chapters")
-            let chapters = try await screen.wait(forAny: "panel.chapter.")
-            #expect(chapters.map(\.id) == (0...3).map { "panel.chapter.\($0)" })
-            #expect(chapters[1].text.hasPrefix("The Harbour at Night"))
-            #expect(chapters[2].text.hasPrefix("Chapter 3"), "an unnamed chapter reads \(chapters[2].text)")
-            #expect(chapters.map(\.value) == ["playing", "", "", ""])
+        /// The mock's first show, its second episode (the show has seven).
+        static let episode = ["-autoplay", "series-000-s1-e2", "-quickTimers"]
+
+        @Test func upNextIsTheNextEpisodeAndAddingPutsItAfter() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.tall)
+            let player = try await screen.playerController()
+            try await screen.wait(for: "upnext.series-000-s1-e3")
+            try await screen.waitUntil("films like it") { !player.similarItems.isEmpty }
+            let film = player.similarItems[0]
+            player.addToUpNext(film)
+            try await screen.wait(for: "upnext.\(film.id)")
+            #expect(player.upNextList.map(\.id).prefix(2) == ["series-000-s1-e3", film.id])
+            #expect(screen.app.queue.plan.entries.prefix(3).map(\.id) == ["series-000-s1-e2", "series-000-s1-e3", film.id],
+                    "this one, what was next, then the new one")
         }
 
-        @Test func aChapterInThePanelGoesThere() async throws {
+        /// The TV's Up Next card and the phone remote: only what you've lined
+        /// up — nothing for the next episode that plays by itself.
+        @Test func onlyWhatYouLinedUpIsChosen() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.tall)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("films like it") { !player.similarItems.isEmpty && player.nextEpisode != nil }
+            #expect(player.chosenUpNext.isEmpty, "the next episode plays by itself: nothing chosen")
+            let film = player.similarItems[0]
+            player.addToUpNext(film)
+            #expect(player.chosenUpNext.map(\.id) == ["series-000-s1-e3", film.id])
+        }
+
+        @Test func addToUpNextOffersTheRestOfTheShowFirstAndTakesItBackOut() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.tall)
+            let player = try await screen.playerController()
+            try await screen.wait(for: "upnext.add")
+            try await screen.waitUntil("the rest of the show") { player.addSections.first?.items.isEmpty == false }
+            let more = try #require(player.addSections.first)
+            #expect(more.title.hasPrefix("More from "))
+            #expect(more.items.first?.id == "series-000-s1-e4", "the next episode plays by itself, so it isn't offered")
+            player.toggleUpNext(more.items[0])
+            #expect(player.isUpNext("series-000-s1-e4"))
+            player.toggleUpNext(more.items[0])
+            #expect(!player.isUpNext("series-000-s1-e4"))
+            #expect(player.isUpNext("series-000-s1-e3"), "the next episode stays")
+        }
+
+        @Test func thePanelHasNoChaptersNow() async throws {
             let screen = Screen.player(Self.play, size: Screen.tall)
-            try await screen.press("panel.chapter.2")
-            try await screen.wait(for: "panel.chapter.2") { $0.value == "playing" }
-            #expect(screen.engine?.currentTime == .seconds(60))
-            #expect(screen.element("panel.chapter.0")?.value == "")
+            try await screen.wait(for: "upnext.add")
+            #expect(screen.text("Chapters") == nil)
+        }
+
+        // MARK: The end card
+
+        @Test func atTheEndKeepGoingCountsDownThenPlaysTheNextEpisode() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("the next episode") { player.nextEpisode != nil }
+            screen.engine?.reachEnd()
+            try await screen.wait(for: "option.end-next") { $0.text.contains("Keep going") }
+            #expect(screen.element("option.end-done") != nil)
+            try await screen.waitUntil("the next episode to play", timeout: .seconds(4)) { screen.app.playback?.item.id == "series-000-s1-e3" }
+        }
+
+        @Test func movingTheRemoteStopsTheCountdown() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("the next episode") { player.nextEpisode != nil }
+            screen.engine?.reachEnd()
+            try await screen.wait(for: "option.end-next") { $0.text.contains("Keep going · in ") }
+            player.holdCountdown()
+            try await screen.wait(for: "option.end-next") { !$0.text.contains("Keep going · in ") }
+            try await Task.sleep(for: .seconds(2))                     // past the quick countdown
+            #expect(screen.app.playback?.item.id == "series-000-s1-e2", "it went on by itself")
+            #expect(player.endCard?.held == true)
+        }
+
+        @Test func doneForTonightClosesThePlayer() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("the next episode") { player.nextEpisode != nil }
+            screen.engine?.reachEnd()
+            try await screen.press("option.end-done")
+            try await screen.waitUntil("the player to close") { screen.app.playback == nil }
+        }
+
+        @Test func somethingDifferentPlaysAFilmLikeIt() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("films like it") { !player.similarItems.isEmpty && player.nextEpisode != nil }
+            let instead = try #require(player.somethingDifferent)
+            screen.engine?.reachEnd()
+            try await screen.press("option.end-instead")
+            try await screen.waitUntil("it to play") { screen.app.playback?.item.id == instead.id }
+        }
+
+        @Test func withTheSleepTimerAtTheEndOfThisThereIsNoCard() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("the next episode") { player.nextEpisode != nil }
+            screen.app.sleepTimer.set(.endOfItem)
+            screen.engine?.reachEnd()
+            try await screen.waitUntil("the player to close") { screen.app.playback == nil }
+            #expect(player.endCard == nil)
         }
 
         @Test func wideTheChaptersMenuNamesTheOnePlaying() async throws {
@@ -104,6 +197,52 @@ extension OnScreen {
             try await screen.press("detail.background")
             try await screen.wait(for: "player.backgroundTag")
             #expect(screen.app.playback?.background == true)
+        }
+
+        // MARK: Low memory (VLCKit's ASS)
+
+        /// The typeset clip, with a threshold no device has: the memory
+        /// guard trips at its first reading (`-memoryGuardAt`, as on a device).
+        static let lowMemory = ["-autoplay", "media-1", "-memoryGuardAt", "100000"]
+
+        @Test func lowMemorySwapsVLCKitsASSForThePlainWordsAndSaysSo() async throws {
+            let screen = Screen.player(Self.lowMemory, size: Screen.wide)
+            try await screen.wait(for: "player.notice") { $0.text == "Simpler subtitles, so playback keeps going" }
+            let engine = try #require(screen.engine)
+            #expect(engine.kind == .vlc)
+            #expect(engine.subtitleRequests.first??.codec == "ass", "VLCKit should have drawn the ASS first")
+            #expect(engine.subtitleRequests.last.map { $0 == nil } == true, "VLCKit's track should be off")
+            #expect(engine.activeSubtitleTrack == nil)
+            #expect(engine.status == .playing, "playback should carry on")
+            engine.currentTime = .seconds(1)
+            try await screen.wait(for: "subtitle.text") { $0.text == "Plain words, no typesetting." }
+            try await screen.wait(for: "player.subtitles") { $0.text == "WebVTT" }
+        }
+
+        /// As a real MKV did: subtitles set to off here, VLCKit turns the
+        /// file's default ASS on by itself — and that one's watched too.
+        @Test func lowMemoryCatchesTheASSVLCKitTurnedOnByItself() async throws {
+            let screen = Screen.player(Self.lowMemory, size: Screen.wide)
+            screen.app.settings.subtitleMode = .off
+            screen.nextEngine = { $0.picksItsOwnSubtitle = true }
+            try await screen.wait(for: "player.notice") { $0.text == "Simpler subtitles, so playback keeps going" }
+            let engine = try #require(screen.engine)
+            #expect(engine.subtitleRequests.first.map { $0 == nil } == true, "the app should have asked for none: VLCKit picked it")
+            #expect(engine.drawnSubtitleStream == nil, "VLCKit's track should be off")
+            engine.currentTime = .seconds(1)
+            try await screen.wait(for: "subtitle.text") { $0.text == "Plain words, no typesetting." }
+        }
+
+        @Test func lowMemoryWithNoWebVTTTurnsSubtitlesOffSayingSo() async throws {
+            MockMedia.webVTTFails.withLock { $0 = true }
+            defer { MockMedia.webVTTFails.withLock { $0 = false } }
+            let screen = Screen.player(Self.lowMemory, size: Screen.wide)
+            try await screen.wait(for: "player.notice") { $0.text == "Subtitles off, so playback keeps going" }
+            screen.engine?.currentTime = .seconds(1)
+            try await screen.settle()
+            #expect(screen.element("subtitle.text") == nil)
+            #expect(screen.engine?.activeSubtitleTrack == nil)
+            #expect(screen.element("player.subtitles")?.text == "off")
         }
 
         // MARK: Picture in Picture

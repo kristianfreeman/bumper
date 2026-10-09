@@ -9,6 +9,9 @@
 #   ASC_KEY_ID=… ASC_ISSUER_ID=… scripts/release.sh   upload with an App Store Connect API key
 #     (~/.appstoreconnect/private_keys/AuthKey_<id>.p8) instead of Xcode's account
 #   RELEASE_XCODE=/Applications/Xcode-27.1.app scripts/release.sh   another Xcode (default: /Applications/Xcode.app)
+# The version (MARKETING_VERSION in project.yml) needs an entry in CHANGELOG.md.
+# With an API key, once uploaded, scripts/testflight.py sets that entry as each
+# build's What to Test, adds it to Friends & Family and submits it for review.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # Releases build with the released Xcode, whatever xcode-select or the shell
@@ -18,6 +21,9 @@ if [[ "$DEVELOPER_DIR" == *[Bb]eta* && -z "${ALLOW_BETA:-}" ]]; then
   echo "$DEVELOPER_DIR is a beta Xcode: the App Store won't take its builds (ALLOW_BETA=1 for TestFlight only)"; exit 1
 fi
 echo "$(xcodebuild -version | head -1) at ${DEVELOPER_DIR%/Contents/Developer}"
+VERSION=$(sed -n 's/^ *MARKETING_VERSION: *//p' project.yml | head -1)
+grep -q "^## ${VERSION//./\\.}\$" CHANGELOG.md || { echo "CHANGELOG.md has no '## $VERSION' entry: write what changed first"; exit 1; }
+echo "version $VERSION"
 OUT="build/release/$(date +%Y%m%d-%H%M%S)"; mkdir -p "$OUT"
 # Every upload needs a build number App Store Connect hasn't seen: the time
 # it was built (always increasing), the same for all three apps and the Top Shelf.
@@ -65,3 +71,6 @@ for p in "${platforms[@]}"; do
   echo "$p: uploaded"
 done
 echo "logs: $OUT"
+if [[ -n "${ASC_KEY_ID:-}" && -z "${ARCHIVE_ONLY:-}" ]]; then
+  scripts/testflight.py --build "$BUILD" --platforms "${platforms[@]}"
+fi

@@ -9,7 +9,7 @@ import SwiftUI
 /// Background and the sleep timer (which live only here: they're about
 /// what's playing). Chapters is last, and only there for an item with some.
 enum PlayerMenu: String, CaseIterable, Hashable {
-    case subtitles, audio, playback, info, chapters
+    case subtitles, audio, playback, info, upNext, chapters
 
     var symbol: String {
         switch self {
@@ -17,6 +17,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         case .audio: "speaker.wave.2"
         case .playback: "gearshape"
         case .info: "info.circle"
+        case .upNext: "text.line.first.and.arrowtriangle.forward"
         case .chapters: "list.bullet"
         }
     }
@@ -27,6 +28,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         case .audio: "Audio"
         case .playback: "Playback"
         case .info: "Info"
+        case .upNext: "Up Next"
         case .chapters: "Chapters"
         }
     }
@@ -107,6 +109,31 @@ struct FlashView: View {
     }
 }
 
+/// A few plain words at the top of the picture for a few seconds (the
+/// player changed something by itself: simpler subtitles).
+struct PlayerNotice: View {
+    let words: String?
+
+    var body: some View {
+        VStack {
+            if let words {
+                Text(words)
+                    .font(Platform.isTV ? .callout : .subheadline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Platform.isTV ? 28 : 16)
+                    .padding(.vertical, Platform.isTV ? 14 : 9)
+                    .overVideoPanel(cornerRadius: Platform.isTV ? 24 : 16)
+                    .accessibilityIdentifier("player.notice")
+                    .transition(.opacity)
+            }
+        }
+        .padding(.top, Platform.isTV ? 70 : 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .animation(.easeInOut(duration: 0.25), value: words)
+        .allowsHitTesting(false)
+    }
+}
+
 /// Legibility gradient behind the controls (bottom-heavy; top for the title).
 struct ChromeScrim: View {
     var body: some View {
@@ -176,9 +203,16 @@ struct TransportBar: View {
         .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
     }
 
-    /// Chapters only for an item with more than one.
+    /// Chapters only for an item with more than one; Up Next only when you've
+    /// lined something up.
     private var menus: [PlayerMenu] {
-        PlayerMenu.allCases.filter { $0 != .chapters || controller.chapters.count > 1 }
+        PlayerMenu.allCases.filter {
+            switch $0 {
+            case .chapters: controller.chapters.count > 1
+            case .upNext: !controller.chosenUpNext.isEmpty
+            default: true
+            }
+        }
     }
 
     /// Lit: subtitles on; Background or a sleep timer on.
@@ -579,6 +613,8 @@ struct MenuCard: View {
                 .padding(.horizontal, 26)
                 .focusable()
                 .focused(focus, equals: .option("info"))
+        case .upNext:
+            UpNextCard(controller: controller, focus: focus, close: close)
         case .chapters:
             // Each with its picture and where it starts; the one playing checked.
             let current = controller.currentChapter
@@ -638,9 +674,42 @@ struct MenuCard: View {
             case .minutes(let m): .option(SleepTimer.presets.contains(m) ? "sleep-\(m)" : "sleep-off")
             }
         case .info: .option("info")
+        case .upNext: .option(controller.chosenUpNext.first.map { "next-\($0.id)" } ?? "next-none")
         // The one playing, so Up and Down go to the ones either side.
         case .chapters: .option((controller.currentChapter ?? controller.chapters.first).map { "chapter-\($0.index)" } ?? "chapters-none")
         }
+    }
+}
+
+/// The TV's Up Next: what you've lined up after this one, each with when it
+/// ends; select one to play it now. (Adding is the phone app's.)
+private struct UpNextCard: View {
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        let list = controller.chosenUpNext
+        let ends = controller.upNextEnds(list, now: app.queue.now)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { i, next in
+                    let words = ItemAbout.nextLines(next, after: controller.item)
+                    let end = i < ends.count ? "ends \(ends[i].formatted(date: .omitted, time: .shortened))" : nil
+                    OptionRow(title: words.title, detail: [words.detail, end].compactMap { $0 }.joined(separator: " · "),
+                              selected: false, id: "next-\(next.id)", focus: focus,
+                              thumbnail: AnyView(Artwork(item: next, kind: .landscape, width: 144).frame(width: 144, height: 81).clipShape(.rect(cornerRadius: 8)))) {
+                        app.play(next)
+                        close()
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .tvScrollClipDisabled()
+        .frame(maxHeight: min(560, CGFloat(list.count) * 112 + 12))
     }
 }
 
@@ -737,6 +806,8 @@ struct ItemAbout: View {
     let controller: PlayerController
     /// Its name over the overview (the split's panel already has it, by Close).
     var showsName = true
+    /// What's next (or who's in it) beside it; the watch page has Up Next for that.
+    var showsSide = true
     @Environment(AppModel.self) private var app
 
     private var tv: Bool { Platform.isTV }
@@ -768,7 +839,7 @@ struct ItemAbout: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if sleepStop != nil || controller.upNext != nil || Self.starring(item) != nil || Self.director(item) != nil {
+            if showsSide, sleepStop != nil || controller.upNext != nil || Self.starring(item) != nil || Self.director(item) != nil {
                 side(item)
                     .frame(width: phone || controller.upNext != nil && sleepStop == nil ? nil : (tv ? 400 : 240), alignment: .leading)
                     .frame(maxHeight: phone ? nil : .infinity, alignment: .topLeading)   // the divider runs the band's height

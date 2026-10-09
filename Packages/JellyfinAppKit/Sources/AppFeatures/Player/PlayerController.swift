@@ -32,6 +32,14 @@ final class PlayerController {
     private(set) var segments: [MediaSegment] = []
     private(set) var activeSegment: MediaSegment?
     private(set) var nextEpisode: BaseItem?
+    /// The rest of the show after this episode: what Add to Up Next offers first.
+    private(set) var followingEpisodes: [BaseItem] = []
+    /// Like this one, from another show or a film (the server's Similar):
+    /// Add to Up Next, and the end card's "something different".
+    private(set) var similarItems: [BaseItem] = []
+    /// At the credits (or the end): what now — keep going, something
+    /// different, or done for tonight. Nil the rest of the time.
+    private(set) var endCard: EndCard?
     var subtitleTrack: SubtitleTrack?
     var selectedSubtitle: Int?
     /// "Find Subtitles": the search and its results, and the found subtitle in use.
@@ -42,14 +50,25 @@ final class PlayerController {
     /// The item's chapters, named and in order: from the item handed over
     /// when it has them, else the full item once it's in.
     private(set) var chapters: [PlayerChapter] = []
+    /// Memory ran low while VLCKit drew ASS/SSA (`MemoryGuard`): for the
+    /// rest of this item those tracks are the server's WebVTT, drawn by the
+    /// app's overlay.
+    private(set) var plainSubtitles = false
+    /// A few words over the picture for a few seconds (the subtitle swap).
+    private(set) var notice: String?
 
     @ObservationIgnored let request: PlaybackRequest
     @ObservationIgnored let app: AppModel
     @ObservationIgnored private var reporter: PlaybackReporter?
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var skippedSegments: Set<String> = []
+    @ObservationIgnored private var endCardTask: Task<Void, Never>?
+    /// The end card came up for this item (it does once).
+    @ObservationIgnored private var endCardOffered = false
     @ObservationIgnored private var sleepFading = false
     @ObservationIgnored private var remoteTargets: [(MPRemoteCommand, Any)] = []
+    @ObservationIgnored private var memoryWatch: Task<Void, Never>?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
     @ObservationIgnored private let totalSpan = Span("playback.tapToFrame")
     private static let log = Perf.logger("player")
 
@@ -199,6 +218,7 @@ final class PlayerController {
             Task { await loadSidecars(client: client, plan: plan) }
             await applyInitialSubtitles(plan: plan, client: client)
             runLoop()
+            watchMemory()
             if app.options.seekBench { Task { await SeekBench.run(self) } }
         } catch {
             phase = .failed(error.localizedDescription)
@@ -233,6 +253,8 @@ final class PlayerController {
         guard phase != .finished else { return }
         phase = .finished
         loop?.cancel()
+        endCardTask?.cancel()
+        memoryWatch?.cancel()
         if let engine { detachPictureInPicture(engine) }
         let position = engine?.currentTime ?? .zero
         engine?.stop()
@@ -278,6 +300,7 @@ final class PlayerController {
     private func updateSegment(_ now: Duration) {
         let current = segments.first { $0.range.contains(now) && [.intro, .recap, .preview, .commercial, .outro].contains($0.type) }
         if current?.id != activeSegment?.id { activeSegment = current }
+        if current?.type == .outro { offerEndCard(atCredits: true) }
         if let seg = current, seg.type == .intro || seg.type == .recap, app.settings.skipIntrosAutomatically, !skippedSegments.contains(seg.id) {
             skippedSegments.insert(seg.id)
             Task { await skip(seg) }
@@ -300,8 +323,14 @@ final class PlayerController {
                let idx = eps.firstIndex(where: { $0.id == plan.item.id }) {
                 // Background goes round: after the last, the first again.
                 if idx + 1 < eps.count { nextEpisode = eps[idx + 1] }
+                followingEpisodes = Array(eps.dropFirst(idx + 1).prefix(12))
                 firstEpisode = eps.first
             }
+        }
+        // Like the show (an episode's own Similar is thin), not the show itself.
+        let show = plan.item.seriesId ?? plan.item.id
+        if let like = try? await client.similar(to: show, limit: 12).items {
+            similarItems = like.filter { $0.id != show && $0.seriesId != show }
         }
         segments = await segs
     }
@@ -347,6 +376,97 @@ final class PlayerController {
     private func finishedItem() async {
         Self.log.info("Finished item at \(self.engine?.currentTime.seconds ?? -1, privacy: .public)s status \(String(describing: self.engine?.status), privacy: .public)")
         TraceFile.write("player", "Finished item at \(self.engine?.currentTime.seconds ?? -1)s")
+        // The end card's up (from the credits): the end is Keep Going's
+        // countdown running out early; with nothing to keep going to, it
+        // waits for a choice.
+        if let card = endCard {
+            if card.next != nil, !card.held { await keepGoing() }
+            return
+        }
+        // No credits marked: the card at the end, over the last frame.
+        offerEndCard(atCredits: false)
+        if endCard != nil { return }
+        await advance()
+    }
+
+    // MARK: End card
+
+    /// The end card, once per item: not in a playlist or Background (they
+    /// play on by design), not floating with the screen closed, not when the
+    /// sleep timer stops after this one, and only with something to offer.
+    private func offerEndCard(atCredits: Bool) {
+        guard !endCardOffered, phase == .playing, request.sequence.isEmpty, !isBackground, !floatFlow.screenClosed,
+              app.sleepTimer.mode != .endOfItem else { return }
+        let next = upNext
+        let instead = somethingDifferent
+        guard next != nil || instead != nil else { return }
+        endCardOffered = true
+        endCard = EndCard(next: next, countdown: next == nil ? 0 : EndCard.seconds, instead: instead, atCredits: atCredits)
+        TraceFile.write("player", "end card (\(atCredits ? "credits" : "end")): next \(next?.name ?? "none"), instead \(instead?.name ?? "none")")
+        guard next != nil else { return }
+        endCardTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Pace.of(.seconds(1)))
+                guard !Task.isCancelled, let self, let card = self.endCard else { return }
+                if card.countdown <= 1 { await self.keepGoing(); return }
+                self.endCard?.countdown = card.countdown - 1
+            }
+        }
+    }
+
+    /// The remote moved while the card's up: the countdown stops and the
+    /// card waits for a choice (looking at the choices isn't choosing one).
+    func holdCountdown() {
+        guard let card = endCard, !card.held, card.next != nil else { return }
+        endCardTask?.cancel()
+        endCardTask = nil
+        endCard?.held = true
+        TraceFile.write("player", "end card: countdown held")
+    }
+
+    /// Keep going: what's next, now.
+    func keepGoing() async {
+        guard endCard != nil else { return }
+        dismissEndCard()
+        TraceFile.write("player", "end card: keep going")
+        await advance()
+    }
+
+    /// Something different: it plays instead of what was next.
+    func playInstead() async {
+        guard let other = endCard?.instead else { return }
+        dismissEndCard()
+        TraceFile.write("player", "end card: instead, \(other.name ?? other.id)")
+        await stop()
+        if app.queue.contains(item.id) { app.queue.finished(item.id) }
+        app.playback = PlaybackRequest(item: other, resume: true)
+    }
+
+    /// Done for tonight: the player closes; what was next waits on Home.
+    func doneForTonight() async {
+        dismissEndCard()
+        TraceFile.write("player", "end card: done for tonight")
+        await stop()
+        if app.queue.contains(item.id) { app.queue.finished(item.id) }
+        app.playback = nil
+    }
+
+    /// Keep the credits: the card goes and the credits roll; at the end it
+    /// plays on as it always has.
+    func keepCredits() {
+        dismissEndCard()
+        TraceFile.write("player", "end card: keep the credits")
+    }
+
+    private func dismissEndCard() {
+        endCardTask?.cancel()
+        endCardTask = nil
+        endCard = nil
+    }
+
+    /// After this one: the next thing (the queue, a playlist, Background,
+    /// Play Next Episode), or the player closes.
+    private func advance() async {
         let floated = floatFlow.screenClosed
         await stop()
         // Floating with the screen closed: it ends there. The next one would
@@ -491,7 +611,12 @@ final class PlayerController {
             await switchToVLC(reason: "Subtitles \(stream.codec ?? "?")")
         }
         guard let engine = self.engine, let client = app.session?.client else { return }
-        if engine.rendersSubtitles {
+        if plainSubtitles, let stream, MemoryGuard.covers(stream, engine: engine.kind, rendersSubtitles: engine.rendersSubtitles) {
+            // Memory ran low drawing it: VLCKit lets go of the track (and
+            // libass with it), and the app draws the server's WebVTT of it.
+            await engine.selectSubtitle(nil, external: nil)
+            subtitleTrack = await webVTT(of: stream, plan: plan, client: client)
+        } else if engine.rendersSubtitles {
             // VLCKit draws them (ASS styling, PGS bitmaps). Sidecar files go
             // by URL in their own format.
             let external = stream.flatMap { s -> URL? in
@@ -514,6 +639,68 @@ final class PlayerController {
     }
 
     static func fileExtension(for codec: String?) -> String { DownloadStore.subtitleExtension(codec) }
+
+    /// The server's WebVTT of a stream (a download's saved copy first),
+    /// its styling gone; nil when there's none to be had.
+    private func webVTT(of stream: MediaStream, plan: PlaybackPlan, client: JellyfinClient) async -> SubtitleTrack? {
+        let url = app.downloads?.subtitleFile(itemId: plan.item.id, index: stream.index, format: "vtt")
+            ?? client.subtitleURL(itemId: plan.item.id, mediaSourceId: plan.mediaSource.id, streamIndex: stream.index, format: "vtt")
+        guard let (data, response) = try? await client.session.data(from: url) else { return nil }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
+        let track = SubtitleParser.parse(data, format: "vtt")
+        return track.cues.isEmpty ? nil : track
+    }
+
+    // MARK: Memory
+
+    /// The item's ASS/SSA track VLCKit is drawing, if it is: what the memory
+    /// guard watches. What VLCKit says it draws, not only what was asked
+    /// for — it turns an MKV's default ASS on by itself, with none chosen
+    /// here (subtitles set to off or forced only), and that one grew too.
+    private var drawnASS: MediaStream? {
+        guard !plainSubtitles, foundSubtitle == nil, let engine else { return nil }
+        let index = engine.drawnSubtitleStream ?? selectedSubtitle
+        let stream = subtitleOptions.first { $0.index == index }
+        return MemoryGuard.covers(stream, engine: engine.kind, rendersSubtitles: engine.rendersSubtitles) ? stream : nil
+    }
+
+    /// Twice a second while VLCKit draws ASS/SSA; on low memory, once, plain
+    /// subtitles for the rest of the item — playback never stops for it.
+    private func watchMemory() {
+        let threshold = MemoryGuard.threshold(override: app.options.memoryGuardMB)
+        memoryWatch = Task { [weak self] in
+            var memory = MemoryGuard(threshold: threshold)
+            guard let left = await memory.watch(covered: { self.map { $0.drawnASS != nil } }), let self, let stream = self.drawnASS else { return }
+            await self.memoryRanLow(drawing: stream, left: left, threshold: threshold, available: memory.available)
+        }
+    }
+
+    private func memoryRanLow(drawing stream: MediaStream, left: Int, threshold: Int, available: @Sendable () -> Int?) async {
+        let mb = { (bytes: Int) in bytes / 1_048_576 }
+        let footprint = { AvailableMemory.footprint().map { " (the app: \(mb($0)) MB)" } ?? "" }
+        let codec = stream.codec ?? "?"
+        let own = stream.index != selectedSubtitle ? ", turned on by VLCKit itself" : ""
+        Self.log.notice("Memory guard: \(mb(left), privacy: .public) MB left drawing \(codec, privacy: .public): plain subtitles")
+        TraceFile.write("memory", "\(mb(left)) MB left\(footprint()) under \(mb(threshold)) MB, VLCKit drawing \(codec) #\(stream.index)\(own) at \(Int(displayTime.seconds))s: plain subtitles for the rest of this item")
+        plainSubtitles = true
+        await selectSubtitle(stream.index)
+        let plain = subtitleTrack != nil
+        TraceFile.write("memory", plain ? "VLCKit's track off; the server's WebVTT drawn by the app" : "VLCKit's track off; the server had no WebVTT: subtitles off")
+        show(notice: plain ? "Simpler subtitles, so playback keeps going" : "Subtitles off, so playback keeps going")
+        // Whether letting go of the track gave the memory back (read on the device).
+        try? await Task.sleep(for: .seconds(5))
+        if let after = available() { TraceFile.write("memory", "5 s later: \(mb(after)) MB left\(footprint())") }
+    }
+
+    private func show(notice words: String) {
+        notice = words
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: Pace.of(.seconds(5)))
+            guard !Task.isCancelled else { return }
+            self?.notice = nil
+        }
+    }
 
     private func applyInitialSubtitles(plan: PlaybackPlan, client: JellyfinClient) async {
         let streams = plan.mediaSource.mediaStreams ?? []
@@ -579,7 +766,8 @@ final class PlayerController {
         return await trickplay?.thumbnail(at: chapter.start)
     }
 
-    /// Text cue the player overlays (AVPlayer path); VLCKit draws its own.
+    /// Text cue the player overlays (AVPlayer, or plain subtitles over
+    /// VLCKit); otherwise VLCKit draws its own.
     var currentCue: String? { subtitleText }
 
     /// The picture's width ÷ height: what's decoding, else what the server says.
@@ -593,8 +781,8 @@ final class PlayerController {
     /// "WebVTT" for the overlay. (Read by UI tests.)
     var subtitleStatus: String {
         guard let engine else { return "off" }
-        if engine.rendersSubtitles { return engine.activeSubtitleTrack ?? "off" }
-        return subtitleTrack == nil ? "off" : "WebVTT"
+        if subtitleTrack != nil { return "WebVTT" }               // the overlay: AVPlayer's, or plain subtitles over VLCKit
+        return engine.rendersSubtitles ? engine.activeSubtitleTrack ?? "off" : "off"
     }
 
     // MARK: Backends

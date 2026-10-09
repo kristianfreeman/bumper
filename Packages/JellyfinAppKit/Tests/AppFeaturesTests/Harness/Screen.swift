@@ -168,6 +168,12 @@ final class Screen {
 
     /// Until `condition` holds, polling every few milliseconds; past the
     /// deadline, fails saying what was on screen.
+    /// The player once it's going (it says so a moment after it starts).
+    func playerController() async throws -> PlayerController {
+        try await waitUntil("the player to start") { app.player != nil }
+        return try #require(app.player)
+    }
+
     func waitUntil(_ what: String, timeout: Duration = .seconds(3), _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         while !condition() {
@@ -235,12 +241,14 @@ final class Screen {
 
     /// Clips the mock serves as `media-0…` (only their description: the
     /// fake backend never reads a file). Two minutes, with the mock's
-    /// chapters at 0:30, 1:00 and 1:30.
+    /// chapters at 0:30, 1:00 and 1:30. `media-1` is an MKV with typeset
+    /// ASS subtitles (VLCKit's: anime's signs and karaoke).
     static let media: URL = {
         let dir = FileManager.default.temporaryDirectory.appending(path: "view-test-media", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let clip = #"[{"file":"clip.mp4","name":"Seek Clip","container":"mp4","duration":120,"video":{"codec":"h264","width":1920,"height":1080,"fps":24,"range":"SDR","bitDepth":8},"audio":[{"codec":"aac","channels":2,"title":"Stereo"}],"subtitles":[]}]"#
-        try? Data(clip.utf8).write(to: dir.appending(path: "manifest.json"))
+        let clip = #"{"file":"clip.mp4","name":"Seek Clip","container":"mp4","duration":120,"video":{"codec":"h264","width":1920,"height":1080,"fps":24,"range":"SDR","bitDepth":8},"audio":[{"codec":"aac","channels":2,"title":"Stereo"}],"subtitles":[]}"#
+        let typeset = #"{"file":"typeset.mkv","name":"Typeset Clip","container":"mkv","duration":120,"video":{"codec":"h264","width":1920,"height":1080,"fps":24,"range":"SDR","bitDepth":8},"audio":[{"codec":"aac","channels":2,"title":"Stereo"}],"subtitles":[{"codec":"ass","title":"Signs & Songs","language":"eng"}]}"#
+        try? Data("[\(clip),\(typeset)]".utf8).write(to: dir.appending(path: "manifest.json"))
         return dir
     }()
 

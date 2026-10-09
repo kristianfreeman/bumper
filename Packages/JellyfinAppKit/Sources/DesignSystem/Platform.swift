@@ -227,6 +227,21 @@ extension View {
         #endif
     }
 
+    /// A row that scrolls sideways, inside the page's margins. The TV keeps
+    /// it there — clipped at the right margin as at the left, with room
+    /// inside for a focused card's lift — where it used to run off the
+    /// screen's edge; a phone, iPad and Mac let it run to the edge, as
+    /// their own rows do, starting and ending at the margin.
+    @ViewBuilder public func rowInMargins() -> some View {
+        #if os(tvOS)
+        let lift: CGFloat = 28
+        contentMargins(.horizontal, lift, for: .scrollContent)
+            .padding(.horizontal, Layout.horizontalMargin - lift)
+        #else
+        contentMargins(.horizontal, Layout.horizontalMargin, for: .scrollContent)
+        #endif
+    }
+
     /// Gives the pages inside this the width they're offered, as
     /// `\.pageWidth` (the shared navigation stack wraps every page in it).
     public func readsPageWidth() -> some View { modifier(PageWidthReader()) }

@@ -25,4 +25,27 @@ final class SeasonTests: XCTestCase {
         shot("season-following")
         XCTAssertTrue(two.isSelected, "moving into season 2's episodes didn't move the bar")
     }
+
+    /// A long-runner (35 seasons of 22, as The Simpsons) opened from search,
+    /// as on a living-room TV where the page came up and the remote did
+    /// nothing: Play takes focus, and Down reaches the episodes.
+    func testALongRunnerOpenedFromSearchKeepsTheRemoteWorking() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-reset", "-route", "search", "-searchQuery", "Neon Archive"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let show = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true AND label BEGINSWITH 'Neon Archive' AND NOT (label CONTAINS 'Neon Archive II')")).firstMatch
+        remote.press(.down, in: app, atMost: 8) { show.exists }
+        XCTAssertTrue(show.exists, "couldn't reach the show in the results: \(app.focusSummary)")
+        remote.press(.select)
+        let play = app.buttons["detail.play"]
+        XCTAssertTrue(play.exists(within: 10), "the page didn't open")
+        XCTAssertTrue(waitUntil(5) { play.hasFocus }, "Play didn't take focus: \(app.focusSummary)")
+        shot("long-runner")
+        let episode = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true AND label CONTAINS 'Chapter'")).firstMatch
+        remote.press(.down, in: app, atMost: 4) { episode.exists }
+        XCTAssertTrue(episode.exists, "the remote went dead on the page: \(app.focusSummary)")
+        remote.press(.right, in: app, atMost: 3) { false }
+        XCTAssertTrue(episode.exists, "moving along the episodes lost focus: \(app.focusSummary)")
+    }
 }

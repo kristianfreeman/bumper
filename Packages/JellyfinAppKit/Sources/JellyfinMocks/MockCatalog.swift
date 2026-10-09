@@ -72,7 +72,11 @@ public struct MockCatalog: Sendable {
             let added = Date.now.addingTimeInterval(-Double(i * 9 + 2) * 86_400)
             s.dateCreated = added
             s.providerIds = ["Tvdb": "76568"]                 // a real id: online theme fallback works
-            let seasonCount = 1 + i % 4
+            // The last (the oldest) is a long-runner, as The Simpsons is: 35
+            // seasons of 22, watched up to the last one — a page that has to
+            // stay quick with 770 episodes in its row.
+            let longRunner = i == seriesCount - 1
+            let seasonCount = longRunner ? 35 : 1 + i % 4
             var unplayed = 0
             var seasonList: [BaseItem] = []
             for sn in 1...seasonCount {
@@ -83,7 +87,7 @@ public struct MockCatalog: Sendable {
                 season.seriesName = s.name
                 season.imageTags = ["Primary": "ssp\(i)-\(sn)"]
                 var eps: [BaseItem] = []
-                for e in 1...(6 + (i + sn) % 7) {
+                for e in 1...(longRunner ? 22 : 6 + (i + sn) % 7) {
                     var ep = BaseItem(id: "\(seasonId)-e\(e)", name: "Chapter \(e): \(title())", kind: .episode)
                     ep.indexNumber = e
                     ep.parentIndexNumber = sn
