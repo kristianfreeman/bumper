@@ -40,4 +40,17 @@ struct SettingsSyncTests {
         settings.reloadSynced()
         #expect(settings.hideSpoilers)
     }
+
+    /// A launch argument (`-subtitles.mode off`, for one run) is never
+    /// given to iCloud: it turned subtitles off on every Apple TV.
+    @Test func aLaunchArgumentIsNeverSeededToICloud() throws {
+        let defaults = try #require(UserDefaults(suiteName: "sync-\(UUID().uuidString)"))
+        defaults.set("classic", forKey: "subtitles.style")                // saved on this device
+        defaults.set("off", forKey: "subtitles.mode")                     // reads as a launch argument does
+        let store = FakeStore()
+        let sync = SettingsSync(defaults: defaults, store: store)
+        sync.seed(arguments: ["subtitles.mode": "off"])
+        #expect(store.values["subtitles.mode"] == nil, "the launch argument went to iCloud")
+        #expect(store.values["subtitles.style"] as? String == "classic")
+    }
 }

@@ -39,9 +39,11 @@ public final class SettingsSync {
     }
 
     /// The first device to sync gives iCloud what it has (set before syncing
-    /// existed), so the others start from it.
-    public func seed() {
-        for key in Self.keys where store.object(forKey: key) == nil {
+    /// existed), so the others start from it — what's saved, never a launch
+    /// argument: `-subtitles.mode off` for one diagnostic run on a Mac
+    /// became iCloud's value, and both Apple TVs turned subtitles off.
+    public func seed(arguments: [String: Any] = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)) {
+        for key in Self.keys where store.object(forKey: key) == nil && arguments[key] == nil {
             if let value = defaults.object(forKey: key) { store.set(value, forKey: key) }
         }
     }
