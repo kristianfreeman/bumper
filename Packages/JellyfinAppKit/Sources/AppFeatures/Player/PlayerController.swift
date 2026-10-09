@@ -380,7 +380,7 @@ final class PlayerController {
         // countdown running out early; with nothing to keep going to, it
         // waits for a choice.
         if let card = endCard {
-            if card.next != nil { await keepGoing() }
+            if card.next != nil, !card.held { await keepGoing() }
             return
         }
         // No credits marked: the card at the end, over the last frame.
@@ -412,6 +412,16 @@ final class PlayerController {
                 self.endCard?.countdown = card.countdown - 1
             }
         }
+    }
+
+    /// The remote moved while the card's up: the countdown stops and the
+    /// card waits for a choice (looking at the choices isn't choosing one).
+    func holdCountdown() {
+        guard let card = endCard, !card.held, card.next != nil else { return }
+        endCardTask?.cancel()
+        endCardTask = nil
+        endCard?.held = true
+        TraceFile.write("player", "end card: countdown held")
     }
 
     /// Keep going: what's next, now.

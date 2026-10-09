@@ -112,6 +112,19 @@ extension OnScreen {
             try await screen.waitUntil("the next episode to play", timeout: .seconds(4)) { screen.app.playback?.item.id == "series-000-s1-e3" }
         }
 
+        @Test func movingTheRemoteStopsTheCountdown() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("the next episode") { player.nextEpisode != nil }
+            screen.engine?.reachEnd()
+            try await screen.wait(for: "option.end-next") { $0.text.contains("Keep going · in ") }
+            player.holdCountdown()
+            try await screen.wait(for: "option.end-next") { !$0.text.contains("Keep going · in ") }
+            try await Task.sleep(for: .seconds(2))                     // past the quick countdown
+            #expect(screen.app.playback?.item.id == "series-000-s1-e2", "it went on by itself")
+            #expect(player.endCard?.held == true)
+        }
+
         @Test func doneForTonightClosesThePlayer() async throws {
             let screen = Screen.player(Self.episode, size: Screen.wide)
             let player = try await screen.playerController()

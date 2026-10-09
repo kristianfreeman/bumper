@@ -211,7 +211,7 @@ struct MainTabView: View {
         #elseif os(tvOS)
         // One stack around the tabs: a pushed page covers the whole screen,
         // tab bar and all, like the TV app's.
-        RoutedStack(initial: app.launchRoute) { tabs.hidesNavigationBarEntirely() }
+        RoutedStack(initial: app.launchRoute, coversRoot: true) { tabs.hidesNavigationBarEntirely() }
             .task { await loadLibraries() }
             .onChange(of: app.settings.hiddenLibraries) { _, _ in reapply() }
             .task(id: session.account.imageTag) { profileIcon = await ProfileIcon.make(session: session) }
@@ -575,12 +575,17 @@ struct RoutedStack<Root: View>: View {
     /// The stack routes from outside any page (`app.pendingRoute`) land in:
     /// with a stack per tab, the selected tab's.
     let active: Bool
+    /// The TV's one stack around the tabs: under a pushed page the tabs take
+    /// no focus. Opening a page, focus went to the hidden tab bar first and
+    /// then jumped onto the page.
+    var coversRoot = false
     let root: () -> Root
 
-    init(initial: [Route] = [], active: Bool = true, @ViewBuilder root: @escaping () -> Root) {
+    init(initial: [Route] = [], active: Bool = true, coversRoot: Bool = false, @ViewBuilder root: @escaping () -> Root) {
         _ownPath = State(initialValue: initial)
         external = nil
         self.active = active
+        self.coversRoot = coversRoot
         self.root = root
     }
 
@@ -598,6 +603,7 @@ struct RoutedStack<Root: View>: View {
     var body: some View {
         NavigationStack(path: path) {
             root()
+                .disabled(coversRoot && !path.wrappedValue.isEmpty)
                 .readsPageWidth()
                 .pageToolbar(app)
                 .navigationDestination(for: Route.self) { route in

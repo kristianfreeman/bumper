@@ -16,6 +16,11 @@ TestFlight.
   the left and Up Next down the right.
 - The chapter row under the picture is gone; About has what it's about and
   who's in it.
+- Apple TV: opening a show's page, focus lands on Play and stays there
+  (it used to hop to More and back while the episodes loaded).
+- Apple TV: the season bar, episodes and cast stop at the page's right
+  margin, and a long-running show's 30-odd seasons scroll inside the bar.
+- At the credits, moving the remote stops the countdown: it waits for you.
 - Search finds a show by its name even when lots of its episodes match too,
   and puts the closest name first ("Simpsons" finds "The Simpsons").
 

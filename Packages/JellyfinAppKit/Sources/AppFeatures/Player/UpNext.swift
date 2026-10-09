@@ -16,6 +16,8 @@ struct EndCard: Equatable {
     let instead: BaseItem?
     /// Up over the credits as they roll (else over the last frame).
     let atCredits: Bool
+    /// You moved the remote: the countdown stopped, and it waits for a choice.
+    var held = false
 }
 
 /// Up Next on the watch page: what plays after this one, and adding to it.
