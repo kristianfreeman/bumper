@@ -99,6 +99,10 @@ public final class AppSettings {
     public var maxBitrate: Int? { didSet { defaults.set(maxBitrate, forKey: "playback.maxBitrate") } }
     /// Match the TV's frame rate and dynamic range to the content.
     public var matchContent: Bool { didSet { save(matchContent, "playback.matchContent") } }
+    /// A Speakers button in the player (AirPlay speakers, a HomePod, the TV),
+    /// in place of tvOS's Control Center. This device's own: it's about
+    /// where this room's sound goes.
+    public var speakersButton: Bool { didSet { save(speakersButton, "player.speakersButton") } }
     /// Pass Dolby Atmos / multichannel bitstreams through when the receiver supports it.
     public var preferPassthrough: Bool { didSet { save(preferPassthrough, "playback.passthrough") } }
     public var subtitleMode: SubtitleMode { didSet { save(subtitleMode.rawValue, "subtitles.mode") } }
@@ -139,6 +143,7 @@ public final class AppSettings {
         downloadsOverCellular = defaults.object(forKey: "downloads.cellular") as? Bool ?? false
         downloadQuality = defaults.string(forKey: "downloads.quality") ?? "original"
         matchContent = defaults.object(forKey: "playback.matchContent") as? Bool ?? true
+        speakersButton = defaults.bool(forKey: "player.speakersButton")          // off unless chosen (a launch argument reads too)
         preferPassthrough = defaults.object(forKey: "playback.passthrough") as? Bool ?? true
         subtitleMode = SubtitleMode(rawValue: defaults.string(forKey: "subtitles.mode") ?? "") ?? .always
         subtitleScale = defaults.object(forKey: "subtitles.scale") as? Double ?? 1.0

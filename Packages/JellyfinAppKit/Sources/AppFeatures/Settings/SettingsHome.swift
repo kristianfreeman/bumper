@@ -214,6 +214,7 @@ struct SettingsView: View {
         var tiles: [SettingTile] = [
             .toggle("autoplay", "Play Next Episode", "forward.end", "Plays the next episode when the credits start.", $settings.autoplayNextEpisode),
             .toggle("intros", "Skip Intros", "forward", "Skips intros and recaps for you.", $settings.skipIntrosAutomatically),
+            .toggle("speakers", "Speakers Button", "airplay.audio", "Puts Speakers in the player, to pick AirPlay speakers or the TV.", $settings.speakersButton),
             .toggle("spoilers", "Hide Spoilers", "eye.slash", "Hides details of episodes you haven't seen.", $settings.hideSpoilers),
             .choice("music", "Theme Music", "music.note", "Plays the theme song on a show's page.",
                     options: [("off", "Off"), ("shows", "Shows"), ("all", "Shows and Movies")],
