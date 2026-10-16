@@ -28,6 +28,9 @@ TestFlight.
 - Mac: resizing the window is smooth — pages lay out in steps while you
   drag, the video settles when you pause, and nothing re-lays out under the
   player (a typical step 13 ms → 6 ms; Home's half-second freeze is gone).
+- Settings → Speakers Button: the player gets the system's speaker picker
+  (AirPlay speakers, a HomePod, the TV) — no more Control Center on the
+  Apple TV. Off unless you turn it on, and set per device.
 - Search finds a show by its name even when lots of its episodes match too,
   and puts the closest name first ("Simpsons" finds "The Simpsons").
 

@@ -9,7 +9,7 @@ import SwiftUI
 /// Background and the sleep timer (which live only here: they're about
 /// what's playing). Chapters is last, and only there for an item with some.
 enum PlayerMenu: String, CaseIterable, Hashable {
-    case subtitles, audio, playback, info, upNext, chapters
+    case subtitles, audio, playback, info, upNext, chapters, speakers
 
     var symbol: String {
         switch self {
@@ -19,6 +19,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         case .info: "info.circle"
         case .upNext: "text.line.first.and.arrowtriangle.forward"
         case .chapters: "list.bullet"
+        case .speakers: "airplay.audio"
         }
     }
 
@@ -30,6 +31,7 @@ enum PlayerMenu: String, CaseIterable, Hashable {
         case .info: "Info"
         case .upNext: "Up Next"
         case .chapters: "Chapters"
+        case .speakers: "Speakers"
         }
     }
 }
@@ -172,16 +174,22 @@ struct TransportBar: View {
                 Spacer(minLength: 0)
                 HStack(spacing: 18) {
                     ForEach(menus, id: \.self) { menu in
-                        // On (subtitles, Background, a sleep timer): a filled glyph,
-                        // not a ring — a ring read as focus.
-                        Pill(menu.title, systemImage: menu.symbol + (lit(menu) ? ".fill" : ""),
-                             detail: detail(menu), size: .small) { open(menu) }
-                            .accessibilityIdentifier("control.\(menu.rawValue)")
-                            .focused(focus, equals: .control(menu))
-                            // Down: back to the video — not while a card is open
-                            // (a press before focus has moved into the card closed it).
-                            .tvMoveCommand { if $0 == .down && openMenu == nil { leave() } }
-                            .disabled(openMenu != nil && openMenu != menu)       // a card open: focus stays in it
+                        if menu == .speakers {
+                            // The system's own picker button: it focuses and presents itself.
+                            SpeakerPickerButton(size: PillSize.small.diameter)
+                                .disabled(openMenu != nil)
+                        } else {
+                            // On (subtitles, Background, a sleep timer): a filled glyph,
+                            // not a ring — a ring read as focus.
+                            Pill(menu.title, systemImage: menu.symbol + (lit(menu) ? ".fill" : ""),
+                                 detail: detail(menu), size: .small) { open(menu) }
+                                .accessibilityIdentifier("control.\(menu.rawValue)")
+                                .focused(focus, equals: .control(menu))
+                                // Down: back to the video — not while a card is open
+                                // (a press before focus has moved into the card closed it).
+                                .tvMoveCommand { if $0 == .down && openMenu == nil { leave() } }
+                                .disabled(openMenu != nil && openMenu != menu)       // a card open: focus stays in it
+                        }
                     }
                 }
                 // The row moves as one as a pill opens to show its name (as on
@@ -210,6 +218,7 @@ struct TransportBar: View {
             switch $0 {
             case .chapters: controller.chapters.count > 1
             case .upNext: !controller.chosenUpNext.isEmpty
+            case .speakers: controller.app.settings.speakersButton
             default: true
             }
         }
@@ -615,6 +624,8 @@ struct MenuCard: View {
                 .focused(focus, equals: .option("info"))
         case .upNext:
             UpNextCard(controller: controller, focus: focus, close: close)
+        case .speakers:
+            EmptyView()                                  // no card: the system's picker opens instead
         case .chapters:
             // Each with its picture and where it starts; the one playing checked.
             let current = controller.currentChapter
@@ -675,6 +686,7 @@ struct MenuCard: View {
             }
         case .info: .option("info")
         case .upNext: .option(controller.chosenUpNext.first.map { "next-\($0.id)" } ?? "next-none")
+        case .speakers: .option("speakers-none")
         // The one playing, so Up and Down go to the ones either side.
         case .chapters: .option((controller.currentChapter ?? controller.chapters.first).map { "chapter-\($0.index)" } ?? "chapters-none")
         }

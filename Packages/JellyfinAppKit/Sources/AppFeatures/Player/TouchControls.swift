@@ -77,6 +77,12 @@ struct TouchControls: View {
                             docked ? "Full Screen" : (splitsBeside ? "Show Details Beside" : "Show Details Below"), size: 15) { split() }
                     .accessibilityIdentifier("player.layout")
             }
+            // Settings → Speakers Button: the system's speaker picker, a press away.
+            if app.settings.speakersButton {
+                SpeakerPickerButton(size: 24)                    // the system's own button, in a glass circle like the rest
+                    .frame(width: 40, height: 40)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
             // Only where this item's player can float its picture here.
             if let pip = engine.pictureInPicture, pip.isPossible || pip.isActive {
                 glassButton(pip.isActive ? "pip.exit" : "pip.enter", pip.isActive ? "Exit Picture in Picture" : "Picture in Picture", size: 15) {

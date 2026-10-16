@@ -35,6 +35,28 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["transport.playing"].exists(within: 2), "Play/Pause on the icons didn't resume")
     }
 
+    /// Settings → Speakers Button: Speakers at the end of the icons, and
+    /// pressing it opens the system's speaker picker (not a card of ours).
+    func testTheSpeakersButtonOpensTheSystemsPicker() {
+        let app = launchPlaying(2, from: "/seek", extra: ["-startAt", "40", "-player.speakersButton", "YES"])
+        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
+        let remote = XCUIRemote.shared
+        // The system's picker button, not one of ours: found by its identifier, any type.
+        let speakers = app.descendants(matching: .any).matching(identifier: "control.speakers").firstMatch
+        remote.press(.select)
+        remote.press(.up)
+        XCTAssertTrue(app.buttons["control.subtitles"].waitForFocus(2), "Up didn't reach the icons")
+        XCTAssertTrue(speakers.exists(within: 2), "no Speakers in the icons")
+        // Along to the end of the row: the picker's button is last.
+        for _ in 0..<8 { remote.press(.right); Thread.sleep(forTimeInterval: 0.25) }
+        print("focus at the end of the row: \(app.focusSummary)")
+        remote.press(.select)
+        Thread.sleep(forTimeInterval: 1.5)
+        if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/speakers-picker.png"))
+        }
+    }
+
     /// Left alone on the icons while it plays, the controls go: 8 s, 1.6 at
     /// -quickTimers' pace (from the video, 0.8).
     func testIdleControlsHideFromTheIcons() {
