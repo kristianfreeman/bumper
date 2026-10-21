@@ -152,7 +152,7 @@ private struct PlaybackSettings: View {
                 Picker("Stop Playing", selection: Binding(get: { timer.mode }, set: { mode in
                     if mode == .off { timer.reset() } else { timer.set(mode) }
                 })) {
-                    Text("Never").tag(SleepTimer.Mode.off)
+                    Text("Off").tag(SleepTimer.Mode.off)
                     ForEach(SleepTimer.presets, id: \.self) { m in Text(SleepTimer.stopTitle(m)).tag(SleepTimer.Mode.minutes(m)) }
                     Text(SleepTimer.afterTitle(controller.item.kind)).tag(SleepTimer.Mode.endOfItem)
                 }

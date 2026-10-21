@@ -145,7 +145,9 @@ struct PlayerView: View {
                                    showChrome()
                                    return true
                                }) { up in
-                    open(up ? .languages : .more)
+                    // The first press shows the controls (and what Up and
+                    // Down do); the next opens Audio & Subtitles or More.
+                    if chromeVisible { open(up ? .languages : .more) } else { showChrome() }
                 }
                 .frame(width: 0, height: 0)
             }
@@ -240,7 +242,8 @@ struct PlayerView: View {
             .onKeyPress(.space) { controller?.togglePlayPause(); showChrome(); return .handled }
             .onKeyPress(.leftArrow) { Task { await controller?.skip(by: .seconds(-10)) }; showChrome(); return .handled }
             .onKeyPress(.rightArrow) { Task { await controller?.skip(by: .seconds(10)) }; showChrome(); return .handled }
-            .onKeyPress(.downArrow) { showsMore = true; return .handled }       // as Down on the remote: More
+            // As Down on the remote: the controls first, then More.
+            .onKeyPress(.downArrow) { if chromeVisible { showsMore = true } else { showChrome() }; return .handled }
             .onKeyPress(.escape) { handleExit(); return .handled }
             #endif
             .animation(.easeInOut(duration: 0.22), value: chromeVisible)

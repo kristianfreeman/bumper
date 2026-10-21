@@ -141,10 +141,12 @@ struct ChromeScrim: View {
     }
 }
 
-/// The TV's controls: each way the remote goes, said at that edge of the
-/// screen — Up for Audio & Subtitles, Down for More, Left and Right 10 s
-/// (Right skips an intro while one plays) — over the timeline. None of it
-/// takes focus: the remote acts on the video, and Up and Down open panels.
+/// The TV's controls, in the title-safe area like the system player's: the
+/// timeline along the foot with quiet words under it — the time, More (Down)
+/// in the middle, what's left and when it ends — and Audio & Subtitles (Up)
+/// at the top. Left and Right skip 10 s, said nowhere (everyone knows); in an
+/// intro, Skip Intro sits over the timeline's end, and Right does it. None of
+/// it takes focus: the remote acts on the video, and Up and Down open panels.
 struct CompassChrome: View {
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
@@ -152,121 +154,93 @@ struct CompassChrome: View {
     let engine: any PlayerEngine
     let scrubTime: Duration?
     let scrubThumb: CGImage?
-    /// The four edges and the timeline (false: a segment's Skip alone).
+    /// The hints and the timeline (false: a segment's Skip alone).
     let full: Bool
     /// "Skip Intro" while one plays: Right does it.
     let segment: String?
 
     var body: some View {
-        ZStack {
+        let length = engine.duration ?? controller.item.runtime ?? .zero
+        VStack(spacing: 0) {
             if full {
-                EdgeLabel(side: .top, title: "Audio & Subtitles", detail: languages)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 56)
+                Hint(symbol: "chevron.up", title: "Audio & Subtitles", detail: subtitles)
                     .accessibilityIdentifier("edge.up")
-                EdgeLabel(side: .leading, title: "10 s")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 60)
-                VStack(spacing: 0) {
-                    Spacer()
-                    EdgeLabel(side: .bottom, title: "More", detail: more)
-                        .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
-                        .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
-                        .padding(.bottom, 30)
-                        .accessibilityIdentifier("edge.down")
-                    Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                             scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused, endsAt: endsAt)
-                        .padding(.horizontal, 90)
-                        .padding(.bottom, 64)
-                }
             }
-            if full || segment != nil {
-                EdgeLabel(side: .trailing, title: segment ?? "10 s", accent: segment == nil ? nil : theme.accent)
+            Spacer(minLength: 0)
+            if let segment {
+                Text(segment)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 26)
+                    .padding(.vertical, 12)
+                    .background(theme.accent, in: .capsule)
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 60)
+                    .padding(.bottom, full ? 28 : 0)
                     .accessibilityIdentifier("edge.right")
             }
+            if full {
+                Timeline(time: controller.displayTime, duration: length, scrubTime: scrubTime, scrubThumb: scrubThumb,
+                         paused: engine.status == .paused, showsTimes: false)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(controller.displayTime.clockString)
+                    Spacer()
+                    Hint(symbol: "chevron.down", title: "More", detail: more)
+                        .opacity(scrubTime == nil ? 1 : 0)
+                        .accessibilityIdentifier("edge.down")
+                    Spacer()
+                    Text(remaining(length))
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.62))
+                .padding(.top, 10)
+            }
         }
+        .allowsHitTesting(false)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(!full ? "transport.hidden" : engine.status == .paused ? "transport.paused" : "transport.playing")
     }
 
-    /// "English subtitles · English 5.1"; "Subtitles off · …".
-    private var languages: String {
-        let subtitles: String
-        if let found = controller.foundSubtitle {
-            subtitles = found.name
-        } else if let index = controller.selectedSubtitle, let stream = controller.subtitleOptions.first(where: { $0.index == index }) {
-            subtitles = TrackNames.name(stream) + " subtitles"
-        } else {
-            subtitles = "Subtitles off"
-        }
-        let audio = controller.audioOptions.first { $0.id == engine.selectedAudioTrack }.map { [$0.title, $0.detail].compactMap { $0 }.joined(separator: " ") }
-        return [subtitles, audio].compactMap { $0 }.joined(separator: " · ")
+    /// "English", "Off" — the language alone, not the track's whole label.
+    private var subtitles: String {
+        if controller.foundSubtitle != nil { return "Found" }
+        guard let index = controller.selectedSubtitle, let stream = controller.subtitleOptions.first(where: { $0.index == index }) else { return "Off" }
+        return TrackNames.language(stream)
     }
 
-    /// Its tabs — or, with a sleep timer on, when it stops.
-    private var more: String {
+    /// With a sleep timer on, when it stops.
+    private var more: String? {
         let timer = app.sleepTimer
-        let state = timer.mode == .endOfItem ? "Stops after this" : timer.shortLabel.map { "Stops in \($0)" }
-        return state ?? MorePanel.tabs(controller).map(\.title).joined(separator: " · ")
+        return timer.mode == .endOfItem ? "Stops after this" : timer.shortLabel.map { "Stops in \($0)" }
     }
 
-    /// "ends at 10:42 PM" (Untracked goes on, so no end).
-    private var endsAt: String? {
-        guard !controller.isBackground, let total = engine.duration ?? controller.item.runtime, total >= .seconds(60) else { return nil }
-        let left = max(.zero, total - controller.displayTime)
+    /// "−28:56 · Ends 10:15 PM" (playing in the background, no end).
+    private func remaining(_ length: Duration) -> String {
+        let left = max(.zero, length - controller.displayTime)
+        guard !controller.isBackground, length >= .seconds(60) else { return "−" + left.clockString }
         let end = Date.now.addingTimeInterval(left.seconds / Double(max(0.1, engine.rate)))
-        return "ends at " + end.formatted(date: .omitted, time: .shortened)
+        return "−" + left.clockString + "  ·  Ends " + end.formatted(date: .omitted, time: .shortened)
     }
 }
 
-/// One edge's words: a chevron pointing that way, what that way does, and a
-/// quieter line under it saying how things stand.
-struct EdgeLabel: View {
-    enum Side { case top, bottom, leading, trailing }
-    let side: Side
+/// A quiet word on what a press does: a small chevron the way to press, what
+/// it opens, and how it stands, set softly over the picture.
+private struct Hint: View {
+    let symbol: String
     let title: String
     var detail: String? = nil
-    /// Filled (Skip Intro): this press does something now.
-    var accent: Color? = nil
 
     var body: some View {
-        let stacked = side == .top || side == .bottom
-        let chevron = Image(systemName: symbol).font(.system(size: 24, weight: .bold)).opacity(0.7)
-        let words = VStack(alignment: stacked ? .center : .leading, spacing: 2) {
-            Text(title).font(.callout.weight(.semibold))
-            if let detail {
-                Text(detail).font(.caption).opacity(0.7).lineLimit(1)
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol).font(.caption2.weight(.bold)).opacity(0.7)
+            Text(title).fontWeight(.medium)
+            if let detail { Text(detail).opacity(0.6) }
         }
-        Group {
-            switch side {
-            case .top: VStack(spacing: 4) { chevron; words }
-            case .bottom: VStack(spacing: 4) { words; chevron }
-            case .leading: HStack(spacing: 10) { chevron; words }
-            case .trailing: HStack(spacing: 10) { words; chevron }
-            }
-        }
-        .foregroundStyle(accent == nil ? Color.white : .black)
-        .padding(.horizontal, 28)
-        .padding(.vertical, 14)
-        .background {
-            if let accent { Capsule().fill(accent) } else { Color.clear.overVideoPanel(cornerRadius: 30) }
-        }
+        .font(.caption)
+        .foregroundStyle(.white.opacity(0.75))
+        .shadow(color: .black.opacity(0.5), radius: 8)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(detail ?? "")
-        .allowsHitTesting(false)
-    }
-
-    private var symbol: String {
-        switch side {
-        case .top: "chevron.up"
-        case .bottom: "chevron.down"
-        case .leading: "chevron.left"
-        case .trailing: "chevron.right"
-        }
     }
 }
 
@@ -277,8 +251,8 @@ struct Timeline: View {
     let scrubTime: Duration?
     let scrubThumb: CGImage?
     let paused: Bool
-    /// "ends at 10:42 PM", after the time left.
-    var endsAt: String? = nil
+    /// The times under the bar (the TV sets its own, with More between them).
+    var showsTimes = true
     /// Touch and the pointer: drag along the bar, let go to seek there.
     var seek: (Duration) -> Void = { _ in }
     @State private var dragging: Duration?
@@ -321,15 +295,15 @@ struct Timeline: View {
                 #endif
             }
             .frame(height: 34)
-            HStack {
-                Text(time.clockString)
-                Spacer()
-                if paused && scrubTime == nil && Platform.isTV { Text("Swipe to scrub").foregroundStyle(.white.opacity(0.55)) }
-                Spacer()
-                Text(["−" + max(.zero, duration - time).clockString, endsAt].compactMap { $0 }.joined(separator: " · "))
+            if showsTimes {
+                HStack {
+                    Text(time.clockString)
+                    Spacer()
+                    Text("−" + max(.zero, duration - time).clockString)
+                }
+                .font(.callout.monospacedDigit().weight(.medium))
+                .foregroundStyle(.white.opacity(0.85))
             }
-            .font(.callout.monospacedDigit().weight(.medium))
-            .foregroundStyle(.white.opacity(0.85))
         }
     }
 
@@ -475,7 +449,6 @@ struct LanguagesCard: View {
         .padding(.horizontal, 10)
         .overVideoPanel(cornerRadius: 34)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 60)
         .animation(.spring(duration: 0.3), value: controller.subtitleSearch)
         .onChange(of: controller.subtitleSearch) { _, now in
             // Searching → results: focus onto the best match.
@@ -585,6 +558,14 @@ enum TrackNames {
         return s.isForced == true ? "\(name) (Forced)" : name
     }
 
+    /// "English" — the language alone (the stream's label's first part when
+    /// it has none), for saying what's on.
+    static func language(_ s: MediaStream) -> String {
+        if let code = s.language, let name = Locale.current.localizedString(forLanguageCode: code) { return name }
+        let label = s.displayTitle ?? s.title ?? "Track \(s.index)"
+        return label.components(separatedBy: " - ").first ?? label
+    }
+
     /// Only what tells two tracks apart: hearing-impaired, a title of its own.
     static func note(_ s: MediaStream) -> String? {
         let label = (s.title ?? "") + " " + (s.displayTitle ?? "")
@@ -633,12 +614,18 @@ struct MorePanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .transition(.opacity)
         }
-        .padding(.vertical, 28)
-        .padding(.horizontal, 24)
-        .overVideoPanel(cornerRadius: 34)
+        .padding(.top, 40)
+        // Pinned to the foot of the screen: the content in the title-safe
+        // area, the dark under it running to the edges.
+        .background {
+            LinearGradient(stops: [.init(color: .black.opacity(0), location: 0),
+                                   .init(color: .black.opacity(0.8), location: 0.3),
+                                   .init(color: .black.opacity(0.88), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .padding(.top, -90)
+                .ignoresSafeArea(edges: [.horizontal, .bottom])
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.horizontal, 90)
-        .padding(.bottom, 60)
         .animation(.easeInOut(duration: 0.2), value: tab)
         .onChange(of: focus.wrappedValue) { _, now in if case .tab(let t) = now { tab = t } }
         .modifier(FocusOnAppear(focus: focus, target: .tab(.info)) { now in
@@ -711,6 +698,8 @@ private struct UpNextRow: View {
         .tvScrollClipDisabled()
     }
 
+    /// Its clean art (an episode's show's, not a still), the words on the
+    /// picture over a fade deep enough to read them.
     private struct Tile: View {
         let item: BaseItem
         let title: String
@@ -718,27 +707,31 @@ private struct UpNextRow: View {
         @Environment(\.isFocused) private var focused
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 12) {
-                Artwork(item: item, kind: .landscape, width: 400)
-                    .frame(width: 400, height: 225)
-                    .clipShape(.rect(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white, lineWidth: focused ? 5 : 0))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.callout.weight(.semibold)).lineLimit(1)
-                    Text(detail).font(.caption).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
+            Artwork(item: item, kind: .backdrop, width: 400)
+                .frame(width: 400, height: 225)
+                .overlay {
+                    LinearGradient(stops: [.init(color: .clear, location: 0.25), .init(color: .black.opacity(0.88), location: 1)],
+                                   startPoint: .top, endPoint: .bottom)
                 }
-                .frame(width: 400, alignment: .leading)
-            }
-            .foregroundStyle(.white)
-            .scaleEffect(focused ? 1.06 : 1)
-            .shadowWhen(focused, color: .black.opacity(0.45), radius: 22, y: 10)
-            .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.callout.weight(.semibold)).lineLimit(1)
+                        Text(detail).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                    }
+                    .padding(18)
+                }
+                .clipShape(.rect(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white, lineWidth: focused ? 5 : 0))
+                .foregroundStyle(.white)
+                .scaleEffect(focused ? 1.06 : 1)
+                .shadowWhen(focused, color: .black.opacity(0.45), radius: 22, y: 10)
+                .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
         }
     }
 }
 
-/// Playback on the TV: Speakers (when that's on) on the left, when to stop
-/// on the right.
+/// Playback on the TV: Speakers (when that's on) and where else it can be
+/// controlled from on the left, when to stop on the right.
 private struct PlaybackOptions: View {
     let controller: PlayerController
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
@@ -757,19 +750,36 @@ private struct PlaybackOptions: View {
     var body: some View {
         let timer = app.sleepTimer
         HStack(alignment: .top, spacing: 24) {
-            if app.settings.speakersButton {
-                // The system's own picker: it focuses and presents itself
-                // (a hidden one pressed from a button of ours didn't).
-                HStack(spacing: 20) {
-                    SpeakerPickerButton(size: 66)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Speakers").font(.body)
-                        Text("Choose where the sound plays").font(.caption).foregroundStyle(.white.opacity(0.55))
+            if app.settings.speakersButton || app.settings.allowRemote {
+                VStack(alignment: .leading, spacing: 20) {
+                    if app.settings.speakersButton {
+                        // The system's own picker: it focuses and presents itself
+                        // (a hidden one pressed from a button of ours didn't).
+                        HStack(spacing: 20) {
+                            SpeakerPickerButton(size: 66)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Speakers").font(.body)
+                                Text("Choose where the sound plays").font(.caption).foregroundStyle(.white.opacity(0.55))
+                            }
+                        }
+                    }
+                    if app.settings.allowRemote {
+                        // Not a button: where else this can be played from.
+                        HStack(spacing: 20) {
+                            Image(systemName: "iphone").font(.title3).frame(width: 66)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Control this with your iPhone").font(.body)
+                                Text("Open Bumper on an iPhone or iPad on this Wi-Fi").font(.caption).foregroundStyle(.white.opacity(0.55))
+                            }
+                        }
+                        .foregroundStyle(.white.opacity(0.85))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("player.remoteHint")
                     }
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
-                .frame(width: 560, alignment: .topLeading)
+                .frame(width: 620, alignment: .topLeading)
                 .tvFocusSection()
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -778,7 +788,7 @@ private struct PlaybackOptions: View {
                     .foregroundStyle(.white.opacity(0.5))
                     .padding(.horizontal, 26)
                     .padding(.bottom, 4)
-                OptionRow(title: "Never", detail: nil, selected: !timer.isActive, id: "sleep-off", focus: focus) {
+                OptionRow(title: "Off", detail: nil, selected: !timer.isActive, id: "sleep-off", focus: focus) {
                     timer.reset()
                     close()
                 }
@@ -878,7 +888,6 @@ private struct OptionRow: View {
             .padding(.vertical, showsDetail ? 11 : 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(focused ? Color.white : selected ? Color.white.opacity(0.07) : .clear, in: .rect(cornerRadius: 18, style: .continuous))
-            .scaleEffect(focused ? 1.025 : 1)
             .shadowWhen(focused, color: .black.opacity(0.35), radius: 16, y: 6)
             .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
             .onChange(of: focused) { _, now in

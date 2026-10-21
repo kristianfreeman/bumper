@@ -20,8 +20,10 @@ final class PlaylistTests: XCTestCase {
         remote.press(.select)
         XCTAssertTrue(app.staticTexts["player.time"].exists(within: 10), "Play didn't play")
         // More's Info: what's next beside it is the playlist's second item.
-        remote.press(.down)
-        app.descendants(matching: .any)["player.more"].exists(within: 3)
+        let more = app.descendants(matching: .any)["player.more"]
+        remote.press(.down)                                          // the controls first (if they'd gone)…
+        if !more.exists(within: 1) { remote.press(.down) }           // …then More
+        more.exists(within: 3)
         let upNext = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'E2 · Chapter 2'")).firstMatch
         upNext.exists(within: 3)
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {

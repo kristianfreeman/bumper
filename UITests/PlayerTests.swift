@@ -53,6 +53,22 @@ final class PlayerTests: XCTestCase {
         }
     }
 
+    /// With the controls gone, Up and Down only bring them back; the next
+    /// press opens the panel.
+    func testTheFirstPressShowsTheControls() {
+        let app = launchPlaying(2, from: "/seek", extra: ["-startAt", "40"])
+        XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
+        let edges = app.descendants(matching: .any)["edge.up"]
+        _ = edges.exists(within: 2)
+        XCTAssertTrue(edges.gone(within: 3), "the controls didn't hide")
+        let remote = XCUIRemote.shared
+        remote.press(.down)
+        XCTAssertTrue(edges.exists(within: 2), "Down didn't bring the controls up")
+        XCTAssertFalse(app.descendants(matching: .any)["player.more"].exists, "Down opened More from an empty screen")
+        remote.press(.down)
+        XCTAssertTrue(app.descendants(matching: .any)["player.more"].exists(within: 2), "the second Down didn't open More")
+    }
+
     /// Left alone in a panel while it plays, it goes: 20 s, 4 at
     /// -quickTimers' pace (the edges alone go in 0.8).
     func testAnIdlePanelStaysLongerThenGoes() {
@@ -60,7 +76,8 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["player.time"].exists(within: 8), "it didn't play")
         let remote = XCUIRemote.shared
         let more = app.descendants(matching: .any)["player.more"]
-        remote.press(.down)
+        remote.press(.down)                                          // the controls first (if they'd gone)…
+        if !more.exists(within: 1) { remote.press(.down) }           // …then More
         XCTAssertTrue(more.exists(within: 2), "Down didn't open More")
         let opened = Date()
         XCTAssertTrue(more.gone(within: 8), "More stayed up, left alone")
@@ -93,7 +110,7 @@ final class PlayerTests: XCTestCase {
         XCTAssertTrue(remote.press(.right, in: app, atMost: 3) { playback.hasFocus }, "couldn't reach Playback")
         let fifteen = app.buttons["option.sleep-15"]
         XCTAssertTrue(fifteen.exists(within: 2), "no sleep options")
-        remote.press(.select)                                        // into Playback: Never
+        remote.press(.select)                                        // into Playback: Off
         remote.press(.down, in: app, atMost: 4) { fifteen.hasFocus }
         remote.press(.select)
         let more = app.descendants(matching: .any)["edge.down"]
