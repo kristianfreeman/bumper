@@ -7,10 +7,11 @@ import PlaybackCore
 import SwiftUI
 
 /// The player off the TV (iPhone, iPad, Mac): the system player's shape.
-/// Close and the title at the top; back, play/pause and forward in the
-/// middle; the timeline at the bottom with the subtitle and audio menus,
-/// Background and Info beside it. Glass over the picture, the system's
-/// own menus and sheets — the TV's focus-driven cards are for a remote.
+/// Close and the title at the top; back and forward 10 s and play/pause in
+/// the middle; the timeline at the bottom with Audio & Subtitles and More
+/// (Info, Up Next, Playback) beside it — the TV's Up and Down. Glass over the
+/// picture, the system's own menus and sheets — the TV's focus-driven
+/// panels are for a remote.
 struct TouchControls: View {
     @Environment(AppModel.self) private var app
     let controller: PlayerController
@@ -21,7 +22,7 @@ struct TouchControls: View {
     @Environment(\.verticalSizeClass) private var vertical
     /// Owned by the player, so they stay up when the controls hide.
     @Binding var findingSubtitles: Bool
-    @Binding var showsInfo: Bool
+    @Binding var showsMore: Bool
     /// Where they go: over the whole picture, over the split's picture (no
     /// menus row: it's in the panel below), or that row alone, in the panel.
     var style: Style = .full
@@ -32,7 +33,7 @@ struct TouchControls: View {
 
     enum Style { case full, overPicture, menus }
 
-    /// The split's (either part): Full Screen goes back, and Info is right there below.
+    /// The split's (either part): Full Screen goes back, and More is right there below.
     private var docked: Bool { style != .full }
     private var playing: Bool { engine.status != .paused }
     private var phone: Bool { Layout.device == .phone }
@@ -116,7 +117,8 @@ struct TouchControls: View {
             glassButton("gobackward.10", "Back 10 seconds", size: small) { Task { await controller.skip(by: .seconds(-10)) } }
             glassButton(playing ? "pause.fill" : "play.fill", playing ? "Pause" : "Play", size: small * 1.45) { controller.togglePlayPause() }
                 .accessibilityIdentifier("player.playPause")
-            glassButton("goforward.30", "Forward 30 seconds", size: small) { Task { await controller.skip(by: .seconds(30)) } }
+            glassButton("goforward.10", "Forward 10 seconds", size: small) { Task { await controller.skip(by: .seconds(10)) } }
+                .accessibilityIdentifier("player.forward")
         }
     }
 
@@ -131,7 +133,7 @@ struct TouchControls: View {
 
     private var timeline: some View {
         Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                 scrubTime: nil, scrubThumb: nil, paused: engine.status == .paused, chapters: controller.chapters,
+                 scrubTime: nil, scrubThumb: nil, paused: engine.status == .paused,
                  seek: { t in Task { await controller.seek(to: t) }; poke() })
     }
 
@@ -143,14 +145,16 @@ struct TouchControls: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 8)
-            subtitlesMenu
-            audioMenu
-            playbackMenu
+            languagesMenu
             if !docked {
-                glassButton("info.circle", "Info", size: 15) { showsInfo = true }
-                    .accessibilityIdentifier("control.info")
-                // Docked, they're a row of pictures in the panel below.
-                if controller.chapters.count > 1 { chaptersMenu }
+                // Docked, More is the panel below.
+                HStack(spacing: 6) {
+                    glassButton(controller.isBackground || app.sleepTimer.isActive ? "ellipsis.circle.fill" : "ellipsis.circle", "More", size: 15) { showsMore = true }
+                    if let left = app.sleepTimer.shortLabel, !phone || !short {
+                        Text(left).font(.labelText.weight(.semibold).monospacedDigit()).foregroundStyle(.white.opacity(0.85))
+                    }
+                }
+                .accessibilityIdentifier("control.more")
             }
         }
     }
@@ -163,7 +167,9 @@ struct TouchControls: View {
         return "Ends at " + end.formatted(date: .omitted, time: .shortened)
     }
 
-    private var subtitlesMenu: some View {
+    /// Audio & Subtitles: the TV's Up — the subtitles, Find Subtitles, and
+    /// the audio, in one menu.
+    private var languagesMenu: some View {
         Menu {
             Picker("Subtitles", selection: Binding(get: { controller.foundSubtitle == nil ? controller.selectedSubtitle : -2 },
                                                    set: { index in if index != -2 { Task { await controller.selectSubtitle(index) } } })) {
@@ -176,98 +182,24 @@ struct TouchControls: View {
                 }
             }
             .pickerStyle(.inline)
-            Divider()
             Button("Find Subtitles…", systemImage: "magnifyingglass") {
                 findingSubtitles = true
                 Task { await controller.findSubtitles() }
+            }
+            if !controller.audioOptions.isEmpty {
+                Picker("Audio", selection: Binding(get: { controller.engine?.selectedAudioTrack }, set: { id in if let id { Task { await controller.selectAudio(id) } } })) {
+                    ForEach(controller.audioOptions) { track in
+                        Text([track.title, track.detail ?? track.codec?.uppercased()].compactMap { $0 }.joined(separator: " · ")).tag(Int?.some(track.id))
+                    }
+                }
+                .pickerStyle(.inline)
             }
         } label: {
             glassFace(controller.selectedSubtitle != nil || controller.foundSubtitle != nil ? "captions.bubble.fill" : "captions.bubble", size: 15)
         }
         .bareMenu()
-        .accessibilityLabel("Subtitles")
-        .accessibilityIdentifier("control.subtitles")
-        .simultaneousGesture(TapGesture().onEnded { poke() })
-    }
-
-    private var audioMenu: some View {
-        Menu {
-            Picker("Audio", selection: Binding(get: { controller.engine?.selectedAudioTrack }, set: { id in if let id { Task { await controller.selectAudio(id) } } })) {
-                ForEach(controller.audioOptions) { track in
-                    Text([track.title, track.detail ?? track.codec?.uppercased()].compactMap { $0 }.joined(separator: " · ")).tag(Int?.some(track.id))
-                }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            glassFace("speaker.wave.2", size: 15)
-        }
-        .bareMenu()
-        .disabled(controller.audioOptions.count < 2)
-        .accessibilityLabel("Audio")
-        .accessibilityIdentifier("control.audio")
-        .simultaneousGesture(TapGesture().onEnded { poke() })
-    }
-
-    /// Playback: Background, and the sleep timer (only here, by what's
-    /// playing). Lit while either is on, with the time left.
-    private var playbackMenu: some View {
-        let timer = app.sleepTimer
-        let on = timer.isActive || controller.isBackground
-        return Menu {
-            Toggle(isOn: Binding(get: { controller.isBackground }, set: { controller.setBackground($0) })) {
-                Label {
-                    Text("Untracked")
-                    Text("Your progress won't be saved.")
-                } icon: { Image(systemName: "infinity") }
-            }
-            Picker("Stop Playing", selection: Binding(get: { timer.mode }, set: { mode in
-                if mode == .off { timer.reset() } else { timer.set(mode) }
-            })) {
-                Text("Never").tag(SleepTimer.Mode.off)
-                ForEach(SleepTimer.presets, id: \.self) { m in Text(SleepTimer.stopTitle(m)).tag(SleepTimer.Mode.minutes(m)) }
-                Text(SleepTimer.afterTitle(controller.item.kind)).tag(SleepTimer.Mode.endOfItem)
-            }
-            .pickerStyle(.menu)
-        } label: {
-            HStack(spacing: 6) {
-                glassFace(on ? "gearshape.fill" : "gearshape", size: 15)
-                if let left = timer.shortLabel, !phone || !short {
-                    Text(left).font(.labelText.weight(.semibold).monospacedDigit()).foregroundStyle(.white.opacity(0.85))
-                }
-            }
-        }
-        .bareMenu()
-        .accessibilityLabel("Playback")
-        .accessibilityIdentifier("control.playback")
-        .simultaneousGesture(TapGesture().onEnded { poke() })
-    }
-
-    /// Chapters: each by name and where it starts, the one playing checked.
-    /// Choosing one goes there (the one playing: back to its start).
-    private var chaptersMenu: some View {
-        let current = controller.currentChapter
-        return Menu {
-            ForEach(controller.chapters) { chapter in
-                Button {
-                    Task { await controller.seek(to: chapter.start) }
-                    poke()
-                } label: {
-                    if chapter.id == current?.id {
-                        Label { Text(chapter.name); Text(chapter.start.clockString) } icon: { Image(systemName: "checkmark") }
-                    } else {
-                        Text(chapter.name)
-                        Text(chapter.start.clockString)
-                    }
-                }
-                .accessibilityIdentifier("chapter.\(chapter.index)")
-            }
-        } label: {
-            glassFace("list.bullet", size: 15)
-        }
-        .bareMenu()
-        .accessibilityLabel("Chapters")
-        .accessibilityValue(current?.name ?? "")
-        .accessibilityIdentifier("control.chapters")
+        .accessibilityLabel("Audio & Subtitles")
+        .accessibilityIdentifier("control.languages")
         .simultaneousGesture(TapGesture().onEnded { poke() })
     }
 
@@ -344,19 +276,20 @@ struct FindSubtitlesSheet: View {
     }
 }
 
-/// Which player, which decoder, and why.
-struct InfoSheet: View {
+/// More, full screen: Info, Up Next and Playback in a sheet (the split has
+/// them in its panel).
+struct MoreSheet: View {
     let controller: PlayerController
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ScrollView { ItemAbout(controller: controller).padding(16) }
-                .navigationTitle(controller.item.kind == .episode ? "About This Episode" : "About This Film")
+            WatchPanelContent(controller: controller, showsHeader: false, opensOn: .info)
+                .navigationTitle(controller.item.name ?? "")
                 .navigationBarTitleDisplayModeInline()
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .preferredColorScheme(.dark)
     }
 }

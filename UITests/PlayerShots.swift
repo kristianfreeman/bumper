@@ -16,15 +16,14 @@ final class PlayerShots: XCTestCase {
         remote.press(.select); Thread.sleep(forTimeInterval: 0.3); shot("2-paused")
         remote.press(.right); remote.press(.right); Thread.sleep(forTimeInterval: 1.5); shot("3-scrub")
         remote.press(.menu); Thread.sleep(forTimeInterval: 0.4)
-        remote.press(.up); Thread.sleep(forTimeInterval: 0.5); shot("4-icons")
-        remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("5-subtitles")
-        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("6-audio")
-        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("7-playback")
-        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.6); shot("8-info")
-        remote.press(.menu); remote.press(.right); remote.press(.select); Thread.sleep(forTimeInterval: 0.8); shot("9-chapters")
+        remote.press(.select); Thread.sleep(forTimeInterval: 0.3); shot("4-edges")
+        remote.press(.up); Thread.sleep(forTimeInterval: 0.6); shot("5-audio-subtitles")
+        remote.press(.menu); Thread.sleep(forTimeInterval: 0.4)
+        remote.press(.down); Thread.sleep(forTimeInterval: 0.6); shot("6-more-info")
+        remote.press(.right); Thread.sleep(forTimeInterval: 0.6); shot("7-more-playback")
     }
 
-    /// The About band on an episode (with the next episode beside it).
+    /// More's Info on an episode (with the next episode beside it).
     func testAboutBand() throws {
         let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] ?? NSTemporaryDirectory()
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -33,10 +32,7 @@ final class PlayerShots: XCTestCase {
         app.launch()
         let remote = XCUIRemote.shared
         Thread.sleep(forTimeInterval: 2)
-        remote.press(.select); Thread.sleep(forTimeInterval: 0.4)
-        remote.press(.up); Thread.sleep(forTimeInterval: 0.5)
-        for _ in 0..<3 { remote.press(.right) }
-        remote.press(.select); Thread.sleep(forTimeInterval: 1.2)
+        remote.press(.down); Thread.sleep(forTimeInterval: 1.2)
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/about-episode.png"))
     }
 }

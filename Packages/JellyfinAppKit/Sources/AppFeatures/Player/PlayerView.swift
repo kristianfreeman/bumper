@@ -20,16 +20,17 @@ struct PlayerView: View {
     @Environment(\.theme) private var theme
     @State private var controller: PlayerController?
     @State private var chromeVisible = true
-    @State private var openMenu: PlayerMenu?
+    /// Up's Audio & Subtitles or Down's More (the TV).
+    @State private var openPanel: CompassPanel?
     @State private var scrubThumb: CGImage?
     @State private var flash: Flash?
     @State private var hideTask: Task<Void, Never>?
     @State private var thumbTask: Task<Void, Never>?
     /// Pinched out: the picture fills the screen (iPhone, iPad).
     @State private var fills = false
-    /// Off the TV: the Find Subtitles and Info sheets.
+    /// Off the TV: the Find Subtitles and More sheets.
     @State private var findingSubtitles = false
-    @State private var showsInfo = false
+    @State private var showsMore = false
     /// The picture full screen (false) or over the controls (true) by
     /// choice; nil goes by the space's shape. A new shape clears it.
     @State private var splitChoice: Bool?
@@ -40,11 +41,8 @@ struct PlayerView: View {
     /// The split here is side by side (an iPad on its side, a wide Mac window).
     @State private var splitsBeside = false
     @FocusState private var focus: PlayerFocus?
-    /// Focus is on the icon row: the video isn't a place to move to (Left
-    /// from the first icon went onto it, invisibly). Down goes back.
-    @State private var onControls = false
 
-    enum PlayerFocus: Hashable { case surface, skip, control(PlayerMenu), option(String) }
+    enum PlayerFocus: Hashable { case surface, skip, tab(MoreTab), option(String) }
 
     var body: some View {
         // Two halves for the type checker (one long chain was too much on
@@ -114,21 +112,21 @@ struct PlayerView: View {
                     .allowsHitTesting(false)
             }
             ChromeScrim()
-                .opacity(chromeVisible || openMenu != nil ? 1 : 0)
+                .opacity(chromeVisible || openPanel != nil ? 1 : 0)
                 .modifier(split.picture)
-            // The video's focus target (a sibling of the controls, so
-            // left/right on an icon or menu row move focus, not the video).
-            // Presses and swipes on it are read by RemoteGestures.
+            // The video's focus target (a sibling of the panels, so left/right
+            // in a panel move focus, not the video). Presses and swipes on it
+            // are read by RemoteGestures.
             Color.clear
                 .contentShape(.rect)
-                .focusable(openMenu == nil && !onControls)
+                .focusable(openPanel == nil)
                 .focused($focus, equals: .surface)
                 .modifier(split.picture)
                 .accessibilityIdentifier("player.surface")
                 #if !os(tvOS)
                 // Tap / click the picture: the controls (or a menu) come and go.
                 .onTapGesture {
-                    if openMenu != nil { closeMenu() } else if chromeVisible { chromeVisible = false } else { showChrome() }
+                    if openPanel != nil { closePanel() } else if chromeVisible { chromeVisible = false } else { showChrome() }
                 }
                 // Pinch out to fill the screen, in to see the whole picture.
                 .simultaneousGesture(MagnifyGesture().onEnded { value in
@@ -136,21 +134,31 @@ struct PlayerView: View {
                 })
                 #endif
             if let controller {
-                RemoteGestures(transport: controller.transport, active: focus == .surface && openMenu == nil,
+                RemoteGestures(transport: controller.transport, active: focus == .surface && openPanel == nil,
                                // Select with the controls down brings them up (playing on);
                                // with them up, it plays and pauses.
-                               showsControls: { if chromeVisible { return false }; showChrome(); return true }) {
-                    showChrome()
-                    focus = .control(.subtitles)
+                               showsControls: { if chromeVisible { return false }; showChrome(); return true },
+                               // Right while an intro plays skips it (the Right edge says so).
+                               skipsSegment: {
+                                   guard let segment = controller.activeSegment, controller.endCard == nil else { return false }
+                                   Task { await controller.skip(segment) }
+                                   showChrome()
+                                   return true
+                               }) { up in
+                    open(up ? .languages : .more)
                 }
                 .frame(width: 0, height: 0)
             }
             preparingOverlay
                 .modifier(split.picture)                // split: loading in the picture, the controls already below
             #if os(tvOS)
-            if chromeVisible, let controller, let engine = controller.engine {
-                TransportBar(controller: controller, engine: engine, scrubTime: controller.transport.head, scrubThumb: scrubThumb,
-                             openMenu: openMenu, focus: $focus, open: { open($0) }, leave: { backToVideo() })
+            // The edges and the timeline while the controls are up (a panel
+            // has the screen to itself); an intro's Skip on the right even
+            // when they're not.
+            let segment = controller?.endCard == nil ? controller?.activeSegment.map(label(for:)) : nil
+            if let controller, let engine = controller.engine, openPanel == nil, chromeVisible || segment != nil {
+                CompassChrome(controller: controller, engine: engine, scrubTime: controller.transport.head, scrubThumb: scrubThumb,
+                              full: chromeVisible, segment: segment)
                     .transition(.opacity)
             }
             #else
@@ -159,7 +167,7 @@ struct PlayerView: View {
                 // tapped up and fading on their own.
                 if chromeVisible {
                     TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
-                                  findingSubtitles: $findingSubtitles, showsInfo: $showsInfo, style: .overPicture,
+                                  findingSubtitles: $findingSubtitles, showsMore: $showsMore, style: .overPicture,
                                   split: { splitChoice = false })
                         .modifier(split.pictureArea)
                         .transition(.opacity)
@@ -182,22 +190,31 @@ struct PlayerView: View {
                 }
             } else if chromeVisible, let controller, let engine = controller.engine {
                 TouchControls(controller: controller, engine: engine, close: { leavePlayer() }, poke: { showChrome() },
-                              findingSubtitles: $findingSubtitles, showsInfo: $showsInfo,
+                              findingSubtitles: $findingSubtitles, showsMore: $showsMore,
                               split: canSplit ? { splitChoice = true } : nil, splitsBeside: splitsBeside)
                     .transition(.opacity)
             }
             #endif
-            if let menu = openMenu, let controller {
-                MenuCard(menu: menu, controller: controller, focus: $focus, close: { closeMenu() })
-                    .id(menu)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+            if let controller {
+                switch openPanel {
+                case .languages:
+                    LanguagesCard(controller: controller, focus: $focus, close: { closePanel() })
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                case .more:
+                    MorePanel(controller: controller, focus: $focus, close: { closePanel() })
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                case nil:
+                    EmptyView()
+                }
             }
             FlashView(flash: flash)
                 .modifier(split.pictureArea)
             PlayerNotice(words: controller?.notice)
                 .modifier(split.pictureArea)
-            skipButton(docked: split.isSplit)
+            #if !os(tvOS)
+            skipButton(docked: split.isSplit)               // the TV's is the Right edge
                 .modifier(split.pictureArea)
+            #endif
             if let controller, let card = controller.endCard {
                 EndCardView(card: card, controller: controller, focus: $focus)
                     .transition(.opacity)
@@ -222,11 +239,12 @@ struct PlayerView: View {
             .focusable()
             .onKeyPress(.space) { controller?.togglePlayPause(); showChrome(); return .handled }
             .onKeyPress(.leftArrow) { Task { await controller?.skip(by: .seconds(-10)) }; showChrome(); return .handled }
-            .onKeyPress(.rightArrow) { Task { await controller?.skip(by: .seconds(30)) }; showChrome(); return .handled }
+            .onKeyPress(.rightArrow) { Task { await controller?.skip(by: .seconds(10)) }; showChrome(); return .handled }
+            .onKeyPress(.downArrow) { showsMore = true; return .handled }       // as Down on the remote: More
             .onKeyPress(.escape) { handleExit(); return .handled }
             #endif
             .animation(.easeInOut(duration: 0.22), value: chromeVisible)
-            .animation(.spring(duration: 0.28), value: openMenu)
+            .animation(.spring(duration: 0.28), value: openPanel)
             .animation(.easeInOut(duration: 0.3), value: controller?.endCard == nil)
             .task {
                 // Back from Picture in Picture: the same playback, where it is.
@@ -253,13 +271,18 @@ struct PlayerView: View {
             .onChange(of: fills) { _, fill in controller?.engine?.setFillsScreen(fill) }
             // A new engine (AVPlayer handing over to VLCKit) keeps the choice.
             .onChange(of: controller?.engine.map { ObjectIdentifier($0) }) { _, _ in controller?.engine?.setFillsScreen(fills) }
+            #if !os(tvOS)
             .onChange(of: controller?.activeSegment?.id) { _, id in
                 if id != nil { focus = .skip } else if focus == .skip { focus = .surface }
             }
-            .onChange(of: focus) { _, now in focusChanged(now) }
-            // The end card: the controls and any open menu make way for it.
+            #endif
+            .onChange(of: focus) { _, now in
+                TraceFile.write("focus", now.map { "\($0)" } ?? "none")
+                scheduleHide()                               // every move is activity
+            }
+            // The end card: the controls and any open panel make way for it.
             .onChange(of: controller?.endCard == nil) { _, gone in
-                if !gone { openMenu = nil; chromeVisible = false } else { showChrome() }
+                if !gone { openPanel = nil; chromeVisible = false } else { showChrome() }
             }
             .onChange(of: controller?.transport.head) { _, head in updateThumbnail(for: head) }
             .onChange(of: controller?.transport.feedback) { _, feedback in
@@ -283,15 +306,14 @@ struct PlayerView: View {
                    onDismiss: { if !docked { controller?.subtitleSearch = .idle; showChrome() } }) {
                 if let controller { FindSubtitlesSheet(controller: controller) { findingSubtitles = false } }
             }
-            .sheet(isPresented: $showsInfo, onDismiss: { showChrome() }) {
-                if let controller { InfoSheet(controller: controller) }
+            .sheet(isPresented: $showsMore, onDismiss: { showChrome() }) {
+                if let controller { MoreSheet(controller: controller) }
             }
             #endif
     }
 
-    /// From the icon row back to the video: it becomes focusable again first.
-    private func backToVideo() {
-        onControls = false
+    /// Back onto the video once a panel's gone: it becomes focusable again first.
+    private func focusVideo() {
         Task { @MainActor in
             for _ in 0..<5 where focus != .surface {
                 await Task.yield()
@@ -299,17 +321,6 @@ struct PlayerView: View {
                 try? await Task.sleep(for: .milliseconds(30))
             }
         }
-    }
-
-    /// Every move is activity: the controls stay up, and go again once
-    /// they're left alone (`scheduleHide`).
-    private func focusChanged(_ now: PlayerFocus?) {
-        TraceFile.write("focus", now.map { "\($0)" } ?? "none")
-        if case .control = now {
-            onControls = true
-            chromeVisible = true
-        }
-        scheduleHide()
     }
 
     // MARK: Pieces
@@ -372,19 +383,23 @@ struct PlayerView: View {
 
     // MARK: Input
 
-    private func open(_ menu: PlayerMenu) {
-        openMenu = menu
+    /// Up or Down from the video: Audio & Subtitles, or More (not mid-scrub,
+    /// nor over the end card).
+    private func open(_ panel: CompassPanel) {
+        guard controller?.transport.isScrubbing != true, controller?.endCard == nil else { return }
+        openPanel = panel
+        chromeVisible = true
         scheduleHide()
     }
 
-    private func closeMenu() {
-        let was = openMenu
-        openMenu = nil
-        if let was { focus = .control(was) }
+    private func closePanel() {
+        openPanel = nil
+        focusVideo()
+        showChrome()
     }
 
-    /// Menu/Back: close a menu → cancel a scrub → leave the icons → hide the
-    /// controls → leave the player.
+    /// Menu/Back: close a panel → cancel a scrub → hide the controls → leave
+    /// the player.
     private func handleExit() {
         // The end card: over the credits, Menu lets them roll; at the end, it leaves.
         if let card = controller?.endCard {
@@ -392,10 +407,9 @@ struct PlayerView: View {
             return
         }
         // Found subtitles → back to the list (not out of the card).
-        if openMenu == .subtitles, let controller, controller.subtitleSearch != .idle { controller.subtitleSearch = .idle; return }
-        if openMenu != nil { closeMenu(); return }
+        if openPanel == .languages, let controller, controller.subtitleSearch != .idle { controller.subtitleSearch = .idle; return }
+        if openPanel != nil { closePanel(); return }
         if controller?.transport.cancel() == true { showChrome(); return }
-        if case .control = focus { backToVideo(); return }
         if chromeVisible && controller?.isPlaying == true { chromeVisible = false; return }
         leavePlayer()
     }
@@ -442,18 +456,17 @@ struct PlayerView: View {
         scheduleHide()
     }
 
-    /// Left alone while it plays, the controls go: 4 s from the video, 8 s
-    /// on the icons, 20 s in an open card (time to read it). Paused, they stay.
+    /// Left alone while it plays, the controls go: 4 s from the video, 20 s
+    /// in an open panel (time to read it). Paused, they stay.
     /// (A fifth of that under UI tests: `Pace`.)
     private func scheduleHide() {
         hideTask?.cancel()
-        let wait = Pace.of(openMenu != nil ? .seconds(20) : onControls ? .seconds(8) : .seconds(4))
+        let wait = Pace.of(openPanel != nil ? .seconds(20) : .seconds(4))
         hideTask = Task {
             try? await Task.sleep(for: wait)
-            guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, !findingSubtitles, !showsInfo, controller.isPlaying else { return }
-            if openMenu == .subtitles, controller.subtitleSearch != .idle { return }      // searching: wait for it
-            openMenu = nil
-            if onControls { backToVideo() }
+            guard !Task.isCancelled, let controller, !controller.transport.isScrubbing, !findingSubtitles, !showsMore, controller.isPlaying else { return }
+            if openPanel == .languages, controller.subtitleSearch != .idle { return }      // searching: wait for it
+            if openPanel != nil { openPanel = nil; focusVideo() }
             chromeVisible = false
         }
     }

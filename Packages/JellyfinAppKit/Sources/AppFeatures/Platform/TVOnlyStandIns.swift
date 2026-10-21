@@ -14,7 +14,8 @@ struct RemoteGestures: View {
     let transport: TransportModel
     let active: Bool
     var showsControls: () -> Bool = { false }
-    let onVertical: () -> Void
+    var skipsSegment: () -> Bool = { false }
+    let onVertical: (_ up: Bool) -> Void
     var body: some View { Color.clear.allowsHitTesting(false) }
 }
 

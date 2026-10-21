@@ -9,11 +9,9 @@ import Synchronization
 import Testing
 
 extension OnScreen {
-    /// The player off the TV, on the stand-in backend (UITests/PlayerTests,
-    /// iPhoneUITests/PhoneChapterTests and PhonePlayerLayoutTests: the remote,
-    /// focus, rotation and real clips stay there). `media-0` is two minutes,
-    /// with the mock's chapters: 0:00 "Arrival", 0:30 "The Harbour at
-    /// Night", 1:00 unnamed ("Chapter 03"), 1:30 "Landfall".
+    /// The player off the TV, on the stand-in backend (UITests/PlayerTests
+    /// and iPhoneUITests/PhonePlayerLayoutTests: the remote, focus, rotation
+    /// and real clips stay there). `media-0` is two minutes.
     @Suite("The player")
     struct Player {
         static let play = ["-autoplay", "media-0"]
@@ -166,11 +164,40 @@ extension OnScreen {
             #expect(player.endCard == nil)
         }
 
-        @Test func wideTheChaptersMenuNamesTheOnePlaying() async throws {
+        /// The TV's Next in Your Shows: another show you're in the middle of, its next episode.
+        @Test func nextInYourShowsPlaysAnotherShowsNextEpisode() async throws {
+            let screen = Screen.player(Self.episode, size: Screen.wide)
+            let player = try await screen.playerController()
+            try await screen.waitUntil("the next episode") { player.nextEpisode != nil }
+            var other = BaseItem(id: "series-001-s1-e3", name: "Third", kind: .episode)
+            other.seriesId = "series-001"
+            other.seriesName = "Another Show"
+            screen.app.queue.candidates = [other]
+            screen.engine?.reachEnd()
+            try await screen.wait(for: "option.end-another") { $0.text.contains("Next in your shows") && $0.text.contains("Another Show") }
+            try await screen.press("option.end-another")
+            try await screen.waitUntil("it to play") { screen.app.playback?.item.id == other.id }
+        }
+
+        // MARK: The controls
+
+        /// The TV's Up and Down: Audio & Subtitles in one menu, and More (Info,
+        /// Up Next, Playback) — no separate audio, playback, info or chapters.
+        @Test func wideAudioAndSubtitlesIsOneMenuAndMoreHasTheRest() async throws {
             let screen = Screen.player(Self.play, size: Screen.wide)
-            try await screen.wait(for: "control.chapters") { $0.text == "Arrival" }
-            screen.engine?.currentTime = .seconds(95)
-            try await screen.wait(for: "control.chapters") { $0.text == "Landfall" }
+            try await screen.wait(for: "control.languages")
+            try await screen.wait(for: "control.more")
+            for gone in ["control.subtitles", "control.audio", "control.playback", "control.info", "control.chapters"] {
+                #expect(screen.element(gone) == nil, "\(gone) is still there")
+            }
+        }
+
+        @Test func forwardSkipsTenSeconds() async throws {
+            let screen = Screen.player(Self.play, size: Screen.wide)
+            try await screen.wait(for: "player.forward")
+            screen.engine?.currentTime = .seconds(30)
+            try await screen.press("player.forward")
+            try await screen.waitUntil("10 s on") { screen.engine?.currentTime == .seconds(40) }
         }
 
         // MARK: Starting

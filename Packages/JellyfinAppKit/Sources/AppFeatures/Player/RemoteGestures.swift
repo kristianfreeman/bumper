@@ -18,8 +18,10 @@ struct RemoteGestures: UIViewRepresentable {
     let active: Bool
     /// Select: first, bring the controls up (true: done, nothing to toggle).
     var showsControls: () -> Bool = { false }
-    /// Up/down (click or swipe): bring up the icon row.
-    let onVertical: () -> Void
+    /// Right while an intro (a recap, a preview) plays: skip it (true: done).
+    var skipsSegment: () -> Bool = { false }
+    /// Up or down (click or swipe; true: up): Audio & Subtitles, or More.
+    let onVertical: (_ up: Bool) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -43,6 +45,7 @@ struct RemoteGestures: UIViewRepresentable {
         c.active = active
         c.onVertical = onVertical
         c.showsControls = showsControls
+        c.skipsSegment = skipsSegment
     }
 
     final class InstallerView: UIView {
@@ -57,8 +60,9 @@ struct RemoteGestures: UIViewRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var transport: TransportModel?
         var active = false
-        var onVertical: (() -> Void)?
+        var onVertical: ((Bool) -> Void)?
         var showsControls: (() -> Bool)?
+        var skipsSegment: (() -> Bool)?
         private var recognizers: [UIGestureRecognizer] = []
         private var playPause: PressRecognizer?
         private weak var host: UIView?
@@ -136,10 +140,10 @@ struct RemoteGestures: UIViewRepresentable {
             case .changed:
                 let dx = (t.x - lastTranslation.x) / Self.padWidth
                 lastTranslation = t
-                // A mostly-vertical swipe (not while scrubbing) brings up the icons.
+                // A mostly-vertical swipe (not while scrubbing): up or down, as a click would.
                 if !transport.isScrubbing, !verticalFired, abs(t.y) > 280, abs(t.y) > abs(t.x) * 2 {
                     verticalFired = true
-                    onVertical?()
+                    onVertical?(t.y < 0)
                     return
                 }
                 guard !verticalFired else { return }
@@ -159,7 +163,7 @@ struct RemoteGestures: UIViewRepresentable {
         private func arrowBegan(_ type: UIPress.PressType) {
             switch type {
             case .upArrow, .downArrow:
-                onVertical?()
+                onVertical?(type == .upArrow)
             case .leftArrow, .rightArrow:
                 let direction: TransportModel.Direction = type == .leftArrow ? .backward : .forward
                 holdTask?.cancel()
@@ -182,6 +186,8 @@ struct RemoteGestures: UIViewRepresentable {
             if holding {
                 holding = false
                 transport?.holdEnded()
+            } else if type == .rightArrow, transport?.isScrubbing != true, skipsSegment?() == true {
+                TraceFile.write("input", "right: skipped a segment")
             } else {
                 transport?.click(type == .leftArrow ? .backward : .forward)
             }
