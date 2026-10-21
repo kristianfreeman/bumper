@@ -12,6 +12,9 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     var title: String
     var items: [BaseItem]
     var style: Style
+    /// One row that scrolls sideways (Continue Watching, Next Up), not a grid
+    /// of two rows with "View all".
+    var scrolls = false
     var seeAll: ItemQuery?
     /// The line of copy under the title.
     var subtitle: String? = nil
@@ -113,9 +116,10 @@ final class HomeModel {
 
         var sections: [BrowseSection] = []
         let resumeItems = (try? await resume.items) ?? []
-        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, total: resumeItems.count)) }
+        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, scrolls: true, total: resumeItems.count)) }
         let nextItems = (try? await nextUp.items) ?? []
-        if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .landscape, total: nextItems.count)) }
+        // The shows' posters, big: what's next is a show, not an episode's name.
+        if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .poster, scrolls: true, total: nextItems.count)) }
         sections += latest.filter { !$0.items.isEmpty }
         // Playlists (video ones: music doesn't play here), after what's new.
         for lib in (try await views.items).filter({ $0.collectionType == "playlists" && !hidden.contains($0.id) }) {
@@ -298,8 +302,8 @@ struct EditorialHome {
             var s = section
             let words: Editorial.Copy
             switch section.id {
-            case "resume": words = copy.resume
-            case "nextup": words = copy.upNext
+            // Plain names, no line under them: what these rows are needs no copy.
+            case "resume", "nextup": words = Editorial.Copy(title: section.title, subtitle: nil)
             case let id where id.hasPrefix("playlists-"): words = Editorial.Copy(title: section.title, subtitle: section.subtitle)
             default:
                 if let arrivals = section.arrivals, let spec = section.arrivalsSpec {

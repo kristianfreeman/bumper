@@ -113,7 +113,22 @@ struct CollectionSection: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("collection.\(section.id)")
-            if section.items.isEmpty {
+            if section.scrolls, !section.items.isEmpty {
+                // One row, sideways, as far as it goes.
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
+                        ForEach(Array(section.items.enumerated()), id: \.element.id) { i, item in
+                            card(item)
+                                .accessibilityIdentifier("card.\(section.id).\(item.id)")
+                                .reportsFocus(item, row: section.id)
+                                .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
+                        }
+                    }
+                }
+                .rowInMargins()
+                .scrollIndicators(.hidden)
+                .padding(.horizontal, -Layout.horizontalMargin)        // the row keeps its own margins
+            } else if section.items.isEmpty {
                 // Loading: skeleton cards at the real size, so nothing moves when they fill in.
                 Grid(horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
                     ForEach(0..<Self.rows, id: \.self) { _ in
@@ -174,8 +189,17 @@ struct CollectionSection: View {
                     .contextMenu { ItemContextMenu(item: item) }
             }
         case .poster:
-            PosterCard(item, width: width) { app.select(item, navigate: navigate) }
+            if section.id == "nextup" {
+                // The show, and where you are in it: "S2 · E4 · 23m".
+                PosterCard(item, width: width, title: item.seriesName ?? item.name,
+                           detail: [item.episodeLabel, item.runtime.map(MetadataLine.runtimeString)].compactMap { $0 }.joined(separator: " · ")) {
+                    app.select(item, navigate: navigate)
+                }
                 .contextMenu { ItemContextMenu(item: item) }
+            } else {
+                PosterCard(item, width: width) { app.select(item, navigate: navigate) }
+                    .contextMenu { ItemContextMenu(item: item) }
+            }
         case .square:
             SquareCard(item, subtitle: item.albumArtist, progress: item.progress, width: width) { navigate(.audiobook(item.id)) }
         }

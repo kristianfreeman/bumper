@@ -54,13 +54,19 @@ public struct ProgressStrip: View {
 public struct PosterCard: View {
     let item: BaseItem
     let width: CGFloat
+    /// What it says under the poster (the item's name unless given), and a
+    /// quieter line under that.
+    var title: String? = nil
+    var detail: String? = nil
     let action: () -> Void
     @Environment(\.theme) private var theme
     @Environment(\.playedNow) private var playedNow
 
-    public init(_ item: BaseItem, width: CGFloat = Layout.posterWidth, action: @escaping () -> Void) {
+    public init(_ item: BaseItem, width: CGFloat = Layout.posterWidth, title: String? = nil, detail: String? = nil, action: @escaping () -> Void) {
         self.item = item
         self.width = width
+        self.title = title
+        self.detail = detail
         self.action = action
     }
 
@@ -75,15 +81,20 @@ public struct PosterCard: View {
                         if let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) { ProgressStrip(p).padding(12) }
                     }
                     .cardFocus()
-                Text(item.name ?? "")
-                    .font(.cardTitle)
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                    .frame(width: width, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title ?? item.name ?? "")
+                        .font(.cardTitle)
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                    if let detail {
+                        Text(detail).font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
+                    }
+                }
+                .frame(width: width, alignment: .leading)
             }
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(item.name ?? "Untitled")
+        .accessibilityLabel(title ?? item.name ?? "Untitled")
     }
 }
 
