@@ -64,6 +64,7 @@ extension View {
             .environment(\.theme, app.themes.theme)
             .environment(\.jellyfin, app.session?.client)
             .environment(\.hideSpoilers, app.settings.hideSpoilers)
+            .environment(\.playedNow, app.playedNow)
             .environment(\.downloadStore, app.downloads)
             .preferredColorScheme(app.themes.theme.colorScheme)
             .tint(app.themes.theme.accent)

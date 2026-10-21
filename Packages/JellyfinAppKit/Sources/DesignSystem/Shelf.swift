@@ -151,14 +151,14 @@ public struct ColorWash: View {
         let (wide, poster) = Self.colors(item)
         ZStack {
             theme.backgroundGradient
-            LinearGradient(colors: [wide.opacity(0.6), poster.opacity(0.28), .clear],
+            LinearGradient(colors: [wide.opacity(0.85), poster.opacity(0.45), .clear],
                            startPoint: .topTrailing, endPoint: .bottomLeading)
             if let overlay = FocusBackdrop.overlay(for: theme) {
                 Image(decorative: overlay, scale: 1).resizable()
             }
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.5), value: item?.id)
+        .animation(.easeOut(duration: 0.16), value: item?.id)          // with focus, not after it
     }
 
     /// The backdrop's colour and the poster's (each falls back to the other).

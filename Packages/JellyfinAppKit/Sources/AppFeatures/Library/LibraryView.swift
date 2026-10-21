@@ -218,6 +218,9 @@ struct LibraryView: View {
             await model.load(library: library, client: client, collections: app.collectionLibraries)
             tracker.seed(model.sections.first?.items.first)
         }
+        .onChange(of: app.watchedChanges) { _, _ in
+            Task { if let client = app.session?.client { await model.load(library: library, client: client, collections: app.collectionLibraries) } }
+        }
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "library-\(library.id)")
         .hidesNavigationBar()
     }
@@ -281,10 +284,10 @@ final class CollectionPageModel {
     /// The first page for a new filter, replacing what's shown when it lands.
     /// Opened before, the page shows what it had at once (kept on disk) and
     /// the fresh first page replaces it quietly.
-    func reload(_ filter: CollectionFilter, client: JellyfinClient) async {
+    func reload(_ filter: CollectionFilter, client: JellyfinClient, quietly: Bool = false) async {
         generation += 1
         let generation = generation
-        refreshing = true
+        refreshing = !quietly                // quietly (something marked watched): no dim
         var q = filter.query
         q.startIndex = 0
         q.limit = 100
@@ -435,6 +438,10 @@ struct CollectionPage: View {
         .task {
             guard let client = app.session?.client else { return }
             await model.loadGenres(parentId: spec.filter.base.parentId, client: client)
+        }
+        .onChange(of: app.watchedChanges) { _, _ in
+            guard spec.items == nil, let client = app.session?.client else { return }
+            Task { await model.reload(filter, client: client, quietly: true) }
         }
         .alert("What are you in the mood for?", isPresented: $asking) {
             TextField("Something funny from the 80s, under 90 minutes", text: $words)

@@ -151,11 +151,13 @@ final class FocusTracker {
     func focused(_ item: BaseItem, row: String? = nil) {
         HitchMonitor.shared.noteActivity()
         if let row, row != self.row { self.row = row }
+        // At once: the page's words and its colour wash follow focus in the
+        // same frame (the wash costs nothing; a backdrop was why this waited).
+        if featured?.id != item.id { featured = item }
         pending?.cancel()
         pending = Task { [weak self] in
             try? await Task.sleep(for: Pace.of(.milliseconds(160)))
             guard !Task.isCancelled else { return }
-            if self?.featured?.id != item.id { self?.featured = item }
             FocusTracker.onFeatured?(item)
             try? await Task.sleep(for: Pace.of(.milliseconds(190)))
             guard !Task.isCancelled else { return }
@@ -269,6 +271,10 @@ struct HomeView: View {
             if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) }
             app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(model.sections.first?.items.first)
+        }
+        // Something marked watched: Continue Watching and Next Up move on.
+        .onChange(of: app.watchedChanges) { _, _ in
+            Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) } }
         }
         // Where focus starts (only on appearing: it doesn't steer later moves,
         // which is what kept the sidebar from opening before).
@@ -503,9 +509,9 @@ struct ItemContextMenu: View {
             Button(app.queue.contains(item.id) ? "Remove from Queue" : "Add to Queue",
                    systemImage: app.queue.contains(item.id) ? "text.badge.checkmark" : "text.badge.plus") { app.toggleQueue(item) }
         }
-        Button(item.isPlayed ? "Mark Unwatched" : "Mark Watched", systemImage: item.isPlayed ? "eye.slash" : "eye") {
-            guard let client = app.session?.client else { return }
-            Task { try? await client.setPlayed(!item.isPlayed, itemId: item.id) }
+        let played = app.playedNow[item.id] ?? item.isPlayed
+        Button(played ? "Mark Unwatched" : "Mark Watched", systemImage: played ? "eye.slash" : "eye") {
+            app.setPlayed(item, !played)
         }
         Button(item.isFavorite ? "Remove Favorite" : "Favorite", systemImage: item.isFavorite ? "heart.slash" : "heart") {
             guard let client = app.session?.client else { return }
