@@ -34,17 +34,8 @@ struct QueueSection: View {
     private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(alignment: .center, spacing: 20) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Queue").font(.sectionTitle).foregroundStyle(theme.primaryText)
-                    Text(QueueWords.summary(store)).font(.detailText).foregroundStyle(theme.secondaryText)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("collection.queue")
-                Spacer()
-                QueueControls(store: store)
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            RowHeader("Queue", subtitle: QueueWords.summary(store), identifier: "collection.queue") { QueueControls(store: store) }
             // One row, like Home's others: sideways, as far as the plan goes.
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
@@ -57,10 +48,9 @@ struct QueueSection: View {
                             .modifier(FirstFocus(binding: slot.entry.id == store.timeline.first?.entry.id ? firstCardFocus : nil))
                     }
                 }
+                .scrollTargetLayout()
             }
-            .rowInMargins()
-            .scrollIndicators(.hidden)
-            .padding(.horizontal, -Layout.horizontalMargin)        // the row keeps its own margins
+            .homeRow()
         }
         .padding(.horizontal, Layout.horizontalMargin)
         .tvFocusSection()

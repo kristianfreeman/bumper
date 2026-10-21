@@ -3,13 +3,12 @@ import DesignSystem
 import JellyfinAPI
 import SwiftUI
 
-/// Home's lead: the one thing you'd most likely watch now (`HomePicks`),
-/// with Play ready, and the few others in a row under it. On the TV,
-/// moving along that row brings each one up and Select plays it; on touch
-/// and the Mac, a tap brings it up and its Play plays it.
-///
-/// Wide (TV, iPad, a big Mac window): the words beside the picture. Narrow
-/// (iPhone, a small window): the picture, then the words under it.
+/// Home's lead, nearly a screen of its own: the one thing you'd most likely
+/// watch now (`HomePicks`) big, over its picture, with Play ready — and
+/// its own short list of the others along the bottom. Moving along that
+/// list brings each one up (the TV's focus, the Mac's pointer, a tap) and
+/// selecting one plays it. Nothing else on the page changes what's up
+/// here: the rows below are their own.
 struct HomePickSection: View {
     let picks: [HomePicks.Pick]
     /// Play takes launch focus (Home's first focus) when given.
@@ -28,61 +27,99 @@ struct HomePickSection: View {
     private var compact: Bool { width < 700 }
     private var shown: HomePicks.Pick? { picks.first { $0.id == chosen } ?? picks.first }
 
+    /// Nearly the screen: the TV leaves the first row's title showing
+    /// below; elsewhere it follows the page's shape.
+    private var height: CGFloat {
+        switch Layout.device {
+        case .tv: 820
+        case .phone: 560
+        default: max(440, min(width * 0.52, 700))
+        }
+    }
+    /// The picture runs up under the page's top padding, to the edge.
+    private var bleed: CGFloat { Platform.isTV ? 110 : 18 }
+    private var listCardWidth: CGFloat { Layout.device == .tv ? 260 : compact ? 120 : 180 }
+
     var body: some View {
         if let pick = shown {
-            Group {
-                if compact { narrow(pick) } else { wide(pick) }
+            ZStack(alignment: .bottomLeading) {
+                backdrop(pick.item)
+                VStack(alignment: .leading, spacing: Platform.isTV ? 40 : 20) {
+                    // Across the whole width: Up from anywhere along the list lands on Play.
+                    words(pick)
+                        .frame(maxWidth: compact ? .infinity : width * 0.55, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tvFocusSection()
+                    if picks.count > 1 { list }
+                }
+                .padding(.bottom, Platform.isTV ? 24 : 12)
             }
+            .frame(height: height, alignment: .bottom)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.pick")
-            // On the TV a pick comes up as focus reaches its card.
+            // On the TV a pick comes up as focus reaches it in the list (only
+            // there: the rows below never change it).
             .onChange(of: tracker?.featured?.id) { _, id in
                 guard Platform.isTV, tracker?.row == Self.row, let id, picks.contains(where: { $0.id == id }) else { return }
                 chosen = id
             }
             .onChange(of: picks.map(\.id)) { _, ids in if let chosen, !ids.contains(chosen) { self.chosen = nil } }
             // Every pick's picture and logo in memory before it's brought up:
-            // moving along the row swaps drawn images, never loads them.
+            // moving along the list swaps drawn images, never loads them.
             .task(id: picks.map(\.id)) { prefetch() }
         }
     }
-
-    private var artWidth: CGFloat { compact ? width : (width * 0.46).rounded() }
 
     private func prefetch() {
         guard let client else { return }
         let logoWidth = HeroLogo.box(for: Layout.device).width
         let requests = picks.flatMap { pick in
-            [ArtworkSource.resolve(pick.item, .backdrop)?.request(client: client, pixelWidth: Int(artWidth * scale)),
-             ArtworkSource.resolve(pick.item, .logo)?.request(client: client, pixelWidth: Int(logoWidth * scale))].compactMap { $0 }
+            // The backdrop at the size FocusBackdrop asks for, so it's the same image.
+            [ArtworkSource.resolve(pick.item, .backdrop)?.request(client: client, pixelWidth: 1920),
+             ArtworkSource.resolve(pick.item, .logo)?.request(client: client, pixelWidth: Int(logoWidth * scale)),
+             ArtworkSource.resolve(pick.item, .landscape)?.request(client: client, pixelWidth: Int(listCardWidth * scale))].compactMap { $0 }
         }
         ImagePipeline.shared.prefetch(requests)
     }
 
-    // MARK: Layouts
-
-    private func wide(_ pick: HomePicks.Pick) -> some View {
-        VStack(alignment: .leading, spacing: Platform.isTV ? 44 : 28) {
-            // As tall as the picture whatever the words: nothing below moves
-            // as picks come up. A focus section across the whole width, so Up
-            // from anywhere along the row below lands on Play.
-            HStack(alignment: .center, spacing: Layout.cardSpacing * 1.5) {
-                words(pick)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                picture(pick.item, width: artWidth)
-            }
-            .frame(height: (artWidth * 9 / 16).rounded())
-            .tvFocusSection()
-            if picks.count > 1 { others(cardWidth: Platform.isTV ? 300 : 220) }
-        }
+    /// The pick's picture, edge to edge, fading into the page at the foot.
+    /// FocusBackdrop: image over image as picks change, never a dip between.
+    private func backdrop(_ item: BaseItem) -> some View {
+        FocusBackdrop(item)
+            .frame(width: width + 2 * Layout.horizontalMargin, height: height + bleed)
+            .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.62), .init(color: .clear, location: 1)],
+                                 startPoint: .top, endPoint: .bottom))
+            .clipped()
+            .padding(.horizontal, -Layout.horizontalMargin)
+            .padding(.top, -bleed)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
-    private func narrow(_ pick: HomePicks.Pick) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            picture(pick.item, width: artWidth)
-            words(pick)
-            if picks.count > 1 { others(cardWidth: 160) }
+    /// The others (and the one that's up), each with why it's here.
+    private var list: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: Layout.cardSpacing) {
+                ForEach(picks) { pick in
+                    let up = pick.id == shown?.id
+                    LandscapeCard(pick.item, width: listCardWidth, kind: .landscape, caption: pick.reason) {
+                        // Brought up already (focus, the pointer, an earlier tap): Select plays it.
+                        if Platform.isTV || up { app.play(pick.item) } else { withAnimation(.smooth(duration: 0.25)) { chosen = pick.id } }
+                    }
+                    .opacity(up ? 1 : 0.6)
+                    .animation(.easeOut(duration: 0.2), value: up)
+                    .contextMenu { ItemContextMenu(item: pick.item) }
+                    .reportsFocus(pick.item, row: Self.row)
+                    #if !os(tvOS)
+                    .onHover { inside in if inside { chosen = pick.id } }
+                    #endif
+                    .accessibilityIdentifier("card.picks.\(pick.id)")
+                }
+            }
+            .scrollTargetLayout()
         }
+        .homeRow()
+        .tvFocusSection()
     }
 
     // MARK: Parts
@@ -152,45 +189,5 @@ struct HomePickSection: View {
     static func playTitle(_ pick: HomePicks.Pick) -> String {
         guard let left = pick.minutesLeft else { return "Play" }
         return "Resume · \(MetadataLine.runtimeString(.seconds(max(1, left) * 60))) left"
-    }
-
-    /// The show's or film's own picture (never an episode's still: no spoilers).
-    private func picture(_ item: BaseItem, width: CGFloat) -> some View {
-        Artwork(item: item, kind: .backdrop, width: width)
-            .frame(width: width, height: (width * 9 / 16).rounded())
-            .overlay(alignment: .bottom) {
-                if let p = item.progress, !(app.playedNow[item.id] ?? item.isPlayed) {
-                    ProgressStrip(p).padding(.horizontal, 16).padding(.bottom, 14)
-                }
-            }
-            .clipShape(.rect(cornerRadius: theme.cardCornerRadius))
-            .accessibilityHidden(true)
-    }
-
-    /// Continue Watching: the pick and the others, each with its reason
-    /// under it; the one that's up gets Resume and Start Over above.
-    private func others(cardWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: Platform.isTV ? 4 : 8) {
-            Text("Continue Watching").font(.sectionTitle).foregroundStyle(theme.primaryText)
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: Layout.cardSpacing) {
-                    ForEach(picks) { pick in
-                        let up = pick.id == shown?.id
-                        LandscapeCard(pick.item, width: cardWidth, kind: .landscape, caption: pick.reason) {
-                            // The TV: it's already up (focus brought it), so Select plays.
-                            if Platform.isTV || up { app.play(pick.item) } else { withAnimation(.smooth(duration: 0.25)) { chosen = pick.id } }
-                        }
-                        .opacity(Platform.isTV || up ? 1 : 0.7)
-                        .contextMenu { ItemContextMenu(item: pick.item) }
-                        .reportsFocus(pick.item, row: Self.row)
-                        .accessibilityIdentifier("card.picks.\(pick.id)")
-                    }
-                }
-            }
-            .rowInMargins()
-            .scrollIndicators(.hidden)
-            .padding(.horizontal, -Layout.horizontalMargin)        // the row keeps its own margins
-        }
-        .tvFocusSection()
     }
 }

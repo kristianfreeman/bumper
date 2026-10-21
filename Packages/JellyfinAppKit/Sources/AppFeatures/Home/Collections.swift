@@ -104,15 +104,8 @@ struct CollectionSection: View {
     private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(section.title).font(.sectionTitle).foregroundStyle(theme.primaryText)
-                if let subtitle = section.subtitle {
-                    Text(subtitle).font(.sectionSubtitle).foregroundStyle(theme.secondaryText).lineLimit(2)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("collection.\(section.id)")
+        VStack(alignment: .leading, spacing: 0) {
+            RowHeader(section.title, subtitle: section.subtitle, identifier: "collection.\(section.id)")
             if section.scrolls, !section.items.isEmpty {
                 // One row, sideways, as far as it goes.
                 ScrollView(.horizontal) {
@@ -128,10 +121,9 @@ struct CollectionSection: View {
                             ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) { viewAll() }
                         }
                     }
+                    .scrollTargetLayout()
                 }
-                .rowInMargins()
-                .scrollIndicators(.hidden)
-                .padding(.horizontal, -Layout.horizontalMargin)        // the row keeps its own margins
+                .homeRow()
             } else if section.items.isEmpty {
                 // Loading: skeleton cards at the real size, so nothing moves when they fill in.
                 Grid(horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
@@ -209,6 +201,63 @@ struct CollectionSection: View {
         case .square:
             SquareCard(item, subtitle: item.albumArtist, progress: item.progress, width: width) { navigate(.audiobook(item.id)) }
         }
+    }
+}
+
+/// A row's title, and its line of copy when it has one: the one header for
+/// every row on Home and in the libraries. The gap to the cards is the same
+/// with a line or without, and on the TV it's wide enough for a focused
+/// card's lift, so the card never crowds the title.
+struct RowHeader<Trailing: View>: View {
+    let title: String
+    var subtitle: String?
+    /// The row's name for tests ("collection.resume"): on the words only,
+    /// so the controls beside them keep their own.
+    var identifier: String?
+    @ViewBuilder var trailing: () -> Trailing
+    @Environment(\.theme) private var theme
+
+    /// From the header's last line to the top of the cards.
+    static var gap: CGFloat { Platform.isTV ? 40 : 14 }
+
+    init(_ title: String, subtitle: String? = nil, identifier: String? = nil, @ViewBuilder trailing: @escaping () -> Trailing) {
+        self.title = title
+        self.subtitle = subtitle
+        self.identifier = identifier
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.sectionTitle).foregroundStyle(theme.primaryText)
+                if let subtitle {
+                    Text(subtitle).font(.sectionSubtitle).foregroundStyle(theme.secondaryText).lineLimit(2)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(identifier ?? "")
+            Spacer(minLength: 0)
+            trailing()
+        }
+        .padding(.bottom, Self.gap)
+    }
+}
+
+extension RowHeader where Trailing == EmptyView {
+    init(_ title: String, subtitle: String? = nil, identifier: String? = nil) { self.init(title, subtitle: subtitle, identifier: identifier) { EmptyView() } }
+}
+
+extension View {
+    /// A row that scrolls sideways (Home, the libraries): inside the page's
+    /// margins, its cards coming to rest on the leading margin — under the
+    /// row's title, with no cut-off card peeking in at the left. The row's
+    /// stack marks its cards with `.scrollTargetLayout()`.
+    func homeRow() -> some View {
+        scrollTargetBehavior(.viewAligned)
+            .rowInMargins()
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, -Layout.horizontalMargin)        // the row keeps its own margins
     }
 }
 

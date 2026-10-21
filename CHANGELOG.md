@@ -23,13 +23,20 @@ TestFlight.
   of another show you're watching joins Keep Going, Something Different and
   Done for Tonight, and each says how long it is, when it would end, its
   rating and what it's about.
-- Home leads with one pick: what you'd most likely carry on with now (your
-  queue, something nearly finished, the next episode), with Play ready —
-  "Resume · 18m left" and Start Over when you've started it. An episode
-  shows its show's logo and which episode it is, and Go to Episode opens it.
-- Under the pick, Continue Watching: on the Apple TV moving along it brings
-  each one up, on touch and the Mac a tap does. Late at night the short ones
-  come first. The greeting is gone: Home starts with something to watch.
+- Home opens on one pick, nearly the whole screen: what you'd most likely
+  carry on with now (your queue, something nearly finished, the next
+  episode) big over its picture, with Play ready — "Resume · 18m left" and
+  Start Over when you've started it. An episode shows its show's logo and
+  which episode it is, and Go to Episode opens it. Along its foot, its own
+  list of five: moving along it (the remote, the Mac's pointer, a tap)
+  brings each one up, and selecting it plays. Late at night the short ones
+  come first. The greeting is gone.
+- Below it, Continue Watching, Next Up and the rest are rows of their own:
+  moving along them never changes the pick.
+- Every row's title sits the same distance above its cards, with or without
+  a line under it, and clear of a focused card's lift on the Apple TV. A row
+  scrolled along comes to rest under its title, with no cut-off card at the
+  left.
 - Play from Beginning is called Start Over in a thing's menu, as it is on
   Home.
 - Home's rows are one row each, sideways, so the page is far shorter: what's

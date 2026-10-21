@@ -300,10 +300,7 @@ struct EditorialHome {
                              recentMovies: items("latest-movies"), recentShows: items("latest-tvshows"))
         self.copy = copy
         picks = Self.picks(raw, queue: queue, now: now)
-        // Continue Watching is what the pick and its row already are: with a
-        // pick, it isn't a row of its own.
-        let rows = picks.isEmpty ? raw : raw.filter { $0.id != "resume" }
-        sections = rows.map { section in
+        sections = raw.map { section in
             var s = section
             let words: Editorial.Copy
             switch section.id {

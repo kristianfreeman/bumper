@@ -31,8 +31,8 @@ public struct HomePicks: Sendable {
         public static func == (a: Self, b: Self) -> Bool { a.item.id == b.item.id && a.reason == b.reason }
     }
 
-    /// The pick and the others after it (the row under it scrolls).
-    public static let limit = 10
+    /// The pick and the others in its list.
+    public static let limit = 5
     /// Nearly done: this little left counts as finishing something.
     static let nearlyDone = 30
     /// Short enough for late at night.
