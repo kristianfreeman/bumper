@@ -28,10 +28,9 @@ struct HomePicksTests {
         let picks = HomePicks.make(now: Self.date(20), calendar: Self.calendar,
                                    queue: [Self.item("Queued")],
                                    inProgress: [Self.item("Long", minutes: 120, left: 75), Self.item("Nearly", minutes: 52, left: 12, series: "Paper Moons")],
-                                   nextUp: [Self.item("Next", minutes: 28, series: "Northern Line")],
-                                   newMovies: [Self.item("Fresh", addedDaysAgo: 1), Self.item("Old", addedDaysAgo: 40)])
-        #expect(picks.map(\.item.id) == ["Queued", "Nearly", "Next", "Long", "Fresh"])
-        #expect(picks.map(\.reason) == ["Next in your queue", "12 minutes left", "Next episode", "About an hour and a quarter left", "Arrived yesterday"])
+                                   nextUp: [Self.item("Next", minutes: 28, series: "Northern Line")])
+        #expect(picks.map(\.item.id) == ["Queued", "Nearly", "Next", "Long"])
+        #expect(picks.map(\.reason) == ["Next in your queue", "12 minutes left", "Next episode", "About an hour and a quarter left"])
     }
 
     @Test func oneEpisodePerShowAndOnlyWhatPlays() {
@@ -60,8 +59,8 @@ struct HomePicksTests {
     }
 
     @Test func stopsAtTheLimit() {
-        let many = (0..<(HomePicks.limit + 4)).map { Self.item("Film \($0)", addedDaysAgo: 2) }
-        #expect(HomePicks.make(now: Self.date(20), calendar: Self.calendar, newMovies: many).count == HomePicks.limit)
+        let many = (0..<(HomePicks.limit + 4)).map { Self.item("Film \($0)", minutes: 100, left: 50) }
+        #expect(HomePicks.make(now: Self.date(20), calendar: Self.calendar, inProgress: many).count == HomePicks.limit)
         #expect(HomePicks.make(now: Self.date(20), calendar: Self.calendar).isEmpty)
     }
 }

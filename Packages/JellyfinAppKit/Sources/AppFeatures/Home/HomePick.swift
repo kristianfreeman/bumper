@@ -90,7 +90,7 @@ struct HomePickSection: View {
     /// Why it's here, the title (its logo when there is one), and for an
     /// episode just which one — its words are spoilers and its page is the
     /// show's; for a film what it is and what it's about. Then Resume (with
-    /// what's left) and Go to.
+    /// what's left), Start Over when it's been started, and Go to.
     private func words(_ pick: HomePicks.Pick) -> some View {
         let item = pick.item
         let episode = item.kind == .episode
@@ -130,6 +130,11 @@ struct HomePickSection: View {
                 }
                 .modifier(FirstFocus(binding: playFocus))
                 .accessibilityIdentifier("home.pick.play")
+                if item.resumePosition != nil {
+                    Pill("Start Over", systemImage: "gobackward") { app.play(item, resume: false) }
+                        .pillCaption("Start Over")
+                        .accessibilityIdentifier("home.pick.startOver")
+                }
                 let goTo = episode ? "Go to Episode" : "Go to Film"
                 Pill(goTo, systemImage: "arrow.right") { navigate(.item(item)) }
                     .pillCaption(goTo)
@@ -162,10 +167,11 @@ struct HomePickSection: View {
             .accessibilityHidden(true)
     }
 
-    /// The others, each with its reason under it.
+    /// Continue Watching: the pick and the others, each with its reason
+    /// under it; the one that's up gets Resume and Start Over above.
     private func others(cardWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: Platform.isTV ? 4 : 8) {
-            Text("Or…").font(.sectionTitle).foregroundStyle(theme.primaryText)
+            Text("Continue Watching").font(.sectionTitle).foregroundStyle(theme.primaryText)
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: Layout.cardSpacing) {
                     ForEach(picks) { pick in

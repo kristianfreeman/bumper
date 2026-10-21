@@ -328,7 +328,7 @@ extension EditorialHome {
     /// From the rows Home already loaded: no requests of its own.
     static func picks(_ raw: [BrowseSection], queue: [BaseItem], now: Date = .now) -> [HomePicks.Pick] {
         func items(_ prefix: String) -> [BaseItem] { raw.filter { $0.id.hasPrefix(prefix) }.flatMap(\.items) }
-        return HomePicks.make(now: now, queue: queue, inProgress: items("resume"), nextUp: items("nextup"), newMovies: items("latest-movies"))
+        return HomePicks.make(now: now, queue: queue, inProgress: items("resume"), nextUp: items("nextup"))
     }
 }
 
@@ -529,7 +529,7 @@ struct ItemContextMenu: View {
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }
             if item.resumePosition != nil {
-                Button("Play from Beginning", systemImage: "gobackward") { app.play(item, resume: false) }
+                Button("Start Over", systemImage: "gobackward") { app.play(item, resume: false) }
                 Button("Start Over Next Time", systemImage: "arrow.counterclockwise") { app.startOverNextTime(item) }
                 Button("Remove from Continue Watching", systemImage: "minus.circle") { app.removeFromContinueWatching(item) }
             }

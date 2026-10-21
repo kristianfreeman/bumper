@@ -6,10 +6,12 @@ public import JellyfinAPI
 /// left", "Next in your queue"), in the app's written voice.
 ///
 /// Only things Play can start (a film, an episode): the pick's first button
-/// plays it. Ranked by rules, not a model — your queue, then what you're
-/// nearly done with, then the next episode of what you're watching, then the
-/// rest of what's started, then this week's films. Late at night the short
-/// ones come first. Pure and deterministic, so it's unit-tested.
+/// plays it. And only what you're carrying on with — the row under the pick
+/// is Continue Watching, so nothing new you haven't chosen (new films have
+/// their own row). Ranked by rules, not a model — your queue, then what
+/// you're nearly done with, then the next episode of what you're watching,
+/// then the rest of what's started. Late at night the short ones come
+/// first. Pure and deterministic, so it's unit-tested.
 public struct HomePicks: Sendable {
     public struct Pick: Sendable, Equatable, Identifiable {
         public var item: BaseItem
@@ -37,7 +39,7 @@ public struct HomePicks: Sendable {
     static let short = 35
 
     public static func make(now: Date = .now, calendar: Calendar = .current, queue: [BaseItem] = [], inProgress: [BaseItem] = [],
-                            nextUp: [BaseItem] = [], newMovies: [BaseItem] = [], limit: Int = Self.limit) -> [Pick] {
+                            nextUp: [BaseItem] = [], limit: Int = Self.limit) -> [Pick] {
         let words = Editorial(now: now, calendar: calendar, userName: nil)
         func left(_ item: BaseItem) -> Int? {
             guard let total = item.runTimeTicks, let pos = item.userData?.playbackPositionTicks, total > pos, pos > 0 else { return nil }
@@ -55,9 +57,6 @@ public struct HomePicks: Sendable {
         func next(_ item: BaseItem) -> Pick { left(item).map { resumable(item, $0) } ?? Pick(item: item, reason: "Next episode") }
         ranked += nextUp.filter(playable).prefix(2).map(next)
         ranked += started.filter { $0.1 > nearlyDone }.map { resumable($0.0, $0.1) }
-        let week = now.addingTimeInterval(-7 * 86_400)
-        let arrived = newMovies.filter { playable($0) && !$0.isPlayed && ($0.dateCreated ?? .distantPast) > week }
-        ranked += arrived.map { Pick(item: $0, reason: "Arrived \(words.when($0.dateCreated))") }
         ranked += nextUp.filter(playable).dropFirst(2).map(next)
         ranked += queue.filter(playable).dropFirst().map { Pick(item: $0, reason: "In your queue", minutesLeft: left($0)) }
 
