@@ -367,7 +367,12 @@ struct SettingsView: View {
 
     private func aboutTiles(_ settings: AppSettings) -> [SettingTile] {
         @Bindable var settings = settings
-        var tiles: [SettingTile] = [
+        var tiles: [SettingTile] = []
+        // The TV's sidebar has no room for you (seven tabs at most): your page is here.
+        if Platform.isTV {
+            tiles.append(.link("profile", "Profile", "person.crop.circle", "Your sleep timer, stats and sign-in.", value: app.session?.account.userName) { navigate(.profile) })
+        }
+        tiles += [
             .link("capabilities", "Device Capabilities", "cpu", Platform.isTV ? "What this Apple TV can play." : "What this \(DownloadWords.device) can play.", value: app.capabilities.hdrEligible ? "HDR" : "SDR") { navigate(.settings("capabilities")) },
             .toggle("hud", "Performance Overlay", "gauge.with.dots.needle.67percent", "Shows playback stats on screen.", $settings.showPerformanceHUD),
             .action("caches", "Clear Caches", "trash", "Frees space. Artwork reloads from your server.", value: cleared ? "Cleared" : nil) {

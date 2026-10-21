@@ -31,6 +31,14 @@ TestFlight.
 - Settings → Speakers Button: the player gets the system's speaker picker
   (AirPlay speakers, a HomePod, the TV) — no more Control Center on the
   Apple TV. Off unless you turn it on, and set per device.
+- Apple TV: the places move into the system's sidebar (press Menu or swipe
+  left from a page), with you at its top; your profile page is in Settings.
+  The top row had run off the screen.
+- Apple TV: a show's page leads with a big Play that says what it plays, and
+  up from the episodes lands on it.
+- Search asks your server one thing at a time: asked several searches at
+  once it answered wrongly ("21" found episodes, not the film). Films,
+  shows, playlists, collections and videos come before episodes.
 - Search finds a show by its name even when lots of its episodes match too,
   and puts the closest name first ("Simpsons" finds "The Simpsons").
 

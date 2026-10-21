@@ -372,17 +372,15 @@ struct MainTabView: View {
             // Every page through `page(for:)`: switching tabs re-renders this
             // view, and only an equatable page stops that reaching every page.
             Tab("Home", systemImage: "house", value: "home") { tab("home") { page(for: "home") } }
-            // The libraries as one group, as the TV app's sidebar has them (on
-            // an iPhone's tab bar the group is just its tabs).
-            TabSection("Library") {
-                ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
-                    if case .library(let view) = entry {
-                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { tab(view.id) { page(for: view.id) } }
-                    } else if case .audiobooks = entry {
-                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { tab("audiobooks") { page(for: "audiobooks") } }
-                    } else if case .more = entry {
-                        Tab("More", systemImage: "square.grid.2x2", value: "more") { tab("more") { page(for: "more") } }
-                    }
+            // Plain tabs, no TabSection: with one, tvOS's sidebar doesn't open
+            // from the remote (developer.apple.com/forums/thread/760888).
+            ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
+                if case .library(let view) = entry {
+                    Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { tab(view.id) { page(for: view.id) } }
+                } else if case .audiobooks = entry {
+                    Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { tab("audiobooks") { page(for: "audiobooks") } }
+                } else if case .more = entry {
+                    Tab("More", systemImage: "square.grid.2x2", value: "more") { tab("more") { page(for: "more") } }
                 }
             }
             if app.downloads != nil && !Self.placesInMenu {
@@ -394,28 +392,15 @@ struct MainTabView: View {
             if !Self.placesInMenu {
                 Tab("Settings", systemImage: "gearshape", value: "settings") { tab("settings") { page(for: "settings") } }
             }
-            #if os(tvOS)
-            // You, at the end of the tab bar: your picture and name, a tab like
-            // the others (Left and Right move along to it — a corner beside
-            // the bar couldn't be reached sideways: tvOS won't move focus into
-            // its tab bar from the page).
-            Tab(value: "profile") {
-                tab("profile") { ProfileView() }
-            } label: {
-                Label {
-                    Text(session.account.userName)
-                } icon: {
-                    if let avatar = profileIcon { Image(uiImage: avatar).renderingMode(.original) } else { Image(systemName: "person.crop.circle") }
-                }
-            }
-            .accessibilityIdentifier("profile.avatar")
-            #endif
         }
         // The system's sidebar: the TV's along the left (opened from the
         // page's left edge), the iPad's a bar on top that opens into one; an
         // iPhone keeps its tab bar. (The top row ran off the TV's screen with
         // four libraries, Search and Settings.)
         .tabViewStyle(.sidebarAdaptable)
+        #if os(tvOS)
+        .modifier(SidebarHeader(name: session.account.userName, avatar: profileIcon))
+        #endif
         .onChange(of: selection) { _, tab in recordOpen(tab) }
         .onChange(of: app.pendingTab) { _, tab in
             guard let tab else { return }
@@ -664,3 +649,37 @@ struct RoutedStack<Root: View>: View {
     }
 }
 
+#if os(tvOS)
+/// You at the top of the TV's sidebar: your picture and name, in sidebar-title
+/// type, not selectable. tvOS's sidebar needs a header — without one, Menu
+/// and Up from the page don't reach it and it never opens — and stops
+/// opening past seven tabs (developer.apple.com/forums/thread/769884), so
+/// you're here, not a tab (your page is in Settings → Profile).
+private struct SidebarHeader: ViewModifier {
+    let name: String
+    let avatar: UIImage?
+
+    func body(content: Content) -> some View {
+        if #available(tvOS 27.0, *) {
+            content.tabViewSidebarHeader {
+                HStack(spacing: 14) {
+                    if let avatar {
+                        Image(uiImage: avatar).renderingMode(.original).resizable().frame(width: 44, height: 44).clipShape(.circle)
+                    } else {
+                        Image(systemName: "person.crop.circle").font(.title3)
+                    }
+                    Text(name).font(.headline)
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .focusable(false)
+                .accessibilityIdentifier("sidebar.title")
+            }
+        } else {
+            content
+        }
+    }
+}
+#endif
