@@ -33,7 +33,7 @@ final class PerformanceTests: XCTestCase {
     /// Flick through every home shelf and assert smoothness + image budgets.
     func testHomeBrowsingBudgets() throws {
         let app = launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5), "Home never showed content")
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5), "Home never showed content")
 
         let remote = XCUIRemote.shared
         measure(metrics: [XCTCPUMetric(application: app), XCTMemoryMetric(application: app)], options: Self.options(iterations: 3)) {

@@ -45,15 +45,22 @@ struct QueueSection: View {
                 Spacer()
                 QueueControls(store: store)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: Layout.cardSpacing, alignment: .top), count: columns), alignment: .leading, spacing: Layout.shelfSpacing) {
-                ForEach(store.timeline.prefix(8), id: \.entry.id) { slot in
-                    LandscapeCard(slot.entry.item, width: width) { app.play(slot.entry.item) }
-                        .overlay(alignment: .topLeading) { TimeBadge(slot: slot).padding(12) }
-                        .contextMenu { ItemContextMenu(item: slot.entry.item) }
-                        .accessibilityIdentifier("card.queue.\(slot.entry.id)")
-                        .modifier(FirstFocus(binding: slot.entry.id == store.timeline.first?.entry.id ? firstCardFocus : nil))
+            // One row, like Home's others: sideways, as far as the plan goes.
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
+                    ForEach(store.timeline, id: \.entry.id) { slot in
+                        LandscapeCard(slot.entry.item, width: width) { app.play(slot.entry.item) }
+                            .overlay(alignment: .topLeading) { TimeBadge(slot: slot).padding(12) }
+                            .contextMenu { ItemContextMenu(item: slot.entry.item) }
+                            .accessibilityIdentifier("card.queue.\(slot.entry.id)")
+                            .reportsFocus(slot.entry.item, row: "queue")
+                            .modifier(FirstFocus(binding: slot.entry.id == store.timeline.first?.entry.id ? firstCardFocus : nil))
+                    }
                 }
             }
+            .rowInMargins()
+            .scrollIndicators(.hidden)
+            .padding(.horizontal, -Layout.horizontalMargin)        // the row keeps its own margins
         }
         .padding(.horizontal, Layout.horizontalMargin)
         .tvFocusSection()

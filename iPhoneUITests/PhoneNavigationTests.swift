@@ -8,7 +8,7 @@ final class PhoneNavigationTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 10))
         for i in 0..<3 {
             let tiles = app.buttons.matching(identifier: "collection.viewAll")
             var tries = 0
@@ -29,7 +29,7 @@ final class PhoneNavigationTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 10))
         let tiles = app.buttons.matching(identifier: "collection.viewAll")
         var tries = 0
         while tiles.count < 2 || !tiles.element(boundBy: 1).isHittable, tries < 12 { app.swipeUp(); tries += 1 }

@@ -123,6 +123,10 @@ struct CollectionSection: View {
                                 .reportsFocus(item, row: section.id)
                                 .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
                         }
+                        // A page of its own behind the row (what's new, playlists): at its end.
+                        if section.seeAll != nil || section.arrivalsSpec != nil || section.playlistsLibrary != nil {
+                            ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) { viewAll() }
+                        }
                     }
                 }
                 .rowInMargins()
@@ -152,11 +156,7 @@ struct CollectionSection: View {
                                         .reportsFocus(item, row: section.id)
                                         .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
                                 } else if more {
-                                    ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) {
-                                        if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) }
-                                        else if let lib = section.playlistsLibrary { navigate(.library(lib)) }
-                                        else { navigate(.grid(section.seeAllSpec)) }
-                                    }
+                                    ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) { viewAll() }
                                 }
                             }
                         }
@@ -166,6 +166,12 @@ struct CollectionSection: View {
         }
         .padding(.horizontal, Layout.horizontalMargin)
         .tvFocusSection()
+    }
+
+    private func viewAll() {
+        if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) }
+        else if let lib = section.playlistsLibrary { navigate(.library(lib)) }
+        else { navigate(.grid(section.seeAllSpec)) }
     }
 
     private var aspect: CGFloat {

@@ -5,7 +5,7 @@ import XCTest
 /// only Down was pressed). Drives only; the script judges.
 @MainActor
 final class RapidScrollTests: XCTestCase {
-    func testRapidDownOnHome() { run(["-mock", "-reset"], wait: "collection.resume") }
+    func testRapidDownOnHome() { run(["-mock", "-reset"], wait: "home.pick.play") }
     func testRapidDownOnACollectionPage() { run(["-mock", "-reset", "-route", "grid:view-movies"], wait: "filter.add") }
 
     private func run(_ args: [String], wait identifier: String) {

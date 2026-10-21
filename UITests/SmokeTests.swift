@@ -20,7 +20,7 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(play.hasFocus, "Play should take default focus on the detail page; focus is on: \(focused.exists ? "\(focused.elementType.rawValue) '\(focused.label)' id=\(focused.identifier)" : "nothing")")
 
         XCUIRemote.shared.press(.menu)
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5), "Back didn't return to Home")
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5), "Back didn't return to Home")
     }
 
     /// Down moves to the next row (the one above fades out), Up comes back —
@@ -30,7 +30,7 @@ final class SmokeTests: XCTestCase {
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
         let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5) && focused.exists(within: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5) && focused.exists(within: 5))
         app.focusSettles()
         let first = focused.identifier + focused.label
         XCUIRemote.shared.press(.down)
@@ -45,7 +45,7 @@ final class SmokeTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5))
         // First thing focused on launch should be content, not the tab bar.
         let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
         XCTAssertTrue(focused.exists(within: 5))
@@ -63,7 +63,7 @@ final class HomeCardTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-quickTimers", "-reset", "-perfHUD"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5))
         let remote = XCUIRemote.shared
         let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
         remote.press(.down, in: app, atMost: 8) { focused.identifier.hasPrefix("card.latest-movies") }   // down to the first film
@@ -82,9 +82,14 @@ final class HomeCardTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 8))
         app.focusSettles()
         let remote = XCUIRemote.shared
+        // Home opens on the pick's Play: down to the first card under it.
+        let focused = app.descendants(matching: .any).element(matching: NSPredicate(format: "hasFocus == true"))
+        remote.press(.down)
+        waitUntil(2) { focused.identifier.hasPrefix("card.") }
+        app.focusSettles()
         remote.press(.select, forDuration: 1.2)
         let details = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'See Details'")).firstMatch
         if !details.exists(within: 3) {
@@ -93,8 +98,7 @@ final class HomeCardTests: XCTestCase {
         }
         details.waitForFocus(1)                                      // the menu opens on it
         remote.press(.select)
-        let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Resume' OR label BEGINSWITH 'Play'")).firstMatch
-        XCTAssertTrue(resume.exists(within: 5), "See Details didn't open the page")
+        XCTAssertTrue(app.descendants(matching: .any)["detail.play"].exists(within: 5), "See Details didn't open the page")
         XCTAssertFalse(app.descendants(matching: .any)["player.time"].exists, "it played instead of opening the page")
     }
 }
@@ -127,7 +131,7 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(code.exists(within: 5), "no Quick Connect code")
         XCTAssertTrue(app.buttons["onboarding.user.Tester"].exists, "no profiles")
         shot(app, "onboarding-signin")
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 12), "Quick Connect didn't sign in")
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 12), "Quick Connect didn't sign in")
     }
 
     private func shot(_ app: XCUIApplication, _ name: String) {
@@ -145,7 +149,7 @@ final class TopShelfTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 8))
         let time = app.descendants(matching: .any)["player.time"]
         open("bumper://play/movie-0001", in: app, showing: time)
         XCTAssertTrue(time.exists(within: 8), "the link didn't start playback")
@@ -156,7 +160,7 @@ final class TopShelfTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 8))
         let search = app.searchFields.firstMatch, queue = app.staticTexts["Queue"]
         open("bumper://search", in: app, showing: search)
         XCTAssertTrue(search.exists(within: 5), "bumper://search didn't open Search")

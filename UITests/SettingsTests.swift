@@ -9,7 +9,7 @@ final class SettingsTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5))
         let remote = XCUIRemote.shared
         app.focusSettles()
         remote.press(.menu, movingFocusIn: app)               // content → the tabs (on Home)
