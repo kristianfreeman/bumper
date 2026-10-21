@@ -215,7 +215,9 @@ public struct PersonCard: View {
                     .clipShape(.circle)
                     // The focus sheen and shadow follow the circle: on the square
                     // frame the sheen's top edge showed as a light line above it.
+                    #if !os(macOS)
                     .contentShape(.hoverEffect, .circle)
+                    #endif
                     .cardHighlight()
                 Text(person.name ?? "").font(Layout.device == .mac ? .subheadline : .caption2).foregroundStyle(theme.primaryText).lineLimit(1)
                 Text(person.role ?? "").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
@@ -278,5 +280,26 @@ public struct Badge: View {
             .foregroundStyle(theme.primaryText)
             .padding(.horizontal, 10).padding(.vertical, 3)
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.secondaryText.opacity(0.7), lineWidth: 1.5))
+    }
+}
+
+/// A card's place while its page loads: the card's shape and its two lines,
+/// still (motion while waiting reads as flicker), so nothing moves when the
+/// real cards arrive.
+public struct PlaceholderCard: View {
+    let width: CGFloat
+    @Environment(\.theme) private var theme
+
+    public init(width: CGFloat) { self.width = width }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            RoundedRectangle(cornerRadius: theme.cardCornerRadius)
+                .fill(theme.primaryText.opacity(0.06))
+                .frame(width: width, height: width * 9 / 16)
+            RoundedRectangle(cornerRadius: 4).fill(theme.primaryText.opacity(0.06)).frame(width: width * 0.6, height: 14)
+            RoundedRectangle(cornerRadius: 4).fill(theme.primaryText.opacity(0.04)).frame(width: width * 0.35, height: 12)
+        }
+        .accessibilityHidden(true)
     }
 }

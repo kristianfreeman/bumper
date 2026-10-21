@@ -279,6 +279,8 @@ final class CollectionPageModel {
     }
 
     /// The first page for a new filter, replacing what's shown when it lands.
+    /// Opened before, the page shows what it had at once (kept on disk) and
+    /// the fresh first page replaces it quietly.
     func reload(_ filter: CollectionFilter, client: JellyfinClient) async {
         generation += 1
         let generation = generation
@@ -286,6 +288,10 @@ final class CollectionPageModel {
         var q = filter.query
         q.startIndex = 0
         q.limit = 100
+        let key = Self.cacheKey(q)
+        if items.isEmpty, let saved = await ContentCache.shared.value([BaseItem].self, for: key), generation == self.generation {
+            items = saved.filter { filter.matches($0) }
+        }
         guard let page = try? await client.items(q), generation == self.generation else {
             if generation == self.generation { refreshing = false; settled = true }
             return
@@ -301,6 +307,15 @@ final class CollectionPageModel {
         loading = false
         refreshing = false
         settled = true
+        await ContentCache.shared.store(Array(page.items.prefix(40)), for: key)
+    }
+
+    /// A key for a query that's the same at every launch (Swift's hashes aren't).
+    static func cacheKey(_ q: ItemQuery) -> String {
+        let data = (try? JSONEncoder().encode(q)) ?? Data()
+        var hash: UInt64 = 0xcbf29ce484222325                     // FNV-1a
+        for byte in data { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
+        return "collection-" + String(hash, radix: 16)
     }
 
     /// Next page: the server filters what it can; when added and length are
@@ -369,6 +384,9 @@ struct CollectionPage: View {
                         Text(lede).font(.pageLede).foregroundStyle(theme.secondaryText)
                             .frame(maxWidth: 1200, alignment: .leading)
                             .transition(.opacity)
+                    } else if spec.items == nil {
+                        // Its line, held open until the total is in: the grid doesn't jump down.
+                        Text(" ").font(.pageLede)
                     }
                     if spec.items == nil {
                         FilterSentence(filter: $filter, genres: model.genres)
@@ -380,6 +398,11 @@ struct CollectionPage: View {
                 let cardWidth = Layout.cardWidth(width, columns: columns)
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Layout.cardSpacing, alignment: .top), count: columns),
                           alignment: .leading, spacing: Layout.shelfSpacing + 8) {
+                    // Nothing yet: cards' places, still, the size the cards will be
+                    // (an empty grid filled all at once read as a flicker).
+                    if model.items.isEmpty, !model.settled {
+                        ForEach(0..<columns * 2, id: \.self) { _ in PlaceholderCard(width: cardWidth) }
+                    }
                     ForEach(model.items) { item in
                         LandscapeCard(item, width: cardWidth) { app.select(item, navigate: navigate) }
                             .contextMenu { ItemContextMenu(item: item) }
@@ -390,7 +413,7 @@ struct CollectionPage: View {
                     }
                 }
                 .tvFocusSection()
-                .opacity(model.refreshing ? 0.5 : 1)
+                .opacity(model.refreshing && model.settled ? 0.5 : 1)      // dimmed for a new filter, not the first load
                 .animation(.easeOut(duration: 0.15), value: model.refreshing)
                 if model.settled, !model.refreshing, model.items.isEmpty {
                     Text("Nothing matches. Try removing a filter.")
