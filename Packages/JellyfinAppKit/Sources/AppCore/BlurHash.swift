@@ -30,6 +30,15 @@ public enum BlurHash {
         return value
     }
 
+    /// The image's average colour (the hash's first term), 0…1 sRGB: four
+    /// characters read, nothing decoded — a page's background from it costs
+    /// nothing.
+    public static func averageColor(_ hash: String) -> (red: Double, green: Double, blue: Double)? {
+        let bytes = Array(hash.utf8)
+        guard bytes.count >= 6, let dc = decode83(bytes[2..<6]) else { return nil }
+        return (Double(dc >> 16) / 255, Double((dc >> 8) & 255) / 255, Double(dc & 255) / 255)
+    }
+
     public static func image(_ hash: String, width: Int = 32, height: Int = 32, punch: Float = 1) -> CGImage? {
         Perf.measureSync("blurhash", .blurHashDecode) {
             decode(hash, width: width, height: height, punch: punch)

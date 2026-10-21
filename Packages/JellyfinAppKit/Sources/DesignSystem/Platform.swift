@@ -234,9 +234,14 @@ extension View {
     /// their own rows do, starting and ending at the margin.
     @ViewBuilder public func rowInMargins() -> some View {
         #if os(tvOS)
-        let lift: CGFloat = 28
+        // Room inside the clip for a focused card's lift and shadow: sideways
+        // within the margins, and above and below without moving the page
+        // (the clipped shadow drew a line along the top of a cast picture).
+        let lift: CGFloat = 28, headroom: CGFloat = 36
         contentMargins(.horizontal, lift, for: .scrollContent)
+            .contentMargins(.vertical, headroom, for: .scrollContent)
             .padding(.horizontal, Layout.horizontalMargin - lift)
+            .padding(.vertical, -headroom)
         #else
         contentMargins(.horizontal, Layout.horizontalMargin, for: .scrollContent)
         #endif

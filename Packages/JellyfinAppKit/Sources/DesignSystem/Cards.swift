@@ -54,12 +54,19 @@ public struct ProgressStrip: View {
 public struct PosterCard: View {
     let item: BaseItem
     let width: CGFloat
+    /// What it says under the poster (the item's name unless given), and a
+    /// quieter line under that.
+    var title: String? = nil
+    var detail: String? = nil
     let action: () -> Void
     @Environment(\.theme) private var theme
+    @Environment(\.playedNow) private var playedNow
 
-    public init(_ item: BaseItem, width: CGFloat = Layout.posterWidth, action: @escaping () -> Void) {
+    public init(_ item: BaseItem, width: CGFloat = Layout.posterWidth, title: String? = nil, detail: String? = nil, action: @escaping () -> Void) {
         self.item = item
         self.width = width
+        self.title = title
+        self.detail = detail
         self.action = action
     }
 
@@ -71,18 +78,23 @@ public struct PosterCard: View {
                     .overlay(alignment: .topTrailing) { WatchedBadge(item: item).padding(10) }
                     .overlay(alignment: .topLeading) { DownloadedBadge(item: item).padding(10) }
                     .overlay(alignment: .bottom) {
-                        if let p = item.progress, !item.isPlayed { ProgressStrip(p).padding(12) }
+                        if let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) { ProgressStrip(p).padding(12) }
                     }
                     .cardFocus()
-                Text(item.name ?? "")
-                    .font(.cardTitle)
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                    .frame(width: width, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title ?? item.name ?? "")
+                        .font(.cardTitle)
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                    if let detail {
+                        Text(detail).font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
+                    }
+                }
+                .frame(width: width, alignment: .leading)
             }
         }
         .buttonStyle(.borderless)
-        .accessibilityLabel(item.name ?? "Untitled")
+        .accessibilityLabel(title ?? item.name ?? "Untitled")
     }
 }
 
@@ -136,6 +148,7 @@ public struct LandscapeCard: View {
     var badge: String? = nil
     let action: () -> Void
     @Environment(\.theme) private var theme
+    @Environment(\.playedNow) private var playedNow
 
     public init(_ item: BaseItem, width: CGFloat = Layout.landscapeWidth, kind: ArtworkKind = .landscape,
                 caption: String? = nil, badge: String? = nil, action: @escaping () -> Void) {
@@ -165,7 +178,7 @@ public struct LandscapeCard: View {
                 Artwork(item: item, kind: kind, width: width)
                     .frame(width: width, height: width * 9 / 16)
                     .overlay(alignment: .bottom) {
-                        if let p = item.progress, !item.isPlayed {
+                        if let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) {
                             ProgressStrip(p).padding(.horizontal, 14).padding(.bottom, 12)
                         }
                     }
@@ -198,7 +211,6 @@ public struct LandscapeCard: View {
 public struct PersonCard: View {
     let person: Person
     let action: () -> Void
-    @Environment(\.theme) private var theme
 
     public init(_ person: Person, action: @escaping () -> Void) {
         self.person = person
@@ -206,18 +218,39 @@ public struct PersonCard: View {
     }
 
     public var body: some View {
-        Button(action: action) {
+        Button(action: action) { Face(person: person) }
+            .buttonStyle(.borderless)
+    }
+
+    /// The picture, and the name and role under it. On the TV the focused
+    /// picture lifts and grows; the words move down by as much (as the
+    /// system's own cards do), so at rest they sit close under the picture
+    /// and focused they clear it.
+    private struct Face: View {
+        let person: Person
+        @Environment(\.theme) private var theme
+        @Environment(\.isFocused) private var focused
+
+        var body: some View {
             VStack(spacing: 10) {
                 Artwork(person.primaryImageTag.map { ArtworkSource(itemId: person.id, type: .primary, tag: $0, blurHash: person.imageBlurHashes?["Primary"]?[$0]) }, kind: .poster, width: Layout.castWidth)
                     .frame(width: Layout.castWidth, height: Layout.castWidth)
                     .clipShape(.circle)
+                    // The focus sheen and shadow follow the circle: on the square
+                    // frame the sheen's top edge showed as a light line above it.
+                    #if !os(macOS)
+                    .contentShape(.hoverEffect, .circle)
+                    #endif
                     .cardHighlight()
-                Text(person.name ?? "").font(Layout.device == .mac ? .subheadline : .caption2).foregroundStyle(theme.primaryText).lineLimit(1)
-                Text(person.role ?? "").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
+                VStack(spacing: 4) {
+                    Text(person.name ?? "").font(Layout.device == .mac ? .subheadline : .caption2).foregroundStyle(theme.primaryText).lineLimit(1)
+                    Text(person.role ?? "").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
+                }
+                .offset(y: Platform.isTV && focused ? Layout.castWidth * 0.07 : 0)
+                .animation(.spring(duration: 0.25), value: focused)
             }
             .frame(width: Layout.castWidth + 20)
         }
-        .buttonStyle(.borderless)
     }
 }
 
@@ -243,9 +276,10 @@ struct DownloadedBadge: View {
 struct WatchedBadge: View {
     let item: BaseItem
     @Environment(\.theme) private var theme
+    @Environment(\.playedNow) private var playedNow
 
     var body: some View {
-        if item.isPlayed {
+        if playedNow[item.id] ?? item.isPlayed {
             Image(systemName: "checkmark")
                 .font(.caption2.bold())
                 .foregroundStyle(.black)
@@ -274,4 +308,31 @@ public struct Badge: View {
             .padding(.horizontal, 10).padding(.vertical, 3)
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.secondaryText.opacity(0.7), lineWidth: 1.5))
     }
+}
+
+/// A card's place while its page loads: the card's shape and its two lines,
+/// still (motion while waiting reads as flicker), so nothing moves when the
+/// real cards arrive.
+public struct PlaceholderCard: View {
+    let width: CGFloat
+    @Environment(\.theme) private var theme
+
+    public init(width: CGFloat) { self.width = width }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            RoundedRectangle(cornerRadius: theme.cardCornerRadius)
+                .fill(theme.primaryText.opacity(0.06))
+                .frame(width: width, height: width * 9 / 16)
+            RoundedRectangle(cornerRadius: 4).fill(theme.primaryText.opacity(0.06)).frame(width: width * 0.6, height: 14)
+            RoundedRectangle(cornerRadius: 4).fill(theme.primaryText.opacity(0.04)).frame(width: width * 0.35, height: 12)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+extension EnvironmentValues {
+    /// Watched or not, as just set in the app, by item id: cards show it at
+    /// once, before the server answers or the page reloads.
+    @Entry public var playedNow: [String: Bool] = [:]
 }

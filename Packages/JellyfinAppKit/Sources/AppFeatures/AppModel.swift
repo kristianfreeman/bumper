@@ -141,6 +141,23 @@ nonisolated struct LaunchOptions: Sendable {
 @MainActor
 @Observable
 final class AppModel {
+    /// Watched or not, as set here, by item: every card shows it at once
+    /// (before the server answers or any page reloads).
+    private(set) var playedNow: [String: Bool] = [:]
+    /// Counts changes to what's been watched: Home and an open library or
+    /// collection reload quietly on each (Continue Watching and Next Up move on).
+    private(set) var watchedChanges = 0
+
+    /// Marks an item watched or not — the one way the app does it.
+    func setPlayed(_ item: BaseItem, _ played: Bool) {
+        playedNow[item.id] = played
+        guard let client = session?.client else { return }
+        Task {
+            try? await client.setPlayed(played, itemId: item.id)
+            watchedChanges += 1
+        }
+    }
+
     let options: LaunchOptions
     let settings: AppSettings
     let accounts: AccountStore

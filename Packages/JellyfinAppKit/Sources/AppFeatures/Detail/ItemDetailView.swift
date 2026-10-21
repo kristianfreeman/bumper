@@ -315,10 +315,10 @@ struct ItemDetailView: View {
                 // More first and jumping across when it did.
                 let target = model.playTarget
                 if target != nil || item.kind == .series {
-                    // Big, and saying what it plays unless you're on another of the
-                    // row's buttons: "Play S1 · E1" read as the page's point.
+                    // Saying what it plays unless you're on another of the row's
+                    // buttons: "Play S1 · E1" reads as the page's point.
                     Pill(target.map(playLabel) ?? "Play", systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill",
-                         size: Platform.isTV ? .large : .regular, prominent: true, alwaysShowsTitle: actionFocus == nil) {
+                         prominent: true, alwaysShowsTitle: actionFocus == nil) {
                         if let target { app.play(target) }
                     }
                     .pillCaption(castLink?.connectedTo.map { "On \($0)" } ?? (target?.resumePosition != nil ? "Resume" : "Play"))
@@ -467,11 +467,10 @@ struct ItemDetailView: View {
     }
 
     private func toggleWatched() {
-        guard let client = app.session?.client else { return }
         let new = !model.item.isPlayed
         model.item.userData = model.item.userData ?? UserItemData()
         model.item.userData?.played = new
-        Task { try? await client.setPlayed(new, itemId: model.item.id) }
+        app.setPlayed(model.item, new)
     }
 
     private func toggleFavorite() {

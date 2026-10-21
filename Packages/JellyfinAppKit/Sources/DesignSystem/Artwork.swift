@@ -295,10 +295,15 @@ public struct Artwork: View {
                 }
             }
             if let image {
-                Image(decorative: image, scale: scale)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
-                    .transition(.opacity)
+                // Filled within the card and cropped there: a square playlist
+                // cover in a tall poster spilled over its neighbours.
+                Color.clear.overlay {
+                    Image(decorative: image, scale: scale)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                }
+                .clipped()
+                .transition(.opacity)
             }
         }
         .task(id: settling ? nil : request) {

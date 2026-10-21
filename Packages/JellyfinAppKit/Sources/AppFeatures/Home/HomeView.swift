@@ -12,6 +12,9 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     var title: String
     var items: [BaseItem]
     var style: Style
+    /// One row that scrolls sideways (Continue Watching, Next Up), not a grid
+    /// of two rows with "View all".
+    var scrolls = false
     var seeAll: ItemQuery?
     /// The line of copy under the title.
     var subtitle: String? = nil
@@ -113,9 +116,10 @@ final class HomeModel {
 
         var sections: [BrowseSection] = []
         let resumeItems = (try? await resume.items) ?? []
-        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, total: resumeItems.count)) }
+        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, scrolls: true, total: resumeItems.count)) }
         let nextItems = (try? await nextUp.items) ?? []
-        if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .landscape, total: nextItems.count)) }
+        // The shows' posters, big: what's next is a show, not an episode's name.
+        if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .poster, scrolls: true, total: nextItems.count)) }
         sections += latest.filter { !$0.items.isEmpty }
         // Playlists (video ones: music doesn't play here), after what's new.
         for lib in (try await views.items).filter({ $0.collectionType == "playlists" && !hidden.contains($0.id) }) {
@@ -151,11 +155,13 @@ final class FocusTracker {
     func focused(_ item: BaseItem, row: String? = nil) {
         HitchMonitor.shared.noteActivity()
         if let row, row != self.row { self.row = row }
+        // At once: the page's words and its colour wash follow focus in the
+        // same frame (the wash costs nothing; a backdrop was why this waited).
+        if featured?.id != item.id { featured = item }
         pending?.cancel()
         pending = Task { [weak self] in
             try? await Task.sleep(for: Pace.of(.milliseconds(160)))
             guard !Task.isCancelled else { return }
-            if self?.featured?.id != item.id { self?.featured = item }
             FocusTracker.onFeatured?(item)
             try? await Task.sleep(for: Pace.of(.milliseconds(190)))
             guard !Task.isCancelled else { return }
@@ -213,7 +219,9 @@ struct TrackedBackdrop: View {
     /// `-perfNoBackdrop`: the theme background only (device measurements).
     private static let off = ProcessInfo.processInfo.arguments.contains("-perfNoBackdrop")
     var body: some View {
-        if Self.off { BackgroundOnly() } else { FocusBackdrop(tracker.featured) }
+        // A wash of the focused item's colours, not its backdrop: no image
+        // decoded and faded in at every focus move (the detail page has it).
+        if Self.off { BackgroundOnly() } else { ColorWash(tracker.featured) }
     }
 }
 
@@ -268,6 +276,10 @@ struct HomeView: View {
             app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(model.sections.first?.items.first)
         }
+        // Something marked watched: Continue Watching and Next Up move on.
+        .onChange(of: app.watchedChanges) { _, _ in
+            Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) } }
+        }
         // Where focus starts (only on appearing: it doesn't steer later moves,
         // which is what kept the sidebar from opening before).
         .defaultFocus($firstCardFocused, true)
@@ -290,8 +302,8 @@ struct EditorialHome {
             var s = section
             let words: Editorial.Copy
             switch section.id {
-            case "resume": words = copy.resume
-            case "nextup": words = copy.upNext
+            // Plain names, no line under them: what these rows are needs no copy.
+            case "resume", "nextup": words = Editorial.Copy(title: section.title, subtitle: nil)
             case let id where id.hasPrefix("playlists-"): words = Editorial.Copy(title: section.title, subtitle: section.subtitle)
             default:
                 if let arrivals = section.arrivals, let spec = section.arrivalsSpec {
@@ -501,9 +513,9 @@ struct ItemContextMenu: View {
             Button(app.queue.contains(item.id) ? "Remove from Queue" : "Add to Queue",
                    systemImage: app.queue.contains(item.id) ? "text.badge.checkmark" : "text.badge.plus") { app.toggleQueue(item) }
         }
-        Button(item.isPlayed ? "Mark Unwatched" : "Mark Watched", systemImage: item.isPlayed ? "eye.slash" : "eye") {
-            guard let client = app.session?.client else { return }
-            Task { try? await client.setPlayed(!item.isPlayed, itemId: item.id) }
+        let played = app.playedNow[item.id] ?? item.isPlayed
+        Button(played ? "Mark Unwatched" : "Mark Watched", systemImage: played ? "eye.slash" : "eye") {
+            app.setPlayed(item, !played)
         }
         Button(item.isFavorite ? "Remove Favorite" : "Favorite", systemImage: item.isFavorite ? "heart.slash" : "heart") {
             guard let client = app.session?.client else { return }
