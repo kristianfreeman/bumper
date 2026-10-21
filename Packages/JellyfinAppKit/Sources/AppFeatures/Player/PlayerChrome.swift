@@ -587,10 +587,6 @@ struct MenuCard: View {
             let timer = app.sleepTimer
             ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                OptionRow(title: "Untracked", detail: "Your progress won't be saved.", selected: false,
-                          id: "background", focus: focus, symbol: "infinity", trailing: controller.isBackground ? "On" : "Off", detailWhenFocused: true) {
-                    controller.setBackground(!controller.isBackground)
-                }
                 Text("Stop Playing")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))

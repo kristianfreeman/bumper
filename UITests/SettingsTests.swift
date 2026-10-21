@@ -42,10 +42,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(bitrate.exists(within: 5))
         let remote = XCUIRemote.shared
         app.focusSettles()                                    // the page scrolled to its section
-        let focused = app.focused
-        for _ in 0..<16 where !bitrate.hasFocus {
-            remote.press(focused.identifier == "setting.engine" ? .right : .down, movingFocusIn: app)      // down to Player, then across
-        }
+        for _ in 0..<6 where !bitrate.hasFocus { remote.press(.down, movingFocusIn: app) }     // the section's first tile
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {
             try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/settings-nav.png"))
         }

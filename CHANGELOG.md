@@ -7,6 +7,20 @@ TestFlight.
 
 ## Unreleased
 
+- Continue Watching only keeps what you've played lately: Settings → Keep
+  in Continue Watching (a week, a month, or forever). Anything older still
+  resumes where you left it from its page.
+- Remove from Continue Watching, in a thing's menu, takes it out on all
+  your devices until you play it again. Start Over Next Time keeps it but
+  forgets where you were.
+- Settings → Libraries: Show All and Hide All, and a line saying what's
+  left when every library is hidden.
+- Apple TV: choosing a subtitle size, font or style keeps focus on that
+  setting (it used to jump up to Libraries).
+- Settings, tidied: the Player choice is under About with the other
+  diagnostics, the Speakers Button is under Picture and Sound, and Find
+  Missing Theme Songs only shows while theme music is on.
+- Play Untracked is gone for now.
 - Up Next under the picture: what plays after this one and when each ends,
   with Add to Up Next for the rest of the show, things like it, and what's
   next in your other shows. On the Apple TV and the iPhone remote, Up Next

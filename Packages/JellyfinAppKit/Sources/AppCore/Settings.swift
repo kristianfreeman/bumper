@@ -129,6 +129,8 @@ public final class AppSettings {
     /// The phone remote: the TV answers iPhones and iPads; a phone or iPad
     /// looks for TVs. Off on either, they don't connect.
     public var allowRemote: Bool { didSet { save(allowRemote, "companion.allowRemote") } }
+    /// How long things stay in Continue Watching after they were last played.
+    public var continueWatchingWindow: ContinueWatchingWindow { didSet { save(continueWatchingWindow.rawValue, "browse.continueWatching") } }
     /// Libraries left out of the app (Settings → Libraries), by id.
     public var hiddenLibraries: Set<String> { didSet { save(Array(hiddenLibraries), "browse.hiddenLibraries") } }
     /// iPhone/iPad: downloads may use cellular data (off: Wi-Fi only).
@@ -160,6 +162,7 @@ public final class AppSettings {
         onlineThemeFallback = defaults.object(forKey: "detail.themeMusicOnline") as? Bool ?? true
         hideSpoilers = defaults.object(forKey: "browse.hideSpoilers") as? Bool ?? true
         hiddenLibraries = Set(defaults.stringArray(forKey: "browse.hiddenLibraries") ?? [])
+        continueWatchingWindow = ContinueWatchingWindow(rawValue: defaults.string(forKey: "browse.continueWatching") ?? "") ?? .week
         disableTranscoding = defaults.object(forKey: "playback.disableTranscoding") as? Bool ?? false
         allowRemote = defaults.object(forKey: "companion.allowRemote") as? Bool ?? true
     }
@@ -192,6 +195,7 @@ public final class AppSettings {
         set(\.onlineThemeFallback, defaults.object(forKey: "detail.themeMusicOnline") as? Bool ?? true)
         set(\.hideSpoilers, defaults.object(forKey: "browse.hideSpoilers") as? Bool ?? true)
         set(\.hiddenLibraries, Set(defaults.stringArray(forKey: "browse.hiddenLibraries") ?? []))
+        set(\.continueWatchingWindow, ContinueWatchingWindow(rawValue: defaults.string(forKey: "browse.continueWatching") ?? "") ?? .week)
         set(\.disableTranscoding, defaults.object(forKey: "playback.disableTranscoding") as? Bool ?? false)
     }
 }

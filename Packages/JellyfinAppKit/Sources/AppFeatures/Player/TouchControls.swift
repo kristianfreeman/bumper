@@ -208,18 +208,12 @@ struct TouchControls: View {
         .simultaneousGesture(TapGesture().onEnded { poke() })
     }
 
-    /// Playback: Background, and the sleep timer (only here, by what's
+    /// Playback: the sleep timer (only here, by what's
     /// playing). Lit while either is on, with the time left.
     private var playbackMenu: some View {
         let timer = app.sleepTimer
         let on = timer.isActive || controller.isBackground
         return Menu {
-            Toggle(isOn: Binding(get: { controller.isBackground }, set: { controller.setBackground($0) })) {
-                Label {
-                    Text("Untracked")
-                    Text("Your progress won't be saved.")
-                } icon: { Image(systemName: "infinity") }
-            }
             Picker("Stop Playing", selection: Binding(get: { timer.mode }, set: { mode in
                 if mode == .off { timer.reset() } else { timer.set(mode) }
             })) {

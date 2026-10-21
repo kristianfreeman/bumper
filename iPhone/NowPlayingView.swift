@@ -156,10 +156,6 @@ struct TrackControls: View, Equatable {
                 control("speaker.wave.2", playing.audio?.first { $0.id == playing.audioTrack }?.title ?? "Audio")
             }
             .disabled((playing.audio?.count ?? 0) < 2)
-            Button { model.send(.setUntracked(!(playing.untracked ?? false))) } label: {
-                control("infinity", "Untracked", on: playing.untracked == true)
-            }
-            .accessibilityValue(playing.untracked == true ? "On" : "Off")
             Menu {
                 Picker("Stop Playing", selection: Binding(get: { playing.sleep ?? .off }, set: { model.send(.setSleep($0)) })) {
                     Text("Never").tag(CompanionSleep.off)

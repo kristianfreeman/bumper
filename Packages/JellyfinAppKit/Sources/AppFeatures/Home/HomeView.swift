@@ -59,7 +59,7 @@ final class HomeModel {
     private(set) var localNetworkBlocked = false
     private(set) var loadedOnce = false
 
-    func load(_ session: UserSession, usage: [String: Double] = [:], hidden: Set<String> = []) async {
+    func load(_ session: UserSession, usage: [String: Double] = [:], hidden: Set<String> = [], continueWatching: ContinueWatchingFilter = .init()) async {
         let key = "home-\(session.id)"
         if sections.isEmpty, let cached = await ContentCache.shared.value([BrowseSection].self, for: key), !cached.isEmpty {
             BlurHashCache.shared.prewarm(cached.flatMap(\.items))
@@ -67,7 +67,7 @@ final class HomeModel {
             LaunchClock.markFirstContent()
         }
         do {
-            let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client, usage: usage, hidden: hidden) }
+            let fresh = try await Perf.measure("home.load", .homeLoad) { try await Self.fetch(session.client, usage: usage, hidden: hidden, continueWatching: continueWatching) }
             BlurHashCache.shared.prewarm(fresh.flatMap(\.items))
             if fresh != sections { sections = fresh }
             TopShelfWriter.update(fresh, client: session.client, usage: usage)
@@ -83,7 +83,8 @@ final class HomeModel {
     }
 
     /// All home rows in parallel: total latency ≈ the slowest single request.
-    nonisolated static func fetch(_ client: JellyfinClient, usage: [String: Double] = [:], hidden: Set<String> = []) async throws -> [BrowseSection] {
+    nonisolated static func fetch(_ client: JellyfinClient, usage: [String: Double] = [:], hidden: Set<String> = [],
+                                  continueWatching: ContinueWatchingFilter = .init()) async throws -> [BrowseSection] {
         // More than a row shows: the rest is behind "View all".
         async let resume = client.resumeItems(limit: 50)
         async let nextUp = client.nextUp(limit: 50)
@@ -115,7 +116,8 @@ final class HomeModel {
         }
 
         var sections: [BrowseSection] = []
-        let resumeItems = (try? await resume.items) ?? []
+        // Not played lately, or removed: Settings → Keep in Continue Watching.
+        let resumeItems = continueWatching.apply((try? await resume.items) ?? [])
         if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, scrolls: true, total: resumeItems.count)) }
         let nextItems = (try? await nextUp.items) ?? []
         // The shows' posters, big: what's next is a show, not an episode's name.
@@ -261,7 +263,7 @@ struct HomeView: View {
                     Text("\(Brand.displayName) needs Local Network access to reach \(app.session?.server.name ?? "your server"). Turn it on in \(Platform.isMac ? "System Settings → Privacy & Security → Local Network" : "Settings → Privacy & Security → Local Network"), then try again.")
                 } actions: {
                     if let url = LocalNetworkAccess.settingsURL { Button("Open Settings") { openURL(url) }.buttonStyle(.borderedProminent) }
-                    Button("Try Again") { Task { if let s = app.session { await model.load(s, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) } } }
+                    Button("Try Again") { Task { if let s = app.session { await model.load(s, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter) } } }
                 }
             } else if let error = model.error {
                 ContentUnavailableView("Can’t Reach Your Server", systemImage: "wifi.exclamationmark", description: Text(error))
@@ -272,13 +274,13 @@ struct HomeView: View {
         .environment(\.focusTracker, tracker)
         .task {
             tracker.onDwell = { [app] item in Self.prefetch(item, app: app) }
-            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) }
+            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter) }
             app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(model.sections.first?.items.first)
         }
         // Something marked watched: Continue Watching and Next Up move on.
         .onChange(of: app.watchedChanges) { _, _ in
-            Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) } }
+            Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter) } }
         }
         // Where focus starts (only on appearing: it doesn't steer later moves,
         // which is what kept the sidebar from opening before).
@@ -502,13 +504,12 @@ struct ItemContextMenu: View {
 
     var body: some View {
         Button(item.kind == .episode ? "Episode Details" : "See Details", systemImage: "info.circle") { navigate(.item(item)) }
-        if [.series, .episode, .movie].contains(item.kind) {
-            Button("Play Untracked", systemImage: "infinity") { app.playInBackground(item) }
-        }
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }
             if item.resumePosition != nil {
                 Button("Play from Beginning", systemImage: "gobackward") { app.play(item, resume: false) }
+                Button("Start Over Next Time", systemImage: "arrow.counterclockwise") { app.startOverNextTime(item) }
+                Button("Remove from Continue Watching", systemImage: "minus.circle") { app.removeFromContinueWatching(item) }
             }
             Button(app.queue.contains(item.id) ? "Remove from Queue" : "Add to Queue",
                    systemImage: app.queue.contains(item.id) ? "text.badge.checkmark" : "text.badge.plus") { app.toggleQueue(item) }

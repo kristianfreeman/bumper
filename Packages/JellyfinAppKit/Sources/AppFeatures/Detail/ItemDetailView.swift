@@ -357,12 +357,6 @@ struct ItemDetailView: View {
                     .pillCaption("Queue")
                     .focused($actionFocus, equals: "queue")
                     .accessibilityIdentifier("detail.queue")
-                if item.kind == .series || item.kind == .movie {
-                    // On a loop, not marking anything watched (a show from a random episode).
-                    Pill("Untracked", systemImage: "infinity", size: size) { app.playInBackground(item) }
-                        .focused($actionFocus, equals: "background")
-                        .accessibilityIdentifier("detail.background")
-                }
             }
             if let trailer = model.trailer {
                 Pill("Trailer", systemImage: "movieclapper", size: size) { play(trailer) }

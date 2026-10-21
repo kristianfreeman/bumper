@@ -58,7 +58,7 @@ struct SettingsView: View {
                 guard let start else { return }
                 // Focus decides where a tvOS page sits: put it in the section
                 // (scrolling alone is undone by focus landing on Sign Out).
-                let first = ["watching": "autoplay", "libraries": app.libraryPlan?.libraries.first(where: \.placement.canShow).map { "library.\($0.id)" } ?? "", "subtitles": "subMode", "picture": "engine", "audiobooks": "rate", "about": "capabilities"][start]
+                let first = ["watching": "autoplay", "libraries": app.libraryPlan?.libraries.first(where: \.placement.canShow).map { "library.\($0.id)" } ?? "", "subtitles": "subMode", "picture": "bitrate", "audiobooks": "rate", "about": "capabilities"][start]
                 Task {
                     for _ in 0..<6 {
                         try? await Task.sleep(for: .milliseconds(80))
@@ -78,11 +78,7 @@ struct SettingsView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settings").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
-            Text("Everything in one place. Switches flip where they are; choices open right here.")
-                .font(.title3).foregroundStyle(theme.secondaryText)
-        }
+        Text("Settings").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
     }
 
     // MARK: Libraries
@@ -90,12 +86,32 @@ struct SettingsView: View {
     /// A switch for every library the app plays (libraries of things it
     /// can't play — e-books, comics — aren't listed at all).
     private func libraryTiles(_ settings: AppSettings) -> [SettingTile] {
-        let libraries: [SidebarPlan.Library] = app.libraryPlan?.libraries ?? []
-        return libraries.filter { $0.placement.canShow }.map { lib -> SettingTile in
+        let shown = shownLibraries
+        return shown.map { lib -> SettingTile in
             SettingTile.toggle("library.\(lib.id)", lib.item.name ?? "Library", Self.symbol(for: lib.item), libraryLine(lib),
                     Binding(get: { !settings.hiddenLibraries.contains(lib.id) },
                             set: { shown in if shown { settings.hiddenLibraries.remove(lib.id) } else { settings.hiddenLibraries.insert(lib.id) } }))
-        }
+        } + (shown.count < 2 ? [] : [
+            .action("libraries.showAll", "Show All", "eye", "Every library, back where it goes.", value: nil) {
+                settings.hiddenLibraries.subtract(shown.map(\.id))
+            },
+            .action("libraries.hideAll", "Hide All", "eye.slash", "Just Home and Search.", value: nil) {
+                settings.hiddenLibraries.formUnion(shown.map(\.id))
+            },
+        ])
+    }
+
+    /// The libraries the app can show (hidden or not).
+    private var shownLibraries: [SidebarPlan.Library] {
+        (app.libraryPlan?.libraries ?? []).filter { $0.placement.canShow }
+    }
+
+    /// What's left when every library is hidden: said, so an empty sidebar
+    /// isn't a surprise.
+    private func librariesLede(_ settings: AppSettings) -> String {
+        let all = shownLibraries.map(\.id)
+        guard !all.isEmpty, settings.hiddenLibraries.isSuperset(of: all) else { return "Choose which libraries show up." }
+        return "Every library is hidden: you'll have Home and Search, with Continue Watching and Next Up from all of them."
     }
 
     /// "612 films", "12 collections · on the Movies page", "Hidden" — what's
@@ -148,7 +164,7 @@ struct SettingsView: View {
         let tiles = libraryTiles(settings)
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: 24) {
-                SectionTitle(title: "Libraries", lede: "Choose which libraries show up.")
+                SectionTitle(title: "Libraries", lede: librariesLede(settings))
                 TileGrid(tiles: tiles, columns: columns) { tileView($0) }
             }
             .tvFocusSection()
@@ -214,7 +230,12 @@ struct SettingsView: View {
         var tiles: [SettingTile] = [
             .toggle("autoplay", "Play Next Episode", "forward.end", "Plays the next episode when the credits start.", $settings.autoplayNextEpisode),
             .toggle("intros", "Skip Intros", "forward", "Skips intros and recaps for you.", $settings.skipIntrosAutomatically),
-            .toggle("speakers", "Speakers Button", "airplay.audio", "Puts Speakers in the player, to pick AirPlay speakers or the TV.", $settings.speakersButton),
+            .choice("continue", "Keep in Continue Watching", "clock.arrow.circlepath", "After that, it leaves the row (it still resumes).",
+                    options: ContinueWatchingWindow.allCases.map { ($0.rawValue, $0.title) },
+                    current: settings.continueWatchingWindow.rawValue) {
+                        settings.continueWatchingWindow = ContinueWatchingWindow(rawValue: $0) ?? .week
+                        app.continueWatchingChanged()
+                    },
             .toggle("spoilers", "Hide Spoilers", "eye.slash", "Hides details of episodes you haven't seen.", $settings.hideSpoilers),
             .choice("music", "Theme Music", "music.note", "Plays the theme song on a show's page.",
                     options: [("off", "Off"), ("shows", "Shows"), ("all", "Shows and Movies")],
@@ -222,8 +243,10 @@ struct SettingsView: View {
                         settings.playThemeMusic = v != "off"
                         settings.themeMusicForMovies = v == "all"
                     },
-            .toggle("themesOnline", "Find Missing Theme Songs", "globe", "Looks online when your server has none.", $settings.onlineThemeFallback),
         ]
+        if settings.playThemeMusic {
+            tiles.append(.toggle("themesOnline", "Find Missing Theme Songs", "globe", "Looks online when your server has none.", $settings.onlineThemeFallback))
+        }
         // The phone remote (no Mac: it neither answers nor looks for TVs).
         if !Platform.isMac {
             tiles.append(Platform.isTV
@@ -236,15 +259,13 @@ struct SettingsView: View {
     private func pictureTiles(_ settings: AppSettings) -> [SettingTile] {
         @Bindable var settings = settings
         return [
-            .choice("engine", "Player", "play.rectangle", engineHelp(settings.enginePreference),
-                    options: [(EnginePreference.automatic.rawValue, "Automatic"), (EnginePreference.vlc.rawValue, "Always VLCKit")],
-                    current: settings.enginePreference.rawValue) { settings.enginePreference = EnginePreference(rawValue: $0) ?? .automatic },
             .choice("bitrate", "Maximum Bitrate", "speedometer", "Your server lowers anything above this.",
                     options: bitrateOptions.map { (bitrateKey($0), bitrateTitle($0)) },
                     current: bitrateKey(settings.maxBitrate)) { settings.maxBitrate = Int($0) },
             .toggle("match", "Match Frame Rate and Range", "tv", Self.matchDetail(on: settings.matchContent), $settings.matchContent),
             .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio straight to your receiver.", $settings.preferPassthrough),
             .toggle("noTranscode", "Disable Transcoding", "bolt.slash", "Never asks your server to convert. Some videos won't play.", $settings.disableTranscoding),
+            .toggle("speakers", "Speakers Button", "airplay.audio", "Puts Speakers in the player, to pick AirPlay speakers or the TV.", $settings.speakersButton),
         ]
     }
 
@@ -374,6 +395,9 @@ struct SettingsView: View {
         }
         tiles += [
             .link("capabilities", "Device Capabilities", "cpu", Platform.isTV ? "What this Apple TV can play." : "What this \(DownloadWords.device) can play.", value: app.capabilities.hdrEligible ? "HDR" : "SDR") { navigate(.settings("capabilities")) },
+            .choice("engine", "Player", "play.rectangle", engineHelp(settings.enginePreference),
+                    options: [(EnginePreference.automatic.rawValue, "Automatic"), (EnginePreference.vlc.rawValue, "Always VLCKit")],
+                    current: settings.enginePreference.rawValue) { settings.enginePreference = EnginePreference(rawValue: $0) ?? .automatic },
             .toggle("hud", "Performance Overlay", "gauge.with.dots.needle.67percent", "Shows playback stats on screen.", $settings.showPerformanceHUD),
             .action("caches", "Clear Caches", "trash", "Frees space. Artwork reloads from your server.", value: cleared ? "Cleared" : nil) {
                 Task { await ImagePipeline.shared.removeAll(); await ContentCache.shared.removeAll(); cleared = true }
@@ -403,13 +427,17 @@ struct SettingsView: View {
 
     private func close(focusing id: String? = nil) {
         let target = id ?? editing
-        editing = nil
-        preview = nil
+        // Focus goes back to the tile while the row is still there: a row
+        // that goes first takes focus with it, and tvOS picks somewhere else
+        // (up past the subtitle preview, into Libraries).
+        if let target { focus = .tile(target) }
         Task {
-            // The closing row takes focus with it: put it back on the tile.
-            for _ in 0..<6 {
+            try? await Task.sleep(for: .milliseconds(60))
+            editing = nil
+            preview = nil
+            for _ in 0..<3 {
                 try? await Task.sleep(for: .milliseconds(40))
-                if let target { focus = .tile(target) }
+                if let target, focus != .tile(target) { focus = .tile(target) }
             }
         }
     }
@@ -735,7 +763,7 @@ extension SettingsView {
             Section {
                 ForEach(tiles) { row($0) }
             } header: { Text("Libraries") } footer: {
-                Text("Hidden libraries stay on your server.")
+                Text(librariesLede(settings) + " Hidden libraries stay on your server.")
             }
             .id("libraries")
         }

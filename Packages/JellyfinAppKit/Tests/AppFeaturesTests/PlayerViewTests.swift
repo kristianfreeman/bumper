@@ -192,13 +192,6 @@ extension OnScreen {
             }
         }
 
-        @Test func untrackedFromAPagePlaysSayingSo() async throws {
-            let screen = Screen(route: "item:movie-0001")
-            try await screen.press("detail.background")
-            try await screen.wait(for: "player.backgroundTag")
-            #expect(screen.app.playback?.background == true)
-        }
-
         // MARK: Low memory (VLCKit's ASS)
 
         /// The typeset clip, with a threshold no device has: the memory

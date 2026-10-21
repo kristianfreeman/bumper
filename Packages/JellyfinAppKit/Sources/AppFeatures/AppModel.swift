@@ -158,6 +158,64 @@ final class AppModel {
         }
     }
 
+    /// Continue Watching: what the user removed (id → when), the same on
+    /// every device of the account (Jellyfin keeps it beside the queue).
+    /// Playing a thing again brings it back.
+    private(set) var removedFromContinueWatching: [String: Date] = [:]
+
+    /// What Home builds Continue Watching with.
+    var continueWatchingFilter: ContinueWatchingFilter {
+        ContinueWatchingFilter(removed: removedFromContinueWatching, window: settings.continueWatchingWindow)
+    }
+
+    /// Home builds the row again (the window changed).
+    func continueWatchingChanged() { watchedChanges += 1 }
+
+    func removeFromContinueWatching(_ item: BaseItem) {
+        removedFromContinueWatching[item.id] = .now
+        saveRemoved()
+        Task { await syncContinueWatching() }
+        watchedChanges += 1
+    }
+
+    /// Keeps it in Continue Watching, from the start: the server forgets
+    /// where it was left.
+    func startOverNextTime(_ item: BaseItem) {
+        guard let client = session?.client else { return }
+        Task {
+            try? await client.updatePlaybackPosition(itemId: item.id, ticks: 0, lastPlayed: item.userData?.lastPlayedDate ?? .now)
+            watchedChanges += 1
+        }
+    }
+
+    private static let removedKey = "bumper.continueWatching.removed"
+    private var removedDefaultsKey: String? { session.map { "continueWatching.removed.\($0.id)" } }
+
+    private func loadRemoved() {
+        removedFromContinueWatching = ContinueWatching.decode(removedDefaultsKey.flatMap { defaults.string(forKey: $0) })
+    }
+
+    private func saveRemoved() {
+        if let key = removedDefaultsKey { defaults.set(ContinueWatching.encode(removedFromContinueWatching), forKey: key) }
+    }
+
+    /// Ours and the server's together; the server gets anything it lacks.
+    private func syncContinueWatching() async {
+        guard let client = session?.client, !options.mock else { return }
+        guard let prefs = try? await client.customPreferences() else { return }
+        let theirs = ContinueWatching.decode(prefs[Self.removedKey])
+        let merged = ContinueWatching.merge(removedFromContinueWatching, theirs)
+        if merged != removedFromContinueWatching {
+            removedFromContinueWatching = merged
+            saveRemoved()
+            watchedChanges += 1
+        }
+        if merged != theirs {
+            do { try await client.setCustomPreferences([Self.removedKey: ContinueWatching.encode(merged)]) }
+            catch { TraceFile.write("continue", "sync failed: \(error)") }
+        }
+    }
+
     let options: LaunchOptions
     let settings: AppSettings
     let accounts: AccountStore
@@ -584,6 +642,8 @@ final class AppModel {
         let sync = QueueSync(store: queue, client: session.client)
         sync.start()
         queueSync = sync
+        loadRemoved()
+        Task { await syncContinueWatching() }
     }
 
     /// Back to the front: catch up with changes made on other devices.
@@ -679,6 +739,7 @@ final class AppModel {
             if session == nil { Task { await signInFromCloud() } } else { Task { await checkCloudSignIn() } }
         }
         Task { await queueSync?.pull() }
+        Task { await syncContinueWatching() }
         if let outbox, let client = session?.client { Task { await outbox.deliver(with: client) } }
         Task { await refreshProfile() }
     }

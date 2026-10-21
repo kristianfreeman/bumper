@@ -104,7 +104,6 @@ final class PlayerTests: XCTestCase {
         remote.press(.select)
         let fifteen = app.buttons["option.sleep-15"]
         XCTAssertTrue(fifteen.exists(within: 2), "no sleep options")
-        XCTAssertTrue(app.buttons["option.background"].exists, "no Untracked switch")
         remote.press(.down, in: app, atMost: 4) { fifteen.hasFocus }
         remote.press(.select)
         playback.wait { ($0.value as? String ?? "").contains("m") }

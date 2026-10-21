@@ -13,7 +13,7 @@ public final class SettingsSync {
     public static let keys: Set<String> = [
         "subtitles.mode", "subtitles.scale", "subtitles.style", "subtitles.font",
         "playback.autoplayNext", "playback.autoSkipIntro", "playback.disableTranscoding",
-        "browse.hideSpoilers", "browse.hiddenLibraries",
+        "browse.hideSpoilers", "browse.hiddenLibraries", "browse.continueWatching",
         "detail.themeMusic", "detail.themeMusicMovies", "detail.themeMusicOnline",
         "appearance.theme",
         "audiobooks.rate", "audiobooks.smartSpeed",
