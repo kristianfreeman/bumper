@@ -207,7 +207,9 @@ public struct PersonCard: View {
 
     public var body: some View {
         Button(action: action) {
-            VStack(spacing: 10) {
+            // On the TV the picture lifts and grows when focused: room for
+            // it above the name (at 10 it ran over the text).
+            VStack(spacing: Platform.isTV ? 26 : 10) {
                 Artwork(person.primaryImageTag.map { ArtworkSource(itemId: person.id, type: .primary, tag: $0, blurHash: person.imageBlurHashes?["Primary"]?[$0]) }, kind: .poster, width: Layout.castWidth)
                     .frame(width: Layout.castWidth, height: Layout.castWidth)
                     .clipShape(.circle)

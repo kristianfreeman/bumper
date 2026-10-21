@@ -315,10 +315,10 @@ struct ItemDetailView: View {
                 // More first and jumping across when it did.
                 let target = model.playTarget
                 if target != nil || item.kind == .series {
-                    // Big, and saying what it plays unless you're on another of the
-                    // row's buttons: "Play S1 · E1" read as the page's point.
+                    // Saying what it plays unless you're on another of the row's
+                    // buttons: "Play S1 · E1" reads as the page's point.
                     Pill(target.map(playLabel) ?? "Play", systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill",
-                         size: Platform.isTV ? .large : .regular, prominent: true, alwaysShowsTitle: actionFocus == nil) {
+                         prominent: true, alwaysShowsTitle: actionFocus == nil) {
                         if let target { app.play(target) }
                     }
                     .pillCaption(castLink?.connectedTo.map { "On \($0)" } ?? (target?.resumePosition != nil ? "Resume" : "Play"))
