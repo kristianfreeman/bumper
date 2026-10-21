@@ -7,95 +7,82 @@ TestFlight.
 
 ## Unreleased
 
-- Apple TV with its sound on AirPlay speakers: starting something no longer
-  shows a black picture until you skip. The speakers' delay only shows once
-  sound plays; the picture now catches up with it by itself.
-- Apple TV: a new player, without the row of icons. Up and Down first
-  bring up the controls, and press again: Up is Audio & Subtitles (both
-  lists side by side, and Find Subtitles), Down is More along the bottom:
-  Info, Up Next (when you've lined something up) and Playback (the sleep
-  timer, Speakers when it's on, and a reminder that your iPhone can
-  control it). Left and Right skip 10 seconds, and during an intro Right
-  skips it. The time under the timeline is quieter.
-- iPhone, iPad and Mac: the same in their own form: one Audio & Subtitles
-  menu, and More (Info, Up Next, Playback) in a sheet, or in the panel
-  beside the picture. Forward skips 10 seconds, as Back does, and so does
-  the → key. On a keyboard, ↓ shows the controls, then opens More.
-- Chapters are gone from the player: no menu, no marks on the timeline.
-- At the credits, more to choose from and more to go on: the next episode
-  of another show you're watching joins Keep Going, Something Different and
-  Done for Tonight, and each says how long it is, when it would end, its
-  rating and what it's about.
+## 0.3.0
+
+Home
 - Home opens on one pick, nearly the whole screen: what you'd most likely
   carry on with now (your queue, something nearly finished, the next
-  episode) big over its picture, with Play ready — "Resume · 18m left" and
-  Start Over when you've started it. An episode shows its show's logo and
-  which episode it is, and Go to Episode opens it. Along its foot, its own
-  list of five: moving along it (the remote, the Mac's pointer, a tap)
-  brings each one up, and selecting it plays. Late at night the short ones
-  come first. The greeting is gone.
-- Below it, Continue Watching, Next Up and the rest are rows of their own:
-  moving along them never changes the pick.
-- Every row's title sits the same distance above its cards, with or without
-  a line under it, and clear of a focused card's lift on the Apple TV. A row
-  scrolled along comes to rest under its title, with no cut-off card at the
-  left.
-- Play from Beginning is called Start Over in a thing's menu, as it is on
-  Home.
-- Home's rows are one row each, sideways, so the page is far shorter: what's
-  new, playlists and your queue scroll like Next Up.
-- Hidden libraries stay off Home's new rows too (Continue Watching and Next
-  Up still come from every library).
-- Apple TV: Next Up's titles move down as a poster lifts, so it never covers
-  them.
+  episode), with Play ready — "Resume · 18m left" and Start Over when
+  you've started it. An episode shows its show's logo and which episode it
+  is; Go to Episode opens it. Along its foot, a list of five: moving along
+  it brings each one up, and selecting it plays. Late at night the short
+  ones come first.
+- Below it, Continue Watching, Next Up and the rest are rows of their own,
+  one row each, sideways, so the page is far shorter. Next Up shows the
+  shows' posters with their names.
+- Every row's title sits the same distance above its cards, and a row
+  scrolled along comes to rest under its title.
 - Continue Watching only keeps what you've played lately: Settings → Keep
   in Continue Watching (a week, a month, or forever). Anything older still
-  resumes where you left it from its page.
-- Remove from Continue Watching, in a thing's menu, takes it out on all
-  your devices until you play it again. Start Over Next Time keeps it but
-  forgets where you were.
-- Settings → Libraries: Show All and Hide All, and a line saying what's
-  left when every library is hidden.
-- Apple TV: choosing a subtitle size, font or style keeps focus on that
-  setting (it used to jump up to Libraries).
-- Settings, tidied: the Player choice is under About with the other
-  diagnostics, the Speakers Button is under Picture and Sound, and Find
-  Missing Theme Songs only shows while theme music is on.
+  resumes from its page.
+- In a thing's menu: Remove from Continue Watching (on all your devices,
+  until you play it again), Start Over Next Time, and Start Over (which
+  was Play from Beginning).
+- Marking something watched updates Home and your libraries at once.
+- Hidden libraries stay off Home's new rows too.
+
+The player
+- Apple TV: a new player, without the row of icons. Up and Down bring up
+  the controls, and press again: Up is Audio & Subtitles (both lists side
+  by side, and Find Subtitles); Down is More along the bottom: Info, Up
+  Next (when you've lined something up) and Playback (the sleep timer,
+  Speakers when it's on, and a reminder that your iPhone can control it).
+  Left and Right skip 10 seconds; during an intro Right skips it.
+- iPhone, iPad and Mac: the same in their own form: one Audio & Subtitles
+  menu, and More in a sheet or in the panel beside the picture. Forward
+  skips 10 seconds, as Back does, and so does the → key.
+- At the credits: Keep Going (it counts down, and moving the remote stops
+  it), the next episode of another show, Something Different, or Done for
+  Tonight, each with how long it is and when it would end. Keep the
+  Credits lets them roll.
+- Chapters are gone from the player.
+- Settings → Speakers Button: the system's speaker picker in the player
+  (AirPlay speakers, a HomePod, the TV), so no trip to Control Center.
+  Off unless you turn it on, and set per device.
 - Play Untracked is gone for now.
-- Up Next under the picture: what plays after this one and when each ends,
-  with Add to Up Next for the rest of the show, things like it, and what's
-  next in your other shows. On the Apple TV and the iPhone remote, Up Next
-  is only what you've lined up yourself, and isn't there when you haven't.
-- At the credits: keep going (it counts down, then goes on by itself),
-  something different, or done for tonight. Keep the Credits lets them roll.
-- iPad on its side and wide Mac windows: Show Details puts the picture on
-  the left and Up Next down the right.
-- The chapter row under the picture is gone; About has what it's about and
-  who's in it.
-- Apple TV: opening a show's page, focus lands on Play and stays there
-  (it used to hop to More and back while the episodes loaded).
-- Apple TV: the season bar, episodes and cast stop at the page's right
-  margin, and a long-running show's 30-odd seasons scroll inside the bar.
-- At the credits, moving the remote stops the countdown: it waits for you.
-- Apple TV with its sound on AirPlay speakers (a Sonos, a HomePod): no more
-  sound cutting in and out on files VLCKit plays. The TV only says it's
-  AirPlaying once sound plays; Bumper checks then, and remembers.
-- Mac: resizing the window is smooth — pages lay out in steps while you
-  drag, the video settles when you pause, and nothing re-lays out under the
-  player (a typical step 13 ms → 6 ms; Home's half-second freeze is gone).
-- Settings → Speakers Button: the player gets the system's speaker picker
-  (AirPlay speakers, a HomePod, the TV) — no more Control Center on the
-  Apple TV. Off unless you turn it on, and set per device.
-- Apple TV: the places move into the system's sidebar (press Menu or swipe
-  left from a page), with you at its top; your profile page is in Settings.
-  The top row had run off the screen.
-- Apple TV: a show's page leads with a big Play that says what it plays, and
-  up from the episodes lands on it.
-- Search asks your server one thing at a time: asked several searches at
-  once it answered wrongly ("21" found episodes, not the film). Films,
-  shows, playlists, collections and videos come before episodes.
-- Search finds a show by its name even when lots of its episodes match too,
-  and puts the closest name first ("Simpsons" finds "The Simpsons").
+
+Apple TV
+- The places are in the system's sidebar (press Menu or swipe left from a
+  page), with you at its top; your profile page is in Settings.
+- Browsing, the background takes the focused thing's colours at once,
+  instead of fading in its picture.
+- Collections and libraries show their cards' places while loading, with
+  no flicker.
+- A show's page puts focus on Play, and up from the episodes lands on it.
+  The season bar, episodes and cast stop at the page's right margin, and a
+  long-running show's seasons scroll inside the bar.
+- Cast pictures: no line across the top when one lifts, and names move
+  down with it.
+- Playlists' pictures fill their cards without stretching.
+- Sound on AirPlay speakers (a Sonos, a HomePod): no more sound cutting in
+  and out, and no black picture at the start until you skip.
+
+Settings
+- Libraries: Show All and Hide All, and a line saying what's left when
+  every library is hidden.
+- Choosing a subtitle size, font or style keeps focus on that setting.
+- Tidied: the Player choice is under About, the Speakers Button under
+  Picture and Sound, and Find Missing Theme Songs only shows while theme
+  music is on.
+
+Search
+- Films, shows, playlists, collections and videos come before episodes,
+  and a show is found by its name ("21" finds the film, "Simpsons" finds
+  "The Simpsons").
+
+Mac
+- Resizing the window is smooth: pages lay out in steps while you drag and
+  nothing re-lays out under the player.
 
 ## 0.2.1
 
