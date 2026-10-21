@@ -7,6 +7,9 @@ TestFlight.
 
 ## Unreleased
 
+- Apple TV with its sound on AirPlay speakers: starting something no longer
+  shows a black picture until you skip. The speakers' delay only shows once
+  sound plays; the picture now catches up with it by itself.
 - Apple TV: a new player, without the row of icons. Up and Down first
   bring up the controls, and press again: Up is Audio & Subtitles (both
   lists side by side, and Find Subtitles), Down is More along the bottom:

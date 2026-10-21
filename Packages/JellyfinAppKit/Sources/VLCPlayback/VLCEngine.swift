@@ -66,6 +66,10 @@ public final class VLCEngine: PlayerEngine {
     /// The clock follows the audio output (AirPlay, Bluetooth), not the
     /// system clock: see `load`.
     @ObservationIgnored private var followsAudio = false
+    /// The speakers' delay when the item opened, and whether the picture's
+    /// clock has been set again for the one they turned out to have.
+    @ObservationIgnored private var openedLatency: TimeInterval = 0
+    @ObservationIgnored private var resynced = false
     @ObservationIgnored private var routeObservers: [NSObjectProtocol] = []
 
     private static let log = Perf.logger("vlc-engine")
@@ -135,7 +139,19 @@ public final class VLCEngine: PlayerEngine {
         guard status == .playing else { return }
         let delayed = AudioRoute.isDelayed
         AudioRoute.lastPlayedDelayed = delayed
-        guard delayed != followsAudio, var next = plan else { return }
+        guard delayed != followsAudio, var next = plan else {
+            // The same clock, but AirPlay's delay only shows once sound plays
+            // (it reads as HDMI's before): the picture waits on a clock set for
+            // the old delay and drops nearly every frame, black until a seek.
+            // One seek where it is sets the clock again.
+            if delayed, followsAudio, !resynced, abs(AudioRoute.outputLatency - openedLatency) > 0.25 {
+                resynced = true
+                let at = currentTime
+                TraceFile.write("vlc", "audio delay \(Int(openedLatency * 1000)) → \(Int(AudioRoute.outputLatency * 1000)) ms since opening: the picture's clock set again at \(Int(at.seconds)) s")
+                Task { [weak self] in await self?.seek(to: at) }
+            }
+            return
+        }
         let resume = status == .playing
         let at = max(currentTime, startTarget ?? .zero)
         TraceFile.write("vlc", "audio now to \(AudioRoute.description): again from \(Int(at.seconds)) s with the clock \(delayed ? "following the audio" : "on the system clock")")
@@ -204,6 +220,8 @@ public final class VLCEngine: PlayerEngine {
         // audio away again and again (sound cutting on and off to a Sonos).
         // There the clock follows the audio output, and the picture waits for it.
         followsAudio = AudioRoute.isDelayed || AudioRoute.lastPlayedDelayed
+        openedLatency = AudioRoute.outputLatency
+        resynced = false
         media.addOption(followsAudio ? ":clock-master=audio" : ":clock-master=monotonic")
         TraceFile.write("vlc", "audio to \(AudioRoute.description); clock \(followsAudio ? (AudioRoute.isDelayed ? "follows the audio" : "follows the audio (delayed when sound last played)") : "system")")
         AudioSessionReport.write("opening")
