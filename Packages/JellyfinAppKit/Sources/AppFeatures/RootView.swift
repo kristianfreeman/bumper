@@ -205,9 +205,10 @@ struct MainTabView: View {
         _selection = State(initialValue: initialTab ?? "home")
     }
 
-    /// The places run along the top, like the Music app's: the TV's and the
-    /// iPad's floating tab bar, the Mac's segmented control in the window
-    /// toolbar. An iPhone has its tab bar at the bottom.
+    /// The places in the system's sidebar, the libraries grouped under
+    /// Library, as the TV app has them: along the TV's left edge, on the iPad
+    /// a bar on top that opens into the sidebar, the Mac's segmented control
+    /// in the window toolbar. An iPhone has its tab bar at the bottom.
     var body: some View {
         #if os(macOS)
         macShell
@@ -371,13 +372,17 @@ struct MainTabView: View {
             // Every page through `page(for:)`: switching tabs re-renders this
             // view, and only an equatable page stops that reaching every page.
             Tab("Home", systemImage: "house", value: "home") { tab("home") { page(for: "home") } }
-            ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
-                if case .library(let view) = entry {
-                    Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { tab(view.id) { page(for: view.id) } }
-                } else if case .audiobooks = entry {
-                    Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { tab("audiobooks") { page(for: "audiobooks") } }
-                } else if case .more = entry {
-                    Tab("More", systemImage: "square.grid.2x2", value: "more") { tab("more") { page(for: "more") } }
+            // The libraries as one group, as the TV app's sidebar has them (on
+            // an iPhone's tab bar the group is just its tabs).
+            TabSection("Library") {
+                ForEach(Array(plan.entries.enumerated()), id: \.offset) { _, entry in
+                    if case .library(let view) = entry {
+                        Tab(view.name ?? "Library", systemImage: icon(for: view), value: view.id) { tab(view.id) { page(for: view.id) } }
+                    } else if case .audiobooks = entry {
+                        Tab("Audiobooks", systemImage: "headphones", value: "audiobooks") { tab("audiobooks") { page(for: "audiobooks") } }
+                    } else if case .more = entry {
+                        Tab("More", systemImage: "square.grid.2x2", value: "more") { tab("more") { page(for: "more") } }
+                    }
                 }
             }
             if app.downloads != nil && !Self.placesInMenu {
@@ -406,7 +411,11 @@ struct MainTabView: View {
             .accessibilityIdentifier("profile.avatar")
             #endif
         }
-        .tabViewStyle(.tabBarOnly)
+        // The system's sidebar: the TV's along the left (opened from the
+        // page's left edge), the iPad's a bar on top that opens into one; an
+        // iPhone keeps its tab bar. (The top row ran off the TV's screen with
+        // four libraries, Search and Settings.)
+        .tabViewStyle(.sidebarAdaptable)
         .onChange(of: selection) { _, tab in recordOpen(tab) }
         .onChange(of: app.pendingTab) { _, tab in
             guard let tab else { return }
