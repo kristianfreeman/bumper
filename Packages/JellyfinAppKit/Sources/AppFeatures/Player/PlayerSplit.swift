@@ -121,7 +121,7 @@ struct PlayerPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             TouchControls(controller: controller, engine: engine, close: close, poke: poke,
-                          findingSubtitles: $findingSubtitles, showsInfo: .constant(false), style: .menus, split: fullScreen)
+                          findingSubtitles: $findingSubtitles, showsMore: .constant(false), style: .menus, split: fullScreen)
             if findingSubtitles {
                 FindSubtitlesSheet(controller: controller) {
                     findingSubtitles = false

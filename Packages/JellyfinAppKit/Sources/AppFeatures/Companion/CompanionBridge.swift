@@ -107,7 +107,7 @@ final class CompanionBridge {
         }
         p.sleepLabel = timer.shortLabel
         guard let player = app.player else { return p }
-        p.subtitles = player.subtitleOptions.map { CompanionTrack(id: $0.index, title: MenuCard.trackName($0), detail: MenuCard.trackNote($0)) }
+        p.subtitles = player.subtitleOptions.map { CompanionTrack(id: $0.index, title: TrackNames.name($0), detail: TrackNames.note($0)) }
         p.subtitle = player.selectedSubtitle
         p.subtitleSearch = switch player.subtitleSearch {
         case .idle: nil

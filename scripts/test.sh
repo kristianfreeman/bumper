@@ -233,7 +233,7 @@ case "${1:-fast}" in
   smoke) TIER_WORKERS=3; step build_for_testing; step ui_run $(only SmokeTests HomeCardTests OnboardingTests TopShelfTests TabBarTests TabBarPlacesTests ScrollTests) ;;
   profile) step build_for_testing; step ui_run -only-testing:"BumperUITests/ProfileTests${2:+/$2}" ;;
   settings) step build_for_testing; step ui_run -only-testing:"BumperUITests/SettingsTests${2:+/$2}" ;;
-  player) TIER_WORKERS=3; step build_for_testing; step ui_run $(only PlayerTests PlayerSubtitleTests PlayerScrubTests PlayerChapterTests) ;;
+  player) TIER_WORKERS=3; step build_for_testing; step ui_run $(only PlayerTests PlayerSubtitleTests PlayerScrubTests) ;;
   queue) step build_for_testing; step ui_run -only-testing:"BumperUITests/QueueTests" ;;
   scroll) step build_for_testing; step ui_run -only-testing:"BumperUITests/ScrollTests" ;;
   tabs|sidebar) TIER_WORKERS=2; step build_for_testing; step ui_run $(only TabBarTests TabBarPlacesTests) ;;

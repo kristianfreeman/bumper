@@ -5,18 +5,21 @@ import PlaybackCore
 import SwiftUI
 
 #if !os(tvOS)
-/// The watch page under (or beside) the picture: what it is, then Up Next —
-/// what plays after this, and adding to it — or About.
+/// More, off the TV — the watch page under (or beside) the picture, and the
+/// sheet full screen: what it is, then Info, Up Next (what plays after this,
+/// and adding to it) or Playback (when to stop), the TV's
+/// More tabs.
 struct WatchPanelContent: View {
     let controller: PlayerController
     /// What it is (facts and badges) at the top; side by side it's under the picture.
     var showsHeader = true
-    @State private var tab: Tab = .upNext
+    @State private var tab: MoreTab
     @State private var adding = false
 
-    enum Tab: String, CaseIterable, Identifiable {
-        case upNext = "Up Next", about = "About"
-        var id: String { rawValue }
+    init(controller: PlayerController, showsHeader: Bool = true, opensOn: MoreTab = .upNext) {
+        self.controller = controller
+        self.showsHeader = showsHeader
+        _tab = State(initialValue: opensOn)
     }
 
     var body: some View {
@@ -24,16 +27,18 @@ struct WatchPanelContent: View {
             VStack(alignment: .leading, spacing: 16) {
                 if showsHeader { WatchHeader(controller: controller) }
                 Picker("Show", selection: $tab) {
-                    ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(MoreTab.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .accessibilityIdentifier("watch.tabs")
                 switch tab {
+                case .info:
+                    WatchAbout(controller: controller)
                 case .upNext:
                     UpNextList(controller: controller) { adding = true }
-                case .about:
-                    WatchAbout(controller: controller)
+                case .playback:
+                    PlaybackSettings(controller: controller)
                 }
             }
             .padding(.horizontal, Layout.device == .phone ? 16 : 28)     // in line with the controls
@@ -132,6 +137,34 @@ struct UpNextList: View {
         if let words { parts.append(words) } else if let runtime = next.runtime { parts.append(MetadataLine.runtimeString(runtime)) }
         if let ends { parts.append("ends \(ends.formatted(date: .omitted, time: .shortened))") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Playback: when to stop (the sleep timer) — only here, by what's playing.
+private struct PlaybackSettings: View {
+    let controller: PlayerController
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        let timer = app.sleepTimer
+        VStack(alignment: .leading, spacing: 18) {
+            LabeledContent("Stop Playing") {
+                Picker("Stop Playing", selection: Binding(get: { timer.mode }, set: { mode in
+                    if mode == .off { timer.reset() } else { timer.set(mode) }
+                })) {
+                    Text("Never").tag(SleepTimer.Mode.off)
+                    ForEach(SleepTimer.presets, id: \.self) { m in Text(SleepTimer.stopTitle(m)).tag(SleepTimer.Mode.minutes(m)) }
+                    Text(SleepTimer.afterTitle(controller.item.kind)).tag(SleepTimer.Mode.endOfItem)
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .accessibilityIdentifier("option.sleep")
+            }
+            if let left = timer.shortLabel {
+                Text("Stops in \(left)").font(.labelText.monospacedDigit()).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.top, 4)
     }
 }
 

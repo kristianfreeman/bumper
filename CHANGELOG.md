@@ -7,6 +7,21 @@ TestFlight.
 
 ## Unreleased
 
+- Apple TV: a new player. Each way the remote goes is said at that edge of
+  the screen, and the row of icons is gone. Up is Audio & Subtitles (both
+  lists side by side, and Find Subtitles). Down is More: Info, Up Next (when
+  you've lined something up) and Playback (the sleep timer, and Speakers
+  when it's on). Left and Right skip 10 seconds, and during an
+  intro Right skips it.
+- iPhone, iPad and Mac: the same in their own form: one Audio & Subtitles
+  menu, and More (Info, Up Next, Playback) in a sheet, or in the panel
+  beside the picture. Forward skips 10 seconds, as Back does, and so does
+  the → key. On a keyboard, ↓ opens More.
+- Chapters are gone from the player: no menu, no marks on the timeline.
+- At the credits, more to choose from and more to go on: the next episode
+  of another show you're watching joins Keep Going, Something Different and
+  Done for Tonight, and each says how long it is, when it would end, its
+  rating and what it's about.
 - Home leads with one pick: what you'd most likely watch now (your queue,
   something nearly finished, the next episode, a new film), with Play ready
   — "Resume · 18m left" when you've started it. An episode shows its show's

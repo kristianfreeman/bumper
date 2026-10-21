@@ -5,33 +5,24 @@ import JellyfinAPI
 import PlaybackCore
 import SwiftUI
 
-/// The menus the icon row above the timeline opens. Playback holds
-/// Background and the sleep timer (which live only here: they're about
-/// what's playing). Chapters is last, and only there for an item with some.
-enum PlayerMenu: String, CaseIterable, Hashable {
-    case subtitles, audio, playback, info, upNext, chapters, speakers
+/// What Up and Down open over the picture on the TV: Audio & Subtitles at
+/// the top, More along the bottom.
+enum CompassPanel: Hashable {
+    case languages, more
+}
 
-    var symbol: String {
-        switch self {
-        case .subtitles: "captions.bubble"
-        case .audio: "speaker.wave.2"
-        case .playback: "gearshape"
-        case .info: "info.circle"
-        case .upNext: "text.line.first.and.arrowtriangle.forward"
-        case .chapters: "list.bullet"
-        case .speakers: "airplay.audio"
-        }
-    }
+/// More's tabs (the TV's panel, the sheet and the split's panel off it):
+/// what it is, what you've lined up after it, and how it plays.
+enum MoreTab: String, CaseIterable, Hashable, Identifiable {
+    case info, upNext, playback
+
+    var id: Self { self }
 
     var title: String {
         switch self {
-        case .subtitles: "Subtitles"
-        case .audio: "Audio"
-        case .playback: "Playback"
         case .info: "Info"
         case .upNext: "Up Next"
-        case .chapters: "Chapters"
-        case .speakers: "Speakers"
+        case .playback: "Playback"
         }
     }
 }
@@ -150,140 +141,132 @@ struct ChromeScrim: View {
     }
 }
 
-/// Bottom controls: what's playing (and how long until it ends), the icon
-/// row, then the timeline (with the scrub preview riding above its head
-/// while paused).
-struct TransportBar: View {
+/// The TV's controls: each way the remote goes, said at that edge of the
+/// screen — Up for Audio & Subtitles, Down for More, Left and Right 10 s
+/// (Right skips an intro while one plays) — over the timeline. None of it
+/// takes focus: the remote acts on the video, and Up and Down open panels.
+struct CompassChrome: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.theme) private var theme
     let controller: PlayerController
     let engine: any PlayerEngine
     let scrubTime: Duration?
     let scrubThumb: CGImage?
-    let openMenu: PlayerMenu?
-    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
-    let open: (PlayerMenu) -> Void
-    let leave: () -> Void
+    /// The four edges and the timeline (false: a segment's Skip alone).
+    let full: Bool
+    /// "Skip Intro" while one plays: Right does it.
+    let segment: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer()
-            HStack(alignment: .bottom, spacing: 40) {
-                PlayingTitle(controller: controller, engine: engine)
-                    .opacity(openMenu == .info ? 0 : 1)        // the About band says it, in its place
-                    .animation(.easeOut(duration: 0.2), value: openMenu)
-                Spacer(minLength: 0)
-                HStack(spacing: 18) {
-                    ForEach(menus, id: \.self) { menu in
-                        if menu == .speakers {
-                            // The system's own picker button: it focuses and presents itself.
-                            SpeakerPickerButton(size: PillSize.small.diameter)
-                                .disabled(openMenu != nil)
-                        } else {
-                            // On (subtitles, Background, a sleep timer): a filled glyph,
-                            // not a ring — a ring read as focus.
-                            Pill(menu.title, systemImage: menu.symbol + (lit(menu) ? ".fill" : ""),
-                                 detail: detail(menu), size: .small) { open(menu) }
-                                .accessibilityIdentifier("control.\(menu.rawValue)")
-                                .focused(focus, equals: .control(menu))
-                                // Down: back to the video — not while a card is open
-                                // (a press before focus has moved into the card closed it).
-                                .tvMoveCommand { if $0 == .down && openMenu == nil { leave() } }
-                                .disabled(openMenu != nil && openMenu != menu)       // a card open: focus stays in it
-                        }
-                    }
+        ZStack {
+            if full {
+                EdgeLabel(side: .top, title: "Audio & Subtitles", detail: languages)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 56)
+                    .accessibilityIdentifier("edge.up")
+                EdgeLabel(side: .leading, title: "10 s")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 60)
+                VStack(spacing: 0) {
+                    Spacer()
+                    EdgeLabel(side: .bottom, title: "More", detail: more)
+                        .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
+                        .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
+                        .padding(.bottom, 30)
+                        .accessibilityIdentifier("edge.down")
+                    Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
+                             scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused, endsAt: endsAt)
+                        .padding(.horizontal, 90)
+                        .padding(.bottom, 64)
                 }
-                // The row moves as one as a pill opens to show its name (as on
-                // the detail page), instead of its neighbours jumping aside.
-                .animation(.spring(duration: 0.3, bounce: 0.2), value: focus.wrappedValue)
-                .tvFocusSection()
             }
-            .padding(.bottom, 44)
-            .opacity(scrubTime == nil ? 1 : 0)              // the preview takes this space
-            .animation(.easeOut(duration: 0.15), value: scrubTime == nil)
-            Timeline(time: controller.displayTime, duration: engine.duration ?? controller.item.runtime ?? .zero,
-                     scrubTime: scrubTime, scrubThumb: scrubThumb, paused: engine.status == .paused, chapters: controller.chapters,
-                     seek: { t in Task { await controller.seek(to: t) } })
+            if full || segment != nil {
+                EdgeLabel(side: .trailing, title: segment ?? "10 s", accent: segment == nil ? nil : theme.accent)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 60)
+                    .accessibilityIdentifier("edge.right")
+            }
         }
-        .padding(.horizontal, 90)
-        .padding(.top, 60)
-        .padding(.bottom, 64)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(engine.status == .paused ? "transport.paused" : "transport.playing")
+        .accessibilityIdentifier(!full ? "transport.hidden" : engine.status == .paused ? "transport.paused" : "transport.playing")
     }
 
-    /// Chapters only for an item with more than one; Up Next only when you've
-    /// lined something up.
-    private var menus: [PlayerMenu] {
-        PlayerMenu.allCases.filter {
-            switch $0 {
-            case .chapters: controller.chapters.count > 1
-            case .upNext: !controller.chosenUpNext.isEmpty
-            case .speakers: controller.app.settings.speakersButton
-            default: true
-            }
+    /// "English subtitles · English 5.1"; "Subtitles off · …".
+    private var languages: String {
+        let subtitles: String
+        if let found = controller.foundSubtitle {
+            subtitles = found.name
+        } else if let index = controller.selectedSubtitle, let stream = controller.subtitleOptions.first(where: { $0.index == index }) {
+            subtitles = TrackNames.name(stream) + " subtitles"
+        } else {
+            subtitles = "Subtitles off"
         }
+        let audio = controller.audioOptions.first { $0.id == engine.selectedAudioTrack }.map { [$0.title, $0.detail].compactMap { $0 }.joined(separator: " ") }
+        return [subtitles, audio].compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// Lit: subtitles on; Background or a sleep timer on.
-    private func lit(_ menu: PlayerMenu) -> Bool {
-        switch menu {
-        case .subtitles: controller.selectedSubtitle != nil || controller.foundSubtitle != nil
-        case .playback: controller.isBackground || app.sleepTimer.isActive
-        default: false
-        }
-    }
-
-    private func detail(_ menu: PlayerMenu) -> String? {
-        guard menu == .playback else { return nil }
+    /// Its tabs — or, with a sleep timer on, when it stops.
+    private var more: String {
         let timer = app.sleepTimer
-        if timer.mode == .endOfItem { return "Stops after this" }
-        return timer.shortLabel.map { "Stops in \($0)" } ?? (controller.isBackground ? "Untracked" : nil)
-    }
-}
-
-/// What's playing, said briefly: the show and episode, the title, and when
-/// it ends — Background, when it's on, as a tag of its own.
-struct PlayingTitle: View {
-    let controller: PlayerController
-    let engine: any PlayerEngine
-
-    var body: some View {
-        let phone = Layout.device == .phone
-        VStack(alignment: .leading, spacing: phone ? 4 : 8) {
-            if controller.isBackground {
-                Label("Untracked", systemImage: "infinity")
-                    .font((phone ? Font.caption : .callout).weight(.semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, phone ? 8 : 14)
-                    .padding(.vertical, phone ? 3 : 5)
-                    .background(.white.opacity(0.85), in: .capsule)
-                    .accessibilityIdentifier("player.backgroundTag")
-            }
-            if let kicker { Text(kicker).font((phone ? Font.caption : .callout).weight(.semibold)).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
-            Text(controller.item.name ?? "")
-                .font(.system(size: Platform.isTV ? 48 : phone ? 19 : Layout.pageTitleSmall, weight: .bold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            if let ends {
-                Text(ends).font((phone ? Font.caption : .callout).weight(.medium)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-            }
-        }
+        let state = timer.mode == .endOfItem ? "Stops after this" : timer.shortLabel.map { "Stops in \($0)" }
+        return state ?? MorePanel.tabs(controller).map(\.title).joined(separator: " · ")
     }
 
-    private var kicker: String? {
-        let item = controller.item
-        guard let series = item.seriesName else { return nil }
-        if let s = item.parentIndexNumber, let e = item.indexNumber { return "\(series) · Season \(s), Episode \(e)" }
-        return series
-    }
-
-    /// "Ends at 10:42 PM" (Background goes on, so no end).
-    private var ends: String? {
+    /// "ends at 10:42 PM" (Untracked goes on, so no end).
+    private var endsAt: String? {
         guard !controller.isBackground, let total = engine.duration ?? controller.item.runtime, total >= .seconds(60) else { return nil }
         let left = max(.zero, total - controller.displayTime)
         let end = Date.now.addingTimeInterval(left.seconds / Double(max(0.1, engine.rate)))
-        return "Ends at " + end.formatted(date: .omitted, time: .shortened)
+        return "ends at " + end.formatted(date: .omitted, time: .shortened)
+    }
+}
+
+/// One edge's words: a chevron pointing that way, what that way does, and a
+/// quieter line under it saying how things stand.
+struct EdgeLabel: View {
+    enum Side { case top, bottom, leading, trailing }
+    let side: Side
+    let title: String
+    var detail: String? = nil
+    /// Filled (Skip Intro): this press does something now.
+    var accent: Color? = nil
+
+    var body: some View {
+        let stacked = side == .top || side == .bottom
+        let chevron = Image(systemName: symbol).font(.system(size: 24, weight: .bold)).opacity(0.7)
+        let words = VStack(alignment: stacked ? .center : .leading, spacing: 2) {
+            Text(title).font(.callout.weight(.semibold))
+            if let detail {
+                Text(detail).font(.caption).opacity(0.7).lineLimit(1)
+            }
+        }
+        Group {
+            switch side {
+            case .top: VStack(spacing: 4) { chevron; words }
+            case .bottom: VStack(spacing: 4) { words; chevron }
+            case .leading: HStack(spacing: 10) { chevron; words }
+            case .trailing: HStack(spacing: 10) { words; chevron }
+            }
+        }
+        .foregroundStyle(accent == nil ? Color.white : .black)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 14)
+        .background {
+            if let accent { Capsule().fill(accent) } else { Color.clear.overVideoPanel(cornerRadius: 30) }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(detail ?? "")
+        .allowsHitTesting(false)
+    }
+
+    private var symbol: String {
+        switch side {
+        case .top: "chevron.up"
+        case .bottom: "chevron.down"
+        case .leading: "chevron.left"
+        case .trailing: "chevron.right"
+        }
     }
 }
 
@@ -294,8 +277,8 @@ struct Timeline: View {
     let scrubTime: Duration?
     let scrubThumb: CGImage?
     let paused: Bool
-    /// Marked along the bar; while scrubbing, the one under the head is named.
-    var chapters: [PlayerChapter] = []
+    /// "ends at 10:42 PM", after the time left.
+    var endsAt: String? = nil
     /// Touch and the pointer: drag along the bar, let go to seek there.
     var seek: (Duration) -> Void = { _ in }
     @State private var dragging: Duration?
@@ -312,13 +295,11 @@ struct Timeline: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.25))
                     Capsule().fill(.white.opacity(shown == nil ? 1 : 0.45)).frame(width: max(8, played))
-                    marks(width)
                     if shown != nil {
                         Capsule().fill(.white).frame(width: 4, height: 34).offset(x: head - 2)
                     }
                     if let shown, scrubTime != nil || !Platform.isTV {
-                        // Hung from its foot, so a chapter name under the
-                        // thumbnail grows it upwards, clear of the bar.
+                        // Hung from its foot, clear of the bar.
                         Color.clear.frame(width: 0, height: 0)
                             .overlay(alignment: .bottom) { preview(shown).fixedSize() }
                             .position(x: min(max(head, Self.thumbSize.width / 2), width - Self.thumbSize.width / 2), y: -34)
@@ -345,7 +326,7 @@ struct Timeline: View {
                 Spacer()
                 if paused && scrubTime == nil && Platform.isTV { Text("Swipe to scrub").foregroundStyle(.white.opacity(0.55)) }
                 Spacer()
-                Text("−" + max(.zero, duration - time).clockString)
+                Text(["−" + max(.zero, duration - time).clockString, endsAt].compactMap { $0 }.joined(separator: " · "))
             }
             .font(.callout.monospacedDigit().weight(.medium))
             .foregroundStyle(.white.opacity(0.85))
@@ -366,15 +347,6 @@ struct Timeline: View {
             .clipShape(.rect(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white, lineWidth: 3))
             .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
-            if let chapter = PlayerChapter.current(in: chapters, at: at), chapters.count > 1 {
-                Text(chapter.name)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .frame(width: Self.thumbSize.width)
-                    .shadow(color: .black.opacity(0.7), radius: 6)
-                    .accessibilityIdentifier("scrub.chapter")
-            }
             Text(at.clockString)
                 .font(.headline.monospacedDigit())
                 .foregroundStyle(.black)
@@ -383,27 +355,9 @@ struct Timeline: View {
                 .background(.white, in: .capsule)
         }
         // A container of its own: an identifier on the bare stack was
-        // stamped on every piece of it, over the chapter name's.
+        // stamped on every piece of it.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("scrub.preview")
-    }
-
-    /// Small, quiet notches where chapters start (not at the very ends,
-    /// and never crowded: see `PlayerChapter.marks`).
-    private func marks(_ width: CGFloat) -> some View {
-        let marks = PlayerChapter.marks(chapters, duration: duration)
-        let notch: CGFloat = Platform.isTV ? 3 : 2
-        return ZStack(alignment: .leading) {
-            ForEach(marks, id: \.self) { at in
-                Rectangle().fill(.black.opacity(0.5)).frame(width: notch).offset(x: at * width - notch / 2)
-            }
-        }
-        .frame(width: width, alignment: .leading)
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(marks.count) chapters")
-        .accessibilityIdentifier("timeline.chapters")
-        .accessibilityHidden(marks.isEmpty)
     }
 
     private func at(_ x: CGFloat, _ width: CGFloat) -> Duration {
@@ -479,38 +433,49 @@ struct FoundSubtitles: View {
     }
 }
 
-/// The card a chrome icon opens, anchored above the icon row on the right.
-/// Focus stays inside it (up and down its rows); Menu steps back out — from
-/// found subtitles to the list, from the list to the icon.
-struct MenuCard: View {
-    @Environment(AppModel.self) private var app
-    let menu: PlayerMenu
+/// Onto `target` once a panel's buttons are in the focus graph (an
+/// immediate assignment can land before they exist and leave focus behind).
+private struct FocusOnAppear: ViewModifier {
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let target: PlayerView.PlayerFocus
+    let isInside: (PlayerView.PlayerFocus?) -> Bool
+
+    func body(content: Content) -> some View {
+        content
+            .defaultFocus(focus, target)
+            .task {
+                for _ in 0..<5 where !isInside(focus.wrappedValue) {
+                    focus.wrappedValue = target
+                    try? await Task.sleep(for: .milliseconds(40))
+                }
+            }
+    }
+}
+
+/// Up on the TV: Audio & Subtitles, as the system's own player has it — the
+/// subtitles and the audio side by side, a check on each one playing.
+/// Choosing one closes it; Left and Right go between the two. Find
+/// Subtitles searches the server, and what it finds takes the Subtitles
+/// column (Menu steps back to the list).
+struct LanguagesCard: View {
     let controller: PlayerController
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
     let close: () -> Void
 
     var body: some View {
-        let band = menu == .info                     // About: a band across, above the timeline
-        VStack(alignment: .leading, spacing: 12) {
-            if !band {
-                Text(heading)
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .padding(.horizontal, 26)
-                    .contentTransition(.opacity)
+        HStack(alignment: .top, spacing: 8) {
+            column(controller.subtitleSearch == .idle ? "Subtitles" : "Found Subtitles") {
+                SubtitleOptions(controller: controller, focus: focus, close: close)
             }
-            content
+            column("Audio") {
+                AudioOptions(controller: controller, focus: focus, close: close)
+            }
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 10)
-        .frame(minWidth: band ? nil : 600, maxWidth: band ? .infinity : 600, alignment: .leading)
         .overVideoPanel(cornerRadius: 34)
-        .tvFocusSection()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .padding(.leading, band ? 90 : 0)
-        .padding(.trailing, 90)
-        .padding(.bottom, 270)
-        .defaultFocus(focus, defaultOption)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 60)
         .animation(.spring(duration: 0.3), value: controller.subtitleSearch)
         .onChange(of: controller.subtitleSearch) { _, now in
             // Searching → results: focus onto the best match.
@@ -523,75 +488,296 @@ struct MenuCard: View {
             }
         }
         .onDisappear { if controller.subtitleSearch != .idle { controller.subtitleSearch = .idle } }
-        .task {
-            // After the card's buttons are in the focus graph (an immediate
-            // assignment can land before they exist and leave focus on the icon).
-            for _ in 0..<5 where !isOption(focus.wrappedValue) {
-                focus.wrappedValue = defaultOption
-                try? await Task.sleep(for: .milliseconds(40))
+        .modifier(FocusOnAppear(focus: focus, target: defaultOption) { if case .option = $0 { true } else { false } })
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.languages")
+    }
+
+    private func column<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, 26)
+                .contentTransition(.opacity)
+            content()
+        }
+        .frame(width: 560, alignment: .topLeading)
+        .tvFocusSection()
+    }
+
+    /// The subtitle playing (or what a search found), so Up and Down go to the ones either side.
+    private var defaultOption: PlayerView.PlayerFocus {
+        switch controller.subtitleSearch {
+        case .results(let found): .option(found.first.map { "found-\($0.id)" } ?? "sub-find")
+        case .searching: .option("sub-searching")
+        case .failed: .option("sub-failed")
+        case .idle: .option(controller.foundSubtitle != nil ? "sub-found" : controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")
+        }
+    }
+}
+
+/// Off, each track, what a search found, and Find Subtitles — or, while
+/// searching, what it's finding.
+private struct SubtitleOptions: View {
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+
+    var body: some View {
+        if controller.subtitleSearch == .idle {
+            let rows = controller.subtitleOptions.count + 2 + (controller.foundSubtitle == nil ? 0 : 1)
+            ScrollView {
+                VStack(spacing: 6) {
+                    OptionRow(title: "Off", detail: nil, selected: controller.selectedSubtitle == nil && controller.foundSubtitle == nil, id: "sub-off", focus: focus) {
+                        Task { await controller.selectSubtitle(nil) }
+                        close()
+                    }
+                    ForEach(controller.subtitleOptions, id: \.index) { stream in
+                        OptionRow(title: TrackNames.name(stream), detail: TrackNames.note(stream), selected: controller.selectedSubtitle == stream.index,
+                                  id: "sub-\(stream.index)", focus: focus) {
+                            Task { await controller.selectSubtitle(stream.index) }
+                            close()
+                        }
+                    }
+                    if let found = controller.foundSubtitle {
+                        OptionRow(title: found.name, detail: "\(found.confidenceText) match", selected: true, id: "sub-found", focus: focus) { close() }
+                    }
+                    OptionRow(title: "Find Subtitles…", detail: nil, selected: false, id: "sub-find", focus: focus, symbol: "magnifyingglass") {
+                        Task { await controller.findSubtitles() }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
             }
+            .tvScrollClipDisabled()
+            .frame(maxHeight: min(560, CGFloat(rows) * 84))
+        } else {
+            FoundSubtitles(controller: controller, focus: focus, close: close)
+        }
+    }
+}
+
+/// Each audio track, the one playing checked.
+private struct AudioOptions: View {
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(controller.audioOptions) { track in
+                OptionRow(title: track.title, detail: track.detail, selected: controller.engine?.selectedAudioTrack == track.id, id: "audio-\(track.id)", focus: focus) {
+                    Task { await controller.selectAudio(track.id) }
+                    close()
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
+/// How a track is named in the menus (and on the phone remote).
+enum TrackNames {
+    /// "English", "English (Forced)" — the language, not the stream's label.
+    static func name(_ s: MediaStream) -> String {
+        let name = s.language.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? s.displayTitle ?? "Track \(s.index)"
+        return s.isForced == true ? "\(name) (Forced)" : name
+    }
+
+    /// Only what tells two tracks apart: hearing-impaired, a title of its own.
+    static func note(_ s: MediaStream) -> String? {
+        let label = (s.title ?? "") + " " + (s.displayTitle ?? "")
+        if label.contains("SDH") || label.localizedCaseInsensitiveContains("hearing impaired") { return "SDH" }
+        guard let title = s.title, !title.isEmpty, title.lowercased() != (s.language ?? "").lowercased() else { return nil }
+        return title
+    }
+}
+
+/// Down on the TV: More — what it is (Info), what you've lined up after it
+/// (Up Next, only when you have), and how it plays (Playback: the sleep
+/// timer, and Speakers when that's on). Focus on a tab shows it, as
+/// tabs do on the TV; Down goes into it, Up from the tabs closes. Opens on Info.
+struct MorePanel: View {
+    @Environment(AppModel.self) private var app
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+    @State private var tab: MoreTab = .info
+
+    static func tabs(_ controller: PlayerController) -> [MoreTab] {
+        MoreTab.allCases.filter { $0 != .upNext || !controller.chosenUpNext.isEmpty }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            HStack(spacing: 14) {
+                ForEach(Self.tabs(controller)) { t in
+                    Button { focus.wrappedValue = into(t) } label: { TabFace(title: t.title, selected: tab == t) }
+                        .buttonStyle(BareButtonStyle())
+                        .focused(focus, equals: .tab(t))
+                        .tvMoveCommand { if $0 == .up { close() } }
+                        .accessibilityIdentifier("tab.\(t.rawValue)")
+                        .accessibilityAddTraits(tab == t ? .isSelected : [])
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .tvFocusSection()
+            Group {
+                switch tab {
+                case .info: ItemAbout(controller: controller).padding(.horizontal, 16)
+                case .upNext: UpNextRow(controller: controller, focus: focus, close: close)
+                case .playback: PlaybackOptions(controller: controller, focus: focus, close: close)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.opacity)
+        }
+        .padding(.vertical, 28)
+        .padding(.horizontal, 24)
+        .overVideoPanel(cornerRadius: 34)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(.horizontal, 90)
+        .padding(.bottom, 60)
+        .animation(.easeInOut(duration: 0.2), value: tab)
+        .onChange(of: focus.wrappedValue) { _, now in if case .tab(let t) = now { tab = t } }
+        .modifier(FocusOnAppear(focus: focus, target: .tab(.info)) { now in
+            switch now {
+            case .tab, .option: true
+            default: false
+            }
+        })
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.more")
+    }
+
+    /// Select on a tab: into it, onto what you'd most likely want there.
+    private func into(_ t: MoreTab) -> PlayerView.PlayerFocus {
+        switch t {
+        case .info: .tab(.info)
+        case .upNext: .option(controller.chosenUpNext.first.map { "next-\($0.id)" } ?? "next-none")
+        case .playback: .option(PlaybackOptions.current(app.sleepTimer))
         }
     }
 
-    private var heading: String {
-        if menu == .subtitles, controller.subtitleSearch != .idle { return "Found Subtitles" }
-        return menu.title
+    private struct TabFace: View {
+        let title: String
+        let selected: Bool
+        @Environment(\.isFocused) private var focused
+
+        var body: some View {
+            Text(title)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(focused ? Color.black : selected ? .white : .white.opacity(0.65))
+                .padding(.horizontal, 30)
+                .padding(.vertical, 12)
+                .background(focused ? Color.white : selected ? Color.white.opacity(0.18) : .clear, in: .capsule)
+                .scaleEffect(focused ? 1.06 : 1)
+                .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
+        }
+    }
+}
+
+/// Up Next on the TV: what you've lined up after this one, across, each
+/// with when it would end; Select plays it now. (Adding is the phone app's.)
+private struct UpNextRow: View {
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        let list = controller.chosenUpNext
+        let ends = controller.upNextEnds(list, now: app.queue.now)
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: 40) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { i, next in
+                    let words = ItemAbout.nextLines(next, after: controller.item)
+                    let end = i < ends.count ? "ends \(ends[i].formatted(date: .omitted, time: .shortened))" : nil
+                    Button {
+                        app.play(next)
+                        close()
+                    } label: {
+                        Tile(item: next, title: words.title, detail: [words.detail, end].compactMap { $0 }.joined(separator: " · "))
+                    }
+                    .buttonStyle(BareButtonStyle())
+                    .focused(focus, equals: .option("next-\(next.id)"))
+                    .accessibilityIdentifier("option.next-\(next.id)")
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
+        }
+        .tvScrollClipDisabled()
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch menu {
-        case .subtitles:
-            if controller.subtitleSearch == .idle {
-                let rows = controller.subtitleOptions.count + 2 + (controller.foundSubtitle == nil ? 0 : 1)
-                ScrollView {
-                    VStack(spacing: 6) {
-                        OptionRow(title: "Off", detail: nil, selected: controller.selectedSubtitle == nil && controller.foundSubtitle == nil, id: "sub-off", focus: focus) {
-                            Task { await controller.selectSubtitle(nil) }
-                            close()
-                        }
-                        ForEach(controller.subtitleOptions, id: \.index) { stream in
-                            OptionRow(title: Self.trackName(stream), detail: Self.trackNote(stream), selected: controller.selectedSubtitle == stream.index,
-                                      id: "sub-\(stream.index)", focus: focus) {
-                                Task { await controller.selectSubtitle(stream.index) }
-                                close()
-                            }
-                        }
-                        if let found = controller.foundSubtitle {
-                            OptionRow(title: found.name, detail: "\(found.confidenceText) match", selected: true, id: "sub-found", focus: focus) { close() }
-                        }
-                        OptionRow(title: "Find Subtitles…", detail: nil, selected: false, id: "sub-find", focus: focus, symbol: "magnifyingglass") {
-                            Task { await controller.findSubtitles() }
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+    private struct Tile: View {
+        let item: BaseItem
+        let title: String
+        let detail: String
+        @Environment(\.isFocused) private var focused
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Artwork(item: item, kind: .landscape, width: 400)
+                    .frame(width: 400, height: 225)
+                    .clipShape(.rect(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white, lineWidth: focused ? 5 : 0))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(detail).font(.caption).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
                 }
-                .tvScrollClipDisabled()
-                .frame(maxHeight: min(560, CGFloat(rows) * 84))
-            } else {
-                FoundSubtitles(controller: controller, focus: focus, close: close)
+                .frame(width: 400, alignment: .leading)
             }
-        case .audio:
-            VStack(spacing: 6) {
-                ForEach(controller.audioOptions) { track in
-                    OptionRow(title: track.title, detail: track.detail, selected: controller.engine?.selectedAudioTrack == track.id, id: "audio-\(track.id)", focus: focus) {
-                        Task { await controller.selectAudio(track.id) }
-                        close()
+            .foregroundStyle(.white)
+            .scaleEffect(focused ? 1.06 : 1)
+            .shadowWhen(focused, color: .black.opacity(0.45), radius: 22, y: 10)
+            .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
+        }
+    }
+}
+
+/// Playback on the TV: Speakers (when that's on) on the left, when to stop
+/// on the right.
+private struct PlaybackOptions: View {
+    let controller: PlayerController
+    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
+    let close: () -> Void
+    @Environment(AppModel.self) private var app
+
+    /// The sleep timer's row for what it's set to.
+    static func current(_ timer: SleepTimer) -> String {
+        switch timer.mode {
+        case .off: "sleep-off"
+        case .endOfItem: "sleep-end"
+        case .minutes(let m): SleepTimer.presets.contains(m) ? "sleep-\(m)" : "sleep-off"
+        }
+    }
+
+    var body: some View {
+        let timer = app.sleepTimer
+        HStack(alignment: .top, spacing: 24) {
+            if app.settings.speakersButton {
+                // The system's own picker: it focuses and presents itself
+                // (a hidden one pressed from a button of ours didn't).
+                HStack(spacing: 20) {
+                    SpeakerPickerButton(size: 66)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Speakers").font(.body)
+                        Text("Choose where the sound plays").font(.caption).foregroundStyle(.white.opacity(0.55))
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 8)
+                .frame(width: 560, alignment: .topLeading)
+                .tvFocusSection()
             }
-            .padding(.horizontal, 10)
-        case .playback:
-            // A short card: what's below scrolls up as focus moves down.
-            let timer = app.sleepTimer
-            ScrollView {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Stop Playing")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
                     .padding(.horizontal, 26)
-                    .padding(.top, 14)
+                    .padding(.bottom, 4)
                 OptionRow(title: "Never", detail: nil, selected: !timer.isActive, id: "sleep-off", focus: focus) {
                     timer.reset()
                     close()
@@ -609,115 +795,10 @@ struct MenuCard: View {
                     close()
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            }
-            .frame(maxHeight: 430)
-        case .info:
-            ItemAbout(controller: controller)
-                .padding(.horizontal, 26)
-                .focusable()
-                .focused(focus, equals: .option("info"))
-        case .upNext:
-            UpNextCard(controller: controller, focus: focus, close: close)
-        case .speakers:
-            EmptyView()                                  // no card: the system's picker opens instead
-        case .chapters:
-            // Each with its picture and where it starts; the one playing checked.
-            let current = controller.currentChapter
-            ScrollView {
-                VStack(spacing: 6) {
-                    ForEach(controller.chapters) { chapter in
-                        OptionRow(title: chapter.name, detail: chapter.start.clockString, selected: chapter.id == current?.id,
-                                  id: "chapter-\(chapter.index)", focus: focus,
-                                  thumbnail: AnyView(ChapterThumb(chapter: chapter, controller: controller, width: 144))) {
-                            Task { await controller.seek(to: chapter.start) }
-                            close()
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-            }
-            .tvScrollClipDisabled()
-            .frame(maxHeight: min(600, CGFloat(controller.chapters.count) * 112 + 12))
+            .frame(width: 560, alignment: .topLeading)
+            .tvFocusSection()
         }
-    }
-
-    /// "English", "English (Forced)" — the language, not the stream's label.
-    static func trackName(_ s: MediaStream) -> String {
-        let name = s.language.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? s.displayTitle ?? "Track \(s.index)"
-        return s.isForced == true ? "\(name) (Forced)" : name
-    }
-
-    /// Only what tells two tracks apart: hearing-impaired, a title of its own.
-    static func trackNote(_ s: MediaStream) -> String? {
-        let label = (s.title ?? "") + " " + (s.displayTitle ?? "")
-        if label.contains("SDH") || label.localizedCaseInsensitiveContains("hearing impaired") { return "SDH" }
-        guard let title = s.title, !title.isEmpty, title.lowercased() != (s.language ?? "").lowercased() else { return nil }
-        return title
-    }
-
-    private func isOption(_ f: PlayerView.PlayerFocus?) -> Bool {
-        if case .option = f { true } else { false }
-    }
-
-    private var defaultOption: PlayerView.PlayerFocus {
-        switch menu {
-        case .subtitles:
-            switch controller.subtitleSearch {
-            case .results(let found): .option(found.first.map { "found-\($0.id)" } ?? "sub-find")
-            case .searching: .option("sub-searching")
-            case .failed: .option("sub-failed")
-            case .idle: .option(controller.foundSubtitle != nil ? "sub-found" : controller.selectedSubtitle.map { "sub-\($0)" } ?? "sub-off")
-            }
-        case .audio: .option((controller.engine?.selectedAudioTrack ?? controller.audioOptions.first?.id).map { "audio-\($0)" } ?? "audio-none")
-        // The sleep timer's current choice (the card's main business);
-        // Untracked is one step up.
-        case .playback:
-            switch app.sleepTimer.mode {
-            case .off: .option("sleep-off")
-            case .endOfItem: .option("sleep-end")
-            case .minutes(let m): .option(SleepTimer.presets.contains(m) ? "sleep-\(m)" : "sleep-off")
-            }
-        case .info: .option("info")
-        case .upNext: .option(controller.chosenUpNext.first.map { "next-\($0.id)" } ?? "next-none")
-        case .speakers: .option("speakers-none")
-        // The one playing, so Up and Down go to the ones either side.
-        case .chapters: .option((controller.currentChapter ?? controller.chapters.first).map { "chapter-\($0.index)" } ?? "chapters-none")
-        }
-    }
-}
-
-/// The TV's Up Next: what you've lined up after this one, each with when it
-/// ends; select one to play it now. (Adding is the phone app's.)
-private struct UpNextCard: View {
-    let controller: PlayerController
-    var focus: FocusState<PlayerView.PlayerFocus?>.Binding
-    let close: () -> Void
-    @Environment(AppModel.self) private var app
-
-    var body: some View {
-        let list = controller.chosenUpNext
-        let ends = controller.upNextEnds(list, now: app.queue.now)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(Array(list.enumerated()), id: \.element.id) { i, next in
-                    let words = ItemAbout.nextLines(next, after: controller.item)
-                    let end = i < ends.count ? "ends \(ends[i].formatted(date: .omitted, time: .shortened))" : nil
-                    OptionRow(title: words.title, detail: [words.detail, end].compactMap { $0 }.joined(separator: " · "),
-                              selected: false, id: "next-\(next.id)", focus: focus,
-                              thumbnail: AnyView(Artwork(item: next, kind: .landscape, width: 144).frame(width: 144, height: 81).clipShape(.rect(cornerRadius: 8)))) {
-                        app.play(next)
-                        close()
-                    }
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-        }
-        .tvScrollClipDisabled()
-        .frame(maxHeight: min(560, CGFloat(list.count) * 112 + 12))
+        .padding(.horizontal, 10)
     }
 }
 
@@ -737,7 +818,7 @@ private struct OptionRow: View {
     var trailing: String? = nil
     /// The detail explains the row: shown only on it, not over the whole card.
     var detailWhenFocused = false
-    /// A picture after the check (a chapter's).
+    /// A picture after the check.
     var thumbnail: AnyView? = nil
     let action: () -> Void
 

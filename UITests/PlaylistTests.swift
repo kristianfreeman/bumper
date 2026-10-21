@@ -19,16 +19,9 @@ final class PlaylistTests: XCTestCase {
         XCTAssertTrue(play.hasFocus, "Play isn't focused")
         remote.press(.select)
         XCTAssertTrue(app.staticTexts["player.time"].exists(within: 10), "Play didn't play")
-        // The info band's Up Next: the playlist's second item.
-        let icons = app.buttons["control.subtitles"]
-        icons.exists(within: 2)
-        icons.gone(within: 6)                                        // the controls hide; Select brings them back
-        remote.press(.select)
-        icons.exists(within: 2)
-        remote.press(.up)
-        icons.waitForFocus()
-        for _ in 0..<3 { remote.press(.right) }
-        remote.press(.select)
+        // More's Info: what's next beside it is the playlist's second item.
+        remote.press(.down)
+        app.descendants(matching: .any)["player.more"].exists(within: 3)
         let upNext = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'E2 · Chapter 2'")).firstMatch
         upNext.exists(within: 3)
         if let dir = ProcessInfo.processInfo.environment["SHOTS_DIR"] {

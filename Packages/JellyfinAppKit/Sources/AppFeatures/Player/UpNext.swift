@@ -12,6 +12,8 @@ struct EndCard: Equatable {
     let next: BaseItem?
     /// Seconds left before it does.
     var countdown: Int
+    /// Next in your shows: another show's next episode.
+    var another: BaseItem? = nil
     /// Something different: like this, not from this show.
     let instead: BaseItem?
     /// Up over the credits as they roll (else over the last frame).
@@ -81,6 +83,15 @@ extension PlayerController {
     var somethingDifferent: BaseItem? {
         let next = Set(upNextList.prefix(1).map(\.id))
         return similarItems.first { !next.contains($0.id) && $0.id != item.id }
+    }
+
+    /// The end card's "Next in your shows": where you are in another show
+    /// you're watching (not this one, nor what's already offered).
+    var nextInAnotherShow: BaseItem? {
+        let taken = Set([upNext?.id, somethingDifferent?.id].compactMap { $0 })
+        return app.queue.candidates.first {
+            $0.kind == .episode && $0.seriesId != nil && $0.seriesId != item.seriesId && $0.id != item.id && !taken.contains($0.id)
+        }
     }
 
     /// Add to Up Next: the rest of the show, things like it, and what's next in your other shows.
