@@ -190,9 +190,9 @@ struct CompassChrome: View {
                     Spacer()
                     Text(remaining(length))
                 }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.62))
-                .padding(.top, 10)
+                .font(.system(size: 30, weight: .medium).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.68))
+                .padding(.top, 12)
             }
         }
         .allowsHitTesting(false)
@@ -231,11 +231,11 @@ private struct Hint: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: symbol).font(.caption2.weight(.bold)).opacity(0.7)
+            Image(systemName: symbol).font(.system(size: 22, weight: .bold)).opacity(0.7)
             Text(title).fontWeight(.medium)
             if let detail { Text(detail).opacity(0.6) }
         }
-        .font(.caption)
+        .font(.system(size: 30))
         .foregroundStyle(.white.opacity(0.75))
         .shadow(color: .black.opacity(0.5), radius: 8)
         .accessibilityElement(children: .ignore)
@@ -475,7 +475,7 @@ struct LanguagesCard: View {
                 .contentTransition(.opacity)
             content()
         }
-        .frame(width: 560, alignment: .topLeading)
+        .frame(width: 620, alignment: .topLeading)
         .tvFocusSection()
     }
 
@@ -611,7 +611,7 @@ struct MorePanel: View {
                 case .playback: PlaybackOptions(controller: controller, focus: focus, close: close)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
             .transition(.opacity)
         }
         .padding(.top, 40)
@@ -654,10 +654,10 @@ struct MorePanel: View {
 
         var body: some View {
             Text(title)
-                .font(.callout.weight(.semibold))
+                .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(focused ? Color.black : selected ? .white : .white.opacity(0.65))
-                .padding(.horizontal, 30)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 34)
+                .padding(.vertical, 14)
                 .background(focused ? Color.white : selected ? Color.white.opacity(0.18) : .clear, in: .capsule)
                 .scaleEffect(focused ? 1.06 : 1)
                 .animation(.spring(duration: 0.22, bounce: 0.15), value: focused)
@@ -675,9 +675,18 @@ private struct UpNextRow: View {
 
     var body: some View {
         let list = controller.chosenUpNext
+        // In the middle when they fit across (four do); more scroll.
+        if list.count <= 4 {
+            tiles(list).frame(maxWidth: .infinity)
+        } else {
+            ScrollView(.horizontal) { tiles(list) }
+                .tvScrollClipDisabled()
+        }
+    }
+
+    private func tiles(_ list: [BaseItem]) -> some View {
         let ends = controller.upNextEnds(list, now: app.queue.now)
-        ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: 40) {
+        return HStack(alignment: .top, spacing: 40) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, next in
                     let words = ItemAbout.nextLines(next, after: controller.item)
                     let end = i < ends.count ? "ends \(ends[i].formatted(date: .omitted, time: .shortened))" : nil
@@ -694,8 +703,6 @@ private struct UpNextRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
-        }
-        .tvScrollClipDisabled()
     }
 
     /// Its clean art (an episode's show's, not a still), the words on the
@@ -715,8 +722,8 @@ private struct UpNextRow: View {
                 }
                 .overlay(alignment: .bottomLeading) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.callout.weight(.semibold)).lineLimit(1)
-                        Text(detail).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                        Text(title).font(.system(size: 32, weight: .semibold)).lineLimit(1)
+                        Text(detail).font(.system(size: 24)).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                     }
                     .padding(18)
                 }
@@ -758,18 +765,18 @@ private struct PlaybackOptions: View {
                         HStack(spacing: 20) {
                             SpeakerPickerButton(size: 66)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Speakers").font(.body)
-                                Text("Choose where the sound plays").font(.caption).foregroundStyle(.white.opacity(0.55))
+                                Text("Speakers").font(.system(size: 34))
+                                Text("Choose where the sound plays").font(.system(size: 24)).foregroundStyle(.white.opacity(0.6))
                             }
                         }
                     }
                     if app.settings.allowRemote {
                         // Not a button: where else this can be played from.
                         HStack(spacing: 20) {
-                            Image(systemName: "iphone").font(.title3).frame(width: 66)
+                            Image(systemName: "iphone").font(.system(size: 40)).frame(width: 66)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Control this with your iPhone").font(.body)
-                                Text("Open Bumper on an iPhone or iPad on this Wi-Fi").font(.caption).foregroundStyle(.white.opacity(0.55))
+                                Text("Control this with your iPhone").font(.system(size: 34))
+                                Text("Open Bumper on an iPhone or iPad on this Wi-Fi").font(.system(size: 24)).foregroundStyle(.white.opacity(0.6))
                             }
                         }
                         .foregroundStyle(.white.opacity(0.85))
@@ -805,7 +812,7 @@ private struct PlaybackOptions: View {
                     close()
                 }
             }
-            .frame(width: 560, alignment: .topLeading)
+            .frame(width: 620, alignment: .topLeading)
             .tvFocusSection()
         }
         .padding(.horizontal, 10)
@@ -864,14 +871,14 @@ private struct OptionRow: View {
                 Group {
                     if let symbol { Image(systemName: symbol) } else { Image(systemName: "checkmark").opacity(selected ? 1 : 0) }
                 }
-                .font(.body.weight(.bold))
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(focused ? Color.black : selected || highlighted ? theme.accent : .white.opacity(0.8))
                 .frame(width: 30)
                 if let thumbnail { thumbnail }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1).truncationMode(.middle)
+                    Text(title).font(.system(size: 34, weight: selected ? .semibold : .regular)).lineLimit(1).truncationMode(.middle)
                     if let detail, showsDetail {
-                        Text(detail).font(.caption.weight(highlighted ? .bold : .medium))
+                        Text(detail).font(.system(size: 24, weight: highlighted ? .bold : .medium))
                             .foregroundStyle(focused ? Color.black.opacity(0.6) : highlighted ? theme.accent : .white.opacity(0.55))
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -880,12 +887,12 @@ private struct OptionRow: View {
                 }
                 Spacer(minLength: 8)
                 if let trailing {
-                    Text(trailing).font(.callout.weight(.semibold).monospacedDigit()).opacity(0.7).contentTransition(.numericText())
+                    Text(trailing).font(.system(size: 28, weight: .semibold).monospacedDigit()).opacity(0.7).contentTransition(.numericText())
                 }
             }
             .foregroundStyle(focused ? .black : .white)
             .padding(.horizontal, 18)
-            .padding(.vertical, showsDetail ? 11 : 16)
+            .padding(.vertical, showsDetail ? 12 : 18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(focused ? Color.white : selected ? Color.white.opacity(0.07) : .clear, in: .rect(cornerRadius: 18, style: .continuous))
             .shadowWhen(focused, color: .black.opacity(0.35), radius: 16, y: 6)
@@ -910,7 +917,7 @@ struct ItemAbout: View {
 
     private var tv: Bool { Platform.isTV }
     private var phone: Bool { Layout.device == .phone }
-    private var small: Font { tv ? .caption : .footnote }
+    private var small: Font { tv ? .callout : .footnote }
 
     var body: some View {
         let item = controller.item
@@ -927,7 +934,7 @@ struct ItemAbout: View {
                 VStack(alignment: .leading, spacing: tv ? 4 : 2) {
                     Text(Self.facts(item)).font(small).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                     if showsName {
-                        Text(item.name ?? "").font(tv ? .callout.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
+                        Text(item.name ?? "").font(tv ? .title3.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
                     }
                     if let overview = item.overview {                     // you're watching it: no spoiler
                         Text(overview).font(small).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 2 : 4)
