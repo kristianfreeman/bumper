@@ -715,10 +715,19 @@ final class PlayerController {
                 chosen = SubtitleSelection.choose(from: streams, serverDefault: plan.subtitleStreamIndex, preferredLanguages: Locale.preferredLanguages)
             }
         }
+        // Why subtitles are (or aren't) on, for "they didn't come on":
+        // the setting, what the file has, and what was picked.
+        let subs = plan.mediaSource.subtitleStreams
+        let why = request.subtitleIndex != nil ? "picked before playing" : "setting \(app.settings.subtitleMode.rawValue)"
+        let have = subs.isEmpty ? "none" : subs.map { "\($0.index) \($0.language ?? "?") \($0.codec ?? "?")\($0.isDefault == true ? " default" : "")\($0.isForced == true ? " forced" : "")\($0.isExternal == true ? " external" : "")" }.joined(separator: ", ")
         if let chosen {
-            let title = plan.mediaSource.subtitleStreams.first { $0.index == chosen }?.displayTitle ?? "#\(chosen)"
+            let title = subs.first { $0.index == chosen }?.displayTitle ?? "#\(chosen)"
             Self.log.info("Subtitles on by default: \(title, privacy: .public)")
+            TraceFile.write("subtitles", "\(why): on, \(title) (of \(have))")
             await selectSubtitle(chosen)
+            TraceFile.write("subtitles", "now: \(subtitleStatus)")
+        } else {
+            TraceFile.write("subtitles", "\(why): off (of \(have))")
         }
     }
 

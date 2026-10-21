@@ -123,6 +123,8 @@ struct ItemDetailView: View {
     @State private var model: DetailModel
     @State private var showTracks = false
     @FocusState private var playFocused: Bool
+    /// Focus was last on an episode: coming up into the action row goes to Play.
+    @State private var fromEpisodes = false
     /// Which of the other actions has focus: the row animates as one when a
     /// pill opens to show its name (each pill only animates itself, and its
     /// neighbours jumped aside in a single frame).
@@ -313,7 +315,10 @@ struct ItemDetailView: View {
                 // More first and jumping across when it did.
                 let target = model.playTarget
                 if target != nil || item.kind == .series {
-                    Pill(target.map(playLabel) ?? "Play", systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill", prominent: true) {
+                    // Big, and saying what it plays unless you're on another of the
+                    // row's buttons: "Play S1 · E1" read as the page's point.
+                    Pill(target.map(playLabel) ?? "Play", systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill",
+                         size: Platform.isTV ? .large : .regular, prominent: true, alwaysShowsTitle: actionFocus == nil) {
                         if let target { app.play(target) }
                     }
                     .pillCaption(castLink?.connectedTo.map { "On \($0)" } ?? (target?.resumePosition != nil ? "Resume" : "Play"))
@@ -324,6 +329,14 @@ struct ItemDetailView: View {
                 }
                 secondaryRow(item, size: .regular)
             }
+            // Up from the episodes lands on Play, not on whichever button sat
+            // above the episode you were on (Queue): a move follows the layout
+            // (default focus only counts when focus resets), so it's sent on.
+            .onChange(of: actionFocus) { was, now in
+                if was == nil, now != nil, fromEpisodes { playFocused = true }
+                fromEpisodes = false
+            }
+            .onChange(of: playFocused) { _, focused in if focused { fromEpisodes = false } }
             .animation(.spring(duration: 0.3, bounce: 0.2), value: actionFocus)
             .animation(.spring(duration: 0.3, bounce: 0.2), value: playFocused)
             .padding(.top, 8)
@@ -429,6 +442,7 @@ struct ItemDetailView: View {
                         LandscapeCard(ep, kind: .still) { app.play(ep) }
                             .contextMenu { ItemContextMenu(item: ep) }
                             .onFocused {
+                                fromEpisodes = true
                                 model.selectedEpisode = ep
                                 if let season = ep.seasonId, season != model.selectedSeason { model.selectedSeason = season }
                             }

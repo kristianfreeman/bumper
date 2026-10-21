@@ -26,10 +26,13 @@ struct SearchView: View {
 
     private var grouped: [(String, [BaseItem], Shelf<AnyView>.Style)] {
         [
+            // Films and shows first; episodes (a show's name matches dozens) last.
             ("Movies", results.filter { $0.kind == .movie }, .poster),
             ("Shows", results.filter { $0.kind == .series }, .poster),
-            ("Episodes", results.filter { $0.kind == .episode }, .landscape),
+            ("Playlists", results.filter { $0.kind == .playlist }, .poster),
             ("Collections", results.filter { $0.kind == .boxSet }, .poster),
+            ("Videos", results.filter { $0.kind == .video }, .landscape),
+            ("Episodes", results.filter { $0.kind == .episode }, .landscape),
         ].filter { !$0.1.isEmpty }
     }
 
@@ -73,7 +76,19 @@ struct SearchView: View {
             guard !Task.isCancelled else { return }
             searching = true
             defer { searching = false }
-            if let page = try? await client.search(term), !Task.isCancelled { results = page.items }
+            do {
+                let page = try await client.search(term)
+                guard !Task.isCancelled else { return }
+                results = page.items
+                // What each kind found, and its first few: "21" finding only episodes was this line's question.
+                let kinds: [ItemKind] = [.movie, .series, .playlist, .boxSet, .video, .episode]
+                TraceFile.write("search", "“\(term)”: " + kinds.map { kind in
+                    let found = page.items.filter { $0.kind == kind }
+                    return "\(kind.rawValue) \(found.count)" + (found.isEmpty ? "" : " (\(found.prefix(3).compactMap(\.name).joined(separator: ", ")))")
+                }.joined(separator: " · "))
+            } catch {
+                TraceFile.write("search", "“\(term)”: failed (\(error.localizedDescription))")
+            }
             // Reading the words waits for a pause in typing (each new set of words is a lookup).
             try? await Task.sleep(for: .milliseconds(280))
             guard !Task.isCancelled else { return }
