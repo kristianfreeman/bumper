@@ -348,8 +348,8 @@ struct ItemDetailView: View {
         HStack(spacing: Self.phone ? 16 : 22) {
             if let target = model.playTarget {
                 if target.resumePosition != nil {
-                    Pill("Play from Beginning", systemImage: "gobackward", size: size) { app.play(target, resume: false) }
-                        .pillCaption("Restart")
+                    Pill("Start Over", systemImage: "gobackward", size: size) { app.play(target, resume: false) }
+                        .pillCaption("Start Over")
                         .focused($actionFocus, equals: "restart")
                 }
                 Pill(app.queue.contains(target.id) ? "In Queue" : "Add to Queue", systemImage: app.queue.contains(target.id) ? "text.badge.checkmark" : "text.badge.plus",

@@ -188,7 +188,7 @@ public struct PillFace<Icon: View>: View {
 extension EnvironmentValues {
     /// Pills show their name beneath them (off the TV, where focus would).
     @Entry public var pillCaptions = false
-    /// A pill's short name for its caption ("Restart" for Play from Beginning).
+    /// A pill's short name for its caption ("Queue" for Add to Queue).
     @Entry public var pillCaption: String? = nil
 }
 
