@@ -213,7 +213,9 @@ struct TrackedBackdrop: View {
     /// `-perfNoBackdrop`: the theme background only (device measurements).
     private static let off = ProcessInfo.processInfo.arguments.contains("-perfNoBackdrop")
     var body: some View {
-        if Self.off { BackgroundOnly() } else { FocusBackdrop(tracker.featured) }
+        // A wash of the focused item's colours, not its backdrop: no image
+        // decoded and faded in at every focus move (the detail page has it).
+        if Self.off { BackgroundOnly() } else { ColorWash(tracker.featured) }
     }
 }
 

@@ -135,6 +135,45 @@ public struct MediaGrid: View {
 /// Full-bleed backdrop that follows focus. The current image stays up until
 /// the next one is decoded, then the new one fades in *over* it — image to
 /// image, never dipping to the plain background in between.
+/// The browsing pages' background (Home, the libraries): the focused item's
+/// colours as a quiet wash over the theme, from the blurhashes Jellyfin
+/// sends with its images — their average colours, nothing to fetch or
+/// decode. A focus move animates between colours, where a full-screen
+/// backdrop was fetched, decoded and faded in at every move. The detail page
+/// and the player keep the picture itself (`FocusBackdrop`).
+public struct ColorWash: View {
+    let item: BaseItem?
+    @Environment(\.theme) private var theme
+
+    public init(_ item: BaseItem?) { self.item = item }
+
+    public var body: some View {
+        let (wide, poster) = Self.colors(item)
+        ZStack {
+            theme.backgroundGradient
+            LinearGradient(colors: [wide.opacity(0.6), poster.opacity(0.28), .clear],
+                           startPoint: .topTrailing, endPoint: .bottomLeading)
+            if let overlay = FocusBackdrop.overlay(for: theme) {
+                Image(decorative: overlay, scale: 1).resizable()
+            }
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.5), value: item?.id)
+    }
+
+    /// The backdrop's colour and the poster's (each falls back to the other).
+    static func colors(_ item: BaseItem?) -> (Color, Color) {
+        guard let item else { return (.clear, .clear) }
+        func color(_ kind: ArtworkKind) -> Color? {
+            guard let hash = ArtworkSource.resolve(item, kind)?.blurHash, let c = BlurHash.averageColor(hash) else { return nil }
+            return Color(red: c.red, green: c.green, blue: c.blue)
+        }
+        let wide = color(.backdrop) ?? color(.landscape) ?? color(.poster)
+        let poster = color(.poster) ?? wide
+        return (wide ?? .clear, poster ?? .clear)
+    }
+}
+
 public struct FocusBackdrop: View {
     let item: BaseItem?
     @Environment(\.theme) private var theme
