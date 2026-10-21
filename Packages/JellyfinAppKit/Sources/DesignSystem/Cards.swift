@@ -81,20 +81,37 @@ public struct PosterCard: View {
                         if let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) { ProgressStrip(p).padding(12) }
                     }
                     .cardFocus()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title ?? item.name ?? "")
-                        .font(.cardTitle)
-                        .foregroundStyle(theme.primaryText)
-                        .lineLimit(1)
-                    if let detail {
-                        Text(detail).font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
-                    }
-                }
-                .frame(width: width, alignment: .leading)
+                Words(title: title ?? item.name ?? "", detail: detail, posterHeight: width * 1.5)
+                    .frame(width: width, alignment: .leading)
             }
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(title ?? item.name ?? "Untitled")
+    }
+
+    /// The lines under the poster. On the TV the focused poster lifts and
+    /// grows over them; they move down by as much (as PersonCard's do), so
+    /// they stay clear of it.
+    private struct Words: View {
+        let title: String
+        let detail: String?
+        let posterHeight: CGFloat
+        @Environment(\.theme) private var theme
+        @Environment(\.isFocused) private var focused
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.cardTitle)
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+                if let detail {
+                    Text(detail).font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
+                }
+            }
+            .offset(y: Platform.isTV && focused ? posterHeight * 0.07 : 0)
+            .animation(.spring(duration: 0.25), value: focused)
+        }
     }
 }
 

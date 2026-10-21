@@ -10,7 +10,7 @@ final class ScrollTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 8))
         app.focusSettles()
         let remote = XCUIRemote.shared
         let screen = app.windows.firstMatch.frame

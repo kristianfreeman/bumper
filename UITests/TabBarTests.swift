@@ -17,8 +17,10 @@ final class TabBarTests: XCTestCase {
         }
         XCTAssertTrue(afterUp.hasPrefix("TABBAR"), "Up from the first card: focus on \(afterUp), not the tabs")
         remote.press(.down)
-        waitUntil(2) { app.focused.identifier.hasPrefix("card.") }
-        XCTAssertTrue(app.focused.identifier.hasPrefix("card."), "Down from the tabs: focus on \(focusedDescription(app)), not a card")
+        // Back on the page: Home's pick (its Play) or a card.
+        let onPage = { ["card.", "home.pick."].contains { app.focused.identifier.hasPrefix($0) } }
+        waitUntil(2) { onPage() }
+        XCTAssertTrue(onPage(), "Down from the tabs: focus on \(focusedDescription(app)), not the page")
         remote.press(.menu)
         XCTAssertTrue(onTabs(app), "Menu: focus on \(focusedDescription(app)), not the tabs")
     }
@@ -48,7 +50,7 @@ final class TabBarTests: XCTestCase {
             time.gone(within: 1)
         }
         XCTAssertFalse(time.exists, "couldn't leave the player")
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 5))
         app.focusSettles()
         remote.press(.up)
         XCTAssertTrue(onTabs(app), "After the player, Up: focus on \(focusedDescription(app))")
@@ -68,7 +70,7 @@ final class TabBarPlacesTests: XCTestCase {
         remote.press(.right, movingFocusIn: app)                // Home → the first library
         let tab = focusedDescription(app)
         XCTAssertTrue(tab.hasPrefix("TABBAR"), "Right along the tabs: focus on \(tab)")
-        let resume = app.descendants(matching: .any)["collection.resume"]
+        let resume = app.descendants(matching: .any)["home.pick.play"]
         let onHome = { resume.exists && resume.isHittable }     // (isHittable on what's gone looks again for a second)
         waitUntil(3) { !onHome() }                              // its page in
         app.focusSettles(quiet: 0.2)
@@ -131,7 +133,7 @@ extension XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-mock", "-reset"] + extra
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["collection.resume"].exists(within: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["home.pick.play"].exists(within: 8))
         app.focusSettles()
         return app
     }

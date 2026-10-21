@@ -89,7 +89,10 @@ final class HomeModel {
         async let nextUp = client.nextUp(limit: 50)
         async let views = client.userViews()
 
-        let libraries = LibraryOrder.ordered(try await views.items, scores: usage).filter { $0.collectionType == "movies" || $0.collectionType == "tvshows" }
+        // What's new comes from the libraries you show; Continue Watching
+        // and Next Up from all of them.
+        let libraries = LibraryOrder.ordered(try await views.items, scores: usage)
+            .filter { ($0.collectionType == "movies" || $0.collectionType == "tvshows") && !hidden.contains($0.id) }
         // What's new, by what it is: New Episodes and New Shows from each
         // shows library, New Movies from each films one. With two libraries
         // of a kind, the row says which ("New Shows · Anime").
@@ -103,7 +106,7 @@ final class HomeModel {
                     let sameKind = libraries.filter { $0.collectionType == row.lib.collectionType }.count > 1
                     let title = row.kind.title + (sameKind ? " · \(row.lib.name ?? "")" : "")
                     let id = "latest-\(row.kind == .movies ? "movies" : row.kind == .shows ? "tvshows" : "episodes")-\(row.lib.id)"
-                    var s = BrowseSection(id: id, title: title, items: arrivals.map(\.card), style: .landscape, library: row.lib.name)
+                    var s = BrowseSection(id: id, title: title, items: arrivals.map(\.card), style: .landscape, scrolls: true, library: row.lib.name)
                     s.arrivals = arrivals
                     s.arrivalsSpec = ArrivalsSpec(kind: row.kind, libraryId: row.lib.id, title: title)
                     return (i, s)
@@ -125,7 +128,7 @@ final class HomeModel {
         for lib in (try await views.items).filter({ $0.collectionType == "playlists" && !hidden.contains($0.id) }) {
             let list = (try? await Playlists.list(library: lib.id, client: client)) ?? []
             guard !list.isEmpty else { continue }
-            var s = BrowseSection(id: "playlists-\(lib.id)", title: lib.name ?? "Playlists", items: list, style: .landscape, total: list.count, library: lib.name)
+            var s = BrowseSection(id: "playlists-\(lib.id)", title: lib.name ?? "Playlists", items: list, style: .landscape, scrolls: true, total: list.count, library: lib.name)
             s.subtitle = Playlists.lede(list)
             s.playlistsLibrary = lib
             sections.append(s)
@@ -239,20 +242,14 @@ struct HomeView: View {
     @FocusState private var firstCardFocused: Bool
 
     var body: some View {
-        let page = EditorialHome(sections: model.sections, userName: app.session?.account.userName)
+        let page = EditorialHome(sections: model.sections, userName: app.session?.account.userName, queue: app.queue.plan.entries.map(\.item))
+        // The pick's Play takes launch focus when there's a pick; the first card otherwise.
+        let pickLeads = !page.picks.isEmpty
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
-            CollectionList(sections: page.sections, firstCardFocus: $firstCardFocused, showsQueue: true) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(page.copy.greeting)
-                        .font(.system(size: Layout.pageTitle, weight: .bold))
-                        .foregroundStyle(theme.primaryText)
-                    Text(page.copy.lede)
-                        .font(.pageLede)
-                        .foregroundStyle(theme.secondaryText)
-                        .frame(maxWidth: 1200, alignment: .leading)
-                }
-                .padding(.top, 10)
+            CollectionList(sections: page.sections, firstCardFocus: pickLeads ? nil : $firstCardFocused, showsQueue: true) {
+                HomePickSection(picks: page.picks, playFocus: pickLeads ? $firstCardFocused : nil)
+                    .padding(.top, 10)
             }
             if model.localNetworkBlocked {
                 ContentUnavailableView {
@@ -274,7 +271,7 @@ struct HomeView: View {
             tracker.onDwell = { [app] item in Self.prefetch(item, app: app) }
             if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries) }
             app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
-            tracker.seed(model.sections.first?.items.first)
+            tracker.seed(EditorialHome.picks(model.sections, queue: app.queue.plan.entries.map(\.item)).first?.item ?? model.sections.first?.items.first)
         }
         // Something marked watched: Continue Watching and Next Up move on.
         .onChange(of: app.watchedChanges) { _, _ in
@@ -288,17 +285,23 @@ struct HomeView: View {
     }
 }
 
-/// Home's words: the fetched sections, retitled and described by `Editorial`.
+/// Home's words: the fetched sections, retitled and described by `Editorial`,
+/// and the pick that leads the page (`HomePicks`).
 struct EditorialHome {
     let copy: Editorial
     let sections: [BrowseSection]
+    let picks: [HomePicks.Pick]
 
-    init(sections raw: [BrowseSection], userName: String?, now: Date = .now) {
+    init(sections raw: [BrowseSection], userName: String?, queue: [BaseItem] = [], now: Date = .now) {
         func items(_ prefix: String) -> [BaseItem] { raw.filter { $0.id.hasPrefix(prefix) }.flatMap(\.items) }
         let copy = Editorial(now: now, userName: userName, inProgress: items("resume"), nextUp: items("nextup"),
                              recentMovies: items("latest-movies"), recentShows: items("latest-tvshows"))
         self.copy = copy
-        sections = raw.map { section in
+        picks = Self.picks(raw, queue: queue, now: now)
+        // Continue Watching is what the pick and its row already are: with a
+        // pick, it isn't a row of its own.
+        let rows = picks.isEmpty ? raw : raw.filter { $0.id != "resume" }
+        sections = rows.map { section in
             var s = section
             let words: Editorial.Copy
             switch section.id {
@@ -316,6 +319,14 @@ struct EditorialHome {
             s.subtitle = words.subtitle
             return s
         }
+    }
+}
+
+extension EditorialHome {
+    /// From the rows Home already loaded: no requests of its own.
+    static func picks(_ raw: [BrowseSection], queue: [BaseItem], now: Date = .now) -> [HomePicks.Pick] {
+        func items(_ prefix: String) -> [BaseItem] { raw.filter { $0.id.hasPrefix(prefix) }.flatMap(\.items) }
+        return HomePicks.make(now: now, queue: queue, inProgress: items("resume"), nextUp: items("nextup"), newMovies: items("latest-movies"))
     }
 }
 
@@ -375,25 +386,36 @@ extension View {
 /// empty frame and no image drawn in the wrong box (the old flicker).
 struct HeroLogo: View {
     let item: BaseItem
+    /// The most room it gets (it shrinks to the logo's shape inside).
+    var box: CGSize = Self.box
     @Environment(\.jellyfin) private var client
     @Environment(\.displayScale) private var scale
     @State private var shown: (key: String, image: CGImage)?
     static let box = CGSize(width: 520, height: 150)
 
+    /// The TV's box, scaled for nearer screens.
+    static func box(for device: DesignSystem.Layout.Device) -> CGSize {
+        switch device {
+        case .tv: box
+        case .mac, .pad: CGSize(width: 340, height: 100)
+        case .phone: CGSize(width: 240, height: 72)
+        }
+    }
+
     private var request: ImageRequest? {
         guard let client, let source = ArtworkSource.resolve(item, .logo) else { return nil }
-        return source.request(client: client, pixelWidth: Int(Self.box.width * scale))
+        return source.request(client: client, pixelWidth: Int(box.width * scale))
     }
 
     /// The logo fitted into the box (the box shrinks to it).
-    private static func fitted(_ image: CGImage) -> CGSize {
+    private func fitted(_ image: CGImage) -> CGSize {
         let aspect = CGFloat(image.width) / CGFloat(max(1, image.height))
         let width = min(box.width, box.height * aspect)
         return CGSize(width: width, height: width / aspect)
     }
 
     var body: some View {
-        let size = shown.map { Self.fitted($0.image) } ?? Self.box
+        let size = shown.map { fitted($0.image) } ?? box
         ZStack(alignment: .bottomLeading) {
             if let shown {
                 Image(decorative: shown.image, scale: scale)
@@ -404,7 +426,7 @@ struct HeroLogo: View {
             }
         }
         .frame(width: size.width, height: size.height, alignment: .bottomLeading)
-        .frame(width: Self.box.width, height: Self.box.height, alignment: .bottomLeading)
+        .frame(width: box.width, height: box.height, alignment: .bottomLeading)
         .task(id: request?.key) {
             guard let request, shown?.key != request.key else { return }
             var image = ImagePipeline.shared.cachedImage(for: request)
@@ -502,9 +524,6 @@ struct ItemContextMenu: View {
 
     var body: some View {
         Button(item.kind == .episode ? "Episode Details" : "See Details", systemImage: "info.circle") { navigate(.item(item)) }
-        if [.series, .episode, .movie].contains(item.kind) {
-            Button("Play Untracked", systemImage: "infinity") { app.playInBackground(item) }
-        }
         if item.kind.isPlayable {
             Button("Play", systemImage: "play.fill") { app.play(item) }
             if item.resumePosition != nil {

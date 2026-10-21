@@ -7,6 +7,21 @@ TestFlight.
 
 ## Unreleased
 
+- Home leads with one pick: what you'd most likely watch now (your queue,
+  something nearly finished, the next episode, a new film), with Play ready
+  — "Resume · 18m left" when you've started it. An episode shows its show's
+  logo and which episode it is, and Go to Episode opens it. A row of others
+  sits under it; on the Apple TV moving along it brings each one up, on
+  touch and the Mac a tap does. Late at night the short ones come first.
+- Continue Watching is the pick and its row now, not a row of its own, and
+  the greeting is gone: Home starts with something to watch.
+- Home's rows are one row each, sideways, so the page is far shorter: what's
+  new, playlists and your queue scroll like Next Up.
+- Hidden libraries stay off Home's new rows too (Continue Watching and Next
+  Up still come from every library).
+- Apple TV: Next Up's titles move down as a poster lifts, so it never covers
+  them.
+- Play Untracked is gone from the item menu for now.
 - Up Next under the picture: what plays after this one and when each ends,
   with Add to Up Next for the rest of the show, things like it, and what's
   next in your other shows. On the Apple TV and the iPhone remote, Up Next
