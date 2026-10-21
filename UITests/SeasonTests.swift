@@ -26,6 +26,25 @@ final class SeasonTests: XCTestCase {
         XCTAssertTrue(two.isSelected, "moving into season 2's episodes didn't move the bar")
     }
 
+    /// Up from the episodes lands on Play — not on Add to Queue, which sat
+    /// above the episode you were on — and Play says what it plays.
+    func testUpFromTheEpisodesLandsOnPlay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-mock", "-route", "item:series-003"]
+        app.launch()
+        let play = app.buttons["detail.play"]
+        XCTAssertTrue(play.exists(within: 10), "the page didn't open")
+        XCTAssertTrue(waitUntil(5) { play.hasFocus }, "Play didn't take focus: \(app.focusSummary)")
+        let remote = XCUIRemote.shared
+        let focusedEpisode = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true AND label CONTAINS 'Chapter'")).firstMatch
+        remote.press(.down, in: app, atMost: 4) { focusedEpisode.exists }
+        XCTAssertTrue(focusedEpisode.exists, "couldn't reach the episodes")
+        remote.press(.right, in: app, atMost: 3) { false }                 // under Queue and the rest, not Play
+        remote.press(.up, in: app, atMost: 3) { play.hasFocus }
+        XCTAssertTrue(play.hasFocus, "up from the episodes went to \(app.focusSummary), not Play")
+        XCTAssertTrue(play.label.contains("Play"), "Play's label: \(play.label)")
+    }
+
     /// A long-runner (35 seasons of 22, as The Simpsons) opened from search,
     /// as on a living-room TV where the page came up and the remote did
     /// nothing: Play takes focus, and Down reaches the episodes.

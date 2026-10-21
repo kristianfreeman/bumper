@@ -1,4 +1,5 @@
 public import Foundation
+import Instrumentation
 
 /// `fields=` values. Ask for the minimum: every extra field costs server DB
 /// time, bytes on the wire, and decode time.
@@ -250,35 +251,35 @@ extension JellyfinClient {
         ]))
     }
 
-    /// Titles matching `term`: films, shows, episodes and collections, each
-    /// kind asked for on its own (as Jellyfin's web client does) — in one
-    /// shared request, a show's matching episodes could fill the limit and
-    /// leave the show out. Within a kind, the best-matching name first.
-    /// One kind failing leaves the others; all failing throws.
+    /// Titles matching `term`: films, shows, playlists, collections and
+    /// videos, then episodes (on the page in that order), the best-matching
+    /// name first within each kind. Two requests, one after the other:
+    /// episodes on their own (a show's name matches dozens of them, which in
+    /// one shared request filled the limit and left the show out), and never
+    /// at once — a server answering several searches at the same time
+    /// returned the wrong things ("21": fifteen episodes and not the film,
+    /// then one result, then fifteen again; asked one at a time, the film
+    /// every time). One failing leaves the other; both failing throws.
     public func search(_ term: String, limit: Int = 24) async throws -> ItemsPage {
-        let kinds: [ItemKind] = [.movie, .series, .episode, .boxSet]
-        var found = Array(repeating: [BaseItem](), count: kinds.count)
+        let titles: [ItemKind] = [.movie, .series, .playlist, .boxSet, .video]
         var failure: (any Error)?
-        await withTaskGroup(of: (Int, Result<[BaseItem], any Error>).self) { group in
-            for (i, kind) in kinds.enumerated() {
-                group.addTask {
-                    var q = ItemQuery(includeItemTypes: [kind], limit: limit)
-                    q.searchTerm = term
-                    q.sortBy = []
-                    q.enableTotalRecordCount = false
-                    do { return (i, .success(try await self.items(q).items)) } catch { return (i, .failure(error)) }
-                }
-            }
-            for await (i, result) in group {
-                switch result {
-                case .success(let items): found[i] = Self.bestFirst(items, for: term)
-                case .failure(let error): failure = failure ?? error
-                }
+        func ask(_ kinds: [ItemKind], limit: Int) async -> [BaseItem] {
+            var q = ItemQuery(includeItemTypes: kinds, limit: limit)
+            q.searchTerm = term
+            q.sortBy = []
+            q.enableTotalRecordCount = false
+            do { return try await self.items(q).items } catch {
+                failure = failure ?? error
+                TraceFile.write("search", "“\(term)” \(kinds.map(\.rawValue).joined(separator: ",")) failed: \(error)")
+                return []
             }
         }
-        if let failure, found.allSatisfy(\.isEmpty) { throw failure }
-        let items = found.flatMap { $0 }
-        return ItemsPage(items: items, totalRecordCount: items.count)
+        let found = await ask(titles, limit: limit * titles.count)
+        let episodes = await ask([.episode], limit: limit)
+        if let failure, found.isEmpty, episodes.isEmpty { throw failure }
+        let ordered = titles.flatMap { kind in Self.bestFirst(found.filter { $0.kind == kind }, for: term).prefix(limit) }
+            + Self.bestFirst(episodes, for: term)
+        return ItemsPage(items: Array(ordered), totalRecordCount: ordered.count)
     }
 
     /// The name that is the term ("Simpsons" → "The Simpsons"), then names

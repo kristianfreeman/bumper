@@ -253,9 +253,14 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         default:
             if types == ["Episode"] {
                 items = catalog.episodes.values.flatMap { $0 }
+            } else if types == ["Playlist"] {
+                items = MockPlaylists.playlists(catalog)
+            } else if types == ["Video"] {
+                items = []                                       // no home videos in the mock
             } else {
                 items = types.contains("Series") && !types.contains("Movie") ? catalog.series : catalog.movies + (types.isEmpty || types.contains("Series") ? catalog.series : [])
                 if types.contains("Episode") { items += catalog.episodes.values.flatMap { $0 } }
+                if types.contains("Playlist") { items += MockPlaylists.playlists(catalog) }      // search asks for several kinds at once
             }
         }
         if let term = q["searchterm"]?.lowercased(), !term.isEmpty {
