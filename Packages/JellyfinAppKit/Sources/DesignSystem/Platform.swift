@@ -32,6 +32,24 @@ extension View {
         #endif
     }
 
+    /// Where focus goes on coming back into `scope` (the TV, the Mac); nothing on touch.
+    @ViewBuilder public func focusPreferred(_ prefers: Bool, in scope: Namespace.ID) -> some View {
+        #if os(tvOS) || os(macOS)
+        prefersDefaultFocus(prefers, in: scope)
+        #else
+        self
+        #endif
+    }
+
+    /// The scope `focusPreferred` answers to (the TV, the Mac); nothing on touch.
+    @ViewBuilder public func focusScopeWhereFocused(_ scope: Namespace.ID) -> some View {
+        #if os(tvOS) || os(macOS)
+        focusScope(scope)
+        #else
+        self
+        #endif
+    }
+
     /// Menu on the remote / Escape on the Mac; nothing on touch (Back is a button there).
     @ViewBuilder public func tvExitCommand(perform action: (() -> Void)?) -> some View {
         #if os(tvOS) || os(macOS)

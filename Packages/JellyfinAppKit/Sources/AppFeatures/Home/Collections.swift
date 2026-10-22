@@ -19,6 +19,8 @@ struct CollectionList<Header: View>: View {
     @Environment(\.navigate) private var navigate
     /// The page's usable width (inside the safe area and margins): cards are sized from it.
     @Environment(\.pageWidth) private var width
+    @Environment(\.focusTracker) private var tracker
+    @Namespace private var page
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -28,13 +30,12 @@ struct CollectionList<Header: View>: View {
                     // elsewhere below the navigation bar, which holds it.
                     header()
                         .padding(.horizontal, Layout.horizontalMargin)
-                    // Not lazy on the TV: a lazy stack estimates the height of
-                    // collections it hasn't built, and corrects it as they appear —
-                    // focus scrolling made the page jump. Lazy elsewhere: a window
-                    // resize re-laid out every card on the page each frame (the
-                    // Mac's sidebar animation dropped frames), now only those on
-                    // screen. The focus engine does the TV's scrolling.
-                    PageStack(spacing: 80) {
+                    // Lazy: only the rows near the screen are built. (The TV
+                    // built them all once, for two-row grids of different
+                    // heights that a lazy stack mis-estimated; every row is one
+                    // carousel of the same height now, and forty of them built
+                    // at once lagged a 2017 Apple TV.)
+                    LazyVStack(alignment: .leading, spacing: 80) {
                         // Launch focus goes to the first card on the page: Queue's when it leads.
                         let queueLeads = showsQueue && !app.queue.isEmpty
                         if queueLeads {
@@ -51,7 +52,11 @@ struct CollectionList<Header: View>: View {
                             }
                         }
                         ForEach(sections) { section in
+                            // Equatable: a row filling in redraws that row, not every row.
                             CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
+                                .equatable()
+                                // Back from the sidebar, focus returns to the row it left.
+                                .focusPreferred(tracker?.row == section.id, in: page)
                                 .id(section.id)
                                 // As it scrolls into view, not as it's built: the
                                 // TV builds the whole page at once, and every row
@@ -69,6 +74,7 @@ struct CollectionList<Header: View>: View {
                 .padding(.bottom, 120)
             }
             .tvScrollClipDisabled()
+            .focusScopeWhereFocused(page)
             .notesScrollActivity()
             .task(id: sections.count) {
                 guard app.options.benchmark, sections.count > 1 else { return }
@@ -89,7 +95,7 @@ struct CollectionList<Header: View>: View {
 
 /// One row: its title (and a line of copy) over its cards, sideways as far
 /// as they go, "View all" at the end when there's a page behind it.
-struct CollectionSection: View {
+struct CollectionSection: View, Equatable {
     let section: BrowseSection
     /// Width for the grid (the page's, inside its margins).
     var available: CGFloat = 1600
@@ -105,6 +111,11 @@ struct CollectionSection: View {
                                  : Layout.columns(available, minWidth: Layout.landscapeMin, max: 4)
     }
     private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.section == b.section && a.section.title == b.section.title && a.section.subtitle == b.section.subtitle
+            && a.available == b.available && (a.firstCardFocus == nil) == (b.firstCardFocus == nil)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -313,20 +324,5 @@ struct FirstFocus: ViewModifier {
     let binding: FocusState<Bool>.Binding?
     func body(content: Content) -> some View {
         if let binding { content.focused(binding) } else { content }
-    }
-}
-
-/// The collections' stack: built in full on the TV, lazily elsewhere (see
-/// CollectionList).
-private struct PageStack<Content: View>: View {
-    let spacing: CGFloat
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        if Platform.isTV {
-            VStack(alignment: .leading, spacing: spacing, content: content)
-        } else {
-            LazyVStack(alignment: .leading, spacing: spacing, content: content)
-        }
     }
 }

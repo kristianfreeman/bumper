@@ -18,6 +18,7 @@ enum InputTrace {
             // measured nothing).
             HitchMonitor.shared.noteActivity()
             let context = note.userInfo?[UIFocusSystem.focusUpdateContextUserInfoKey] as? UIFocusUpdateContext
+            if let context { HeldMoveGuard.check(context, system: note.object as? UIFocusSystem) }
             let item = context?.nextFocusedItem
             let label = (item as? NSObject)?.accessibilityLabel ?? ""
             let frame = item.map { $0.frame } ?? .zero
@@ -40,10 +41,19 @@ enum InputTrace {
     /// Sees every press, claims none.
     private final class PressLogger: UIGestureRecognizer {
         override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent) {
-            for p in presses { TraceFile.write("press", Self.name(p.type)) }
+            for p in presses {
+                TraceFile.write("press", Self.name(p.type))
+                HeldMoveGuard.pressed(p.type)
+            }
         }
-        override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent) { state = .failed }
-        override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent) { state = .failed }
+        override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent) {
+            for p in presses { HeldMoveGuard.released(p.type) }
+            state = .failed
+        }
+        override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent) {
+            for p in presses { HeldMoveGuard.released(p.type) }
+            state = .failed
+        }
 
         static func name(_ type: UIPress.PressType) -> String {
             switch type {

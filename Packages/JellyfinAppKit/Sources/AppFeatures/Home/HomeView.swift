@@ -293,9 +293,6 @@ struct HomeView: View {
         .onChange(of: app.watchedChanges) { _, _ in
             Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter, collections: app.collectionLibraries.first) } }
         }
-        // Where focus starts (only on appearing: it doesn't steer later moves,
-        // which is what kept the sidebar from opening before).
-        .defaultFocus($firstCardFocused, true)
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "home")
         .hidesNavigationBar()
     }

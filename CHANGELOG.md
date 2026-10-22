@@ -12,8 +12,12 @@ TestFlight.
   Because You Watched, Highest Rated, Films You Haven't Seen, Something
   Different, your favourites, and on Movies and Shows the decades too.
   Each row scrolls sideways through all of it and ends in View all.
-- Rows load as they come into view, so a long page costs nothing until
-  you get there, and a row with nothing in it isn't shown.
+- Rows load and are built as they come into view, so a long page costs
+  nothing until you get there (smooth on a 2017 Apple TV), and a row with
+  nothing in it isn't shown.
+- Apple TV: holding Left to run back along a row stops at its start
+  instead of running into the sidebar, and back from the sidebar focus
+  returns to the row you left, not the top of the page.
 - Home's pick is the top of the page, not all of it: Continue Watching and
   the next row show beneath it.
 - Movies and Shows: Continue Watching from that library leads the page,
