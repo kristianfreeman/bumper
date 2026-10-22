@@ -30,9 +30,9 @@ TestFlight.
   you were instead of jumping to the top.
 - Audio & Subtitles on a film's or episode's page: choose them before you
   play, and Play, Resume and Start Over use them.
-- Apple TV player: Down is Info, centred under the timeline. Its panel is
-  stays one height on every tab; Playback's rows
-  scroll inside it, and Info's words aren't cut short.
+- Apple TV player: Down is Info, centred under the timeline. Its panel
+  stays one height on every tab, Playback's rows scroll inside it, and
+  Info's words aren't cut short.
 
 ## 0.3.0
 
