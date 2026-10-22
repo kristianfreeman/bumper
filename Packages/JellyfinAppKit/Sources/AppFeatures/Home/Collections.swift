@@ -4,9 +4,8 @@ import Instrumentation
 import JellyfinAPI
 import SwiftUI
 
-/// The editorial page shared by Home and the libraries: a written header,
-/// then collections — each a title, a line of copy and a grid preview
-/// (four across), ending in a "View all" tile that opens the whole thing.
+/// The page shared by Home and the libraries: a header, then row after row,
+/// each sideways through its cards and ending in "View all".
 struct CollectionList<Header: View>: View {
     let sections: [BrowseSection]
     /// When set, the first card of the first collection binds to it (launch focus).
@@ -54,7 +53,11 @@ struct CollectionList<Header: View>: View {
                         ForEach(sections) { section in
                             CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
                                 .id(section.id)
-                                .onAppear {
+                                // As it scrolls into view, not as it's built: the
+                                // TV builds the whole page at once, and every row
+                                // asked for its cards at launch.
+                                .onScrollVisibilityChange(threshold: 0.01) { visible in
+                                    guard visible else { return }
                                     if section.items.isEmpty { onNear?(section.id) }
                                     prepare(after: section)
                                 }
@@ -76,15 +79,16 @@ struct CollectionList<Header: View>: View {
         }
     }
 
-    /// Lazily loaded collections a little further down start loading now.
+    /// Rows a little further down start loading now, so they're filled by
+    /// the time focus gets there.
     private func prepare(after section: BrowseSection) {
         guard let i = sections.firstIndex(where: { $0.id == section.id }) else { return }
-        for next in sections.dropFirst(i + 1).prefix(2) where next.items.isEmpty { onNear?(next.id) }
+        for next in sections.dropFirst(i + 1).prefix(3) where next.items.isEmpty { onNear?(next.id) }
     }
 }
 
-/// One collection: "Pick up where you left off / Two things in progress —
-/// about an hour in all." over a 4-across grid of up to two rows.
+/// One row: its title (and a line of copy) over its cards, sideways as far
+/// as they go, "View all" at the end when there's a page behind it.
 struct CollectionSection: View {
     let section: BrowseSection
     /// Width for the grid (the page's, inside its margins).
@@ -94,7 +98,6 @@ struct CollectionSection: View {
     @Environment(\.navigate) private var navigate
     @Environment(\.theme) private var theme
 
-    static let rows = 2
 
     /// Four across on the TV (six posters), fewer where the screen's narrower.
     private var columns: Int {
@@ -106,7 +109,7 @@ struct CollectionSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             RowHeader(section.title, subtitle: section.subtitle, identifier: "collection.\(section.id)")
-            if section.scrolls, !section.items.isEmpty {
+            if !section.items.isEmpty {
                 // One row, sideways, as far as it goes.
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
@@ -116,43 +119,19 @@ struct CollectionSection: View {
                                 .reportsFocus(item, row: section.id)
                                 .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
                         }
-                        // A page of its own behind the row (what's new, playlists): at its end.
-                        if section.seeAll != nil || section.arrivalsSpec != nil || section.playlistsLibrary != nil {
+                        // A page of its own behind the row: at its end.
+                        if hasMore {
                             ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) { viewAll() }
                         }
                     }
                     .scrollTargetLayout()
                 }
                 .homeRow()
-            } else if section.items.isEmpty {
-                // Loading: skeleton cards at the real size, so nothing moves when they fill in.
-                Grid(horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
-                    ForEach(0..<Self.rows, id: \.self) { _ in
-                        GridRow { ForEach(0..<columns, id: \.self) { _ in SkeletonCard(width: width, aspect: aspect) } }
-                    }
-                }
             } else {
-                // Two rows at most; with more behind it, the last place is "View all".
-                let more = section.seeAll != nil || section.arrivalsSpec != nil || section.items.count > columns * Self.rows
-                let shown = Array(section.items.prefix(columns * Self.rows - (more ? 1 : 0)))
-                let tiles = shown.count + (more ? 1 : 0)
-                // A plain grid (two rows at most): laid out exactly, nothing estimated.
-                Grid(alignment: .topLeading, horizontalSpacing: Layout.cardSpacing, verticalSpacing: Layout.shelfSpacing + 8) {
-                    ForEach(0..<((tiles + columns - 1) / columns), id: \.self) { row in
-                        GridRow(alignment: .top) {
-                            ForEach(row * columns..<min(tiles, (row + 1) * columns), id: \.self) { i in
-                                if i < shown.count {
-                                    let item = shown[i]
-                                    card(item)
-                                        .accessibilityIdentifier("card.\(section.id).\(item.id)")
-                                        .reportsFocus(item, row: section.id)
-                                        .modifier(FirstFocus(binding: i == 0 ? firstCardFocus : nil))
-                                } else if more {
-                                    ViewAllTile(count: section.total.flatMap { $0 > 0 ? $0 : nil }, width: width, aspect: aspect) { viewAll() }
-                                }
-                            }
-                        }
-                    }
+                // Loading: a row of skeleton cards at the real size, so nothing
+                // moves when they fill in.
+                HStack(spacing: Layout.cardSpacing) {
+                    ForEach(0..<columns, id: \.self) { _ in SkeletonCard(width: width, aspect: aspect) }
                 }
             }
         }
@@ -160,8 +139,14 @@ struct CollectionSection: View {
         .tvFocusSection()
     }
 
+    /// Something behind the row: a query, what's new, playlists, a collection.
+    private var hasMore: Bool {
+        section.seeAll != nil || section.arrivalsSpec != nil || section.playlistsLibrary != nil || section.collection != nil
+    }
+
     private func viewAll() {
-        if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) }
+        if let set = section.collection { navigate(.item(set)) }
+        else if let spec = section.arrivalsSpec { navigate(.arrivals(spec)) }
         else if let lib = section.playlistsLibrary { navigate(.library(lib)) }
         else { navigate(.grid(section.seeAllSpec)) }
     }

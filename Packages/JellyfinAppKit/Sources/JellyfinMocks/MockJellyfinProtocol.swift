@@ -194,6 +194,11 @@ public final class MockJellyfinProtocol: URLProtocol, @unchecked Sendable {
         if parts.count >= 6, parts[0] == "Videos", parts[3] == "Subtitles", parts.last?.hasPrefix("Stream") == true {
             return (200, MockMedia.subtitleFile(), "application/x-subrip")
         }
+        // A library's genres: the names its titles carry.
+        if parts.count == 1, parts[0] == "Genres" {
+            let names = Set(filterItems(q, catalog).flatMap { $0.genres ?? [] }).sorted()
+            return page(names.map { BaseItem(id: "genre-\($0)", name: $0, kind: .folder) })
+        }
         if parts.count >= 2, parts[0] == "Items" {
             let id = parts[1]
             if parts.count >= 4, parts[2] == "Images" {

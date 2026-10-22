@@ -9,7 +9,9 @@ import SwiftUI
 @Observable
 final class LibraryModel {
     private(set) var sections: [BrowseSection] = []
-    private(set) var genreSections: [BrowseSection] = []
+    /// Because you watched, genres, every collection, the decades (each
+    /// loads as it comes into view).
+    let shelves = LazyShelves()
 
     /// The library's own noun ("shows"), set as it loads.
     private var noun: LibraryWords.Noun = ("title", "titles")
@@ -21,7 +23,6 @@ final class LibraryModel {
                           unwatched: sections.first(where: { $0.id == "unwatched" })?.total ?? (sections.isEmpty ? nil : 0),
                           noun: noun, newest: sections.first(where: { $0.id == "recent" })?.items.first, isShows: isShows)
     }
-    private var loadedGenres: Set<String> = []
 
     func load(library: BaseItem, client: JellyfinClient, collections: [BaseItem] = []) async {
         let key = "library-\(library.id)"
@@ -36,9 +37,14 @@ final class LibraryModel {
         let noun = Self.noun(for: library)
         self.noun = noun
         isShows = library.collectionType == "tvshows"
+        // Continue Watching, of this library: a shows library's are episodes.
+        var resume = query(["DatePlayed"], .descending, filters: ["IsResumable"])
+        if isShows { resume.includeItemTypes = [.episode] }
         var specs: [(String, String, ItemQuery, BrowseSection.Style)] = [
+            ("resume", "Continue Watching", resume, .landscape),
             ("recent", "Recently added", query(["DateCreated", "SortName"], .descending), .landscape),
-            ("all", Self.allTitle(for: library), query(["SortName"]), .landscape),
+            // Not a row (its page is the button by the title): how many, for both.
+            ("all", Self.allTitle(for: library), query(["SortName"], limit: 1), .landscape),
             ("unwatched", "Haven't seen yet", query(["Random"], filters: ["IsUnplayed"]), .landscape),
             ("favorites", "Your favourites", query(["SortName"], filters: ["IsFavorite"]), .landscape),
             ("top", "Highest rated", query(["CommunityRating", "SortName"], .descending), .landscape),
@@ -75,49 +81,8 @@ final class LibraryModel {
             await ContentCache.shared.store(fresh, for: key)
         }
 
-        // Genre rows: the library's genres by how many titles each has here,
-        // biggest first (the list also has genres only episodes carry: rows
-        // came up empty and vanished, and alphabetical order buried the big
-        // ones). One count per genre, in parallel; the rows load lazily.
-        if let genres = try? await client.genres(parentId: library.id).items {
-            let counts: [(BaseItem, ItemQuery)] = genres.map { g in
-                var q = query(["SortName"], limit: 1)
-                q.genres = [g.name ?? ""]
-                q.fields = []
-                return (g, q)
-            }
-            let counted = await withTaskGroup(of: (BaseItem, Int).self) { group in
-                for (g, q) in counts {
-                    group.addTask { (g, (try? await client.items(q))?.totalRecordCount ?? 0) }
-                }
-                var out: [(BaseItem, Int)] = []
-                for await r in group where r.1 > 0 { out.append(r) }
-                return out.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : ($0.0.name ?? "") < ($1.0.name ?? "") }
-            }
-            TraceFile.write("library", "\(library.name ?? "?") genres: " + counted.map { "\($0.0.name ?? "?") \($0.1)" }.joined(separator: " | "))
-            genreSections = counted.prefix(12).map { g, count in
-                var q = query(["Random"], limit: 24)
-                q.genres = [g.name ?? ""]
-                var section = BrowseSection(id: "genre-\(g.name ?? g.id)", title: g.name ?? "", items: [], style: .landscape, seeAll: q, library: library.name)
-                section.total = count
-                section.subtitle = LibraryWords.genre(g.name ?? "", count: count, noun: noun)
-                return section
-            }
-        }
-    }
-
-    func loadGenre(_ id: String, client: JellyfinClient) async {
-        guard !loadedGenres.contains(id), let q = genreSections.first(where: { $0.id == id })?.seeAll else { return }
-        loadedGenres.insert(id)
-        guard let page = try? await client.items(q) else { return }
-        // Found again after the wait: the rows can be replaced meanwhile (an
-        // index from before it crashed the app).
-        guard let idx = genreSections.firstIndex(where: { $0.id == id }) else { return }
-        guard !page.items.isEmpty else { genreSections.remove(at: idx); return }
-        BlurHashCache.shared.prewarm(page.items)
-        genreSections[idx].items = page.items
-        genreSections[idx].seeAll?.sortBy = ["SortName"]
-        genreSections[idx].seeAll?.limit = 100
+        let collectionsLibrary = library.collectionType == "movies" ? collections.first : nil
+        shelves.replace(await Shelves.library(library, collections: collectionsLibrary, client: client))
     }
 
     /// The rows that are only an order ("Recently added", "Highest rated",
@@ -178,7 +143,7 @@ final class LibraryModel {
         }
     }
 
-    static func types(for library: BaseItem) -> [ItemKind] {
+    nonisolated static func types(for library: BaseItem) -> [ItemKind] {
         switch library.collectionType {
         case "movies": [.movie]
         case "tvshows": [.series]
@@ -200,13 +165,21 @@ struct LibraryView: View {
     var body: some View {
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
-            CollectionList(sections: model.sections + model.genreSections, firstCardFocus: $firstCardFocused, onNear: { id in
+            CollectionList(sections: model.sections.filter { $0.id != "all" } + model.shelves.sections, firstCardFocus: $firstCardFocused, onNear: { id in
                 guard let client = app.session?.client else { return }
-                Task { await model.loadGenre(id, client: client) }
+                Task { await model.shelves.near(id, client: client) }
             }) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(library.name ?? "Library").font(.system(size: Layout.pageTitle, weight: .bold)).foregroundStyle(theme.primaryText)
                     if let lede = model.lede { Text(lede).font(.pageLede).foregroundStyle(theme.secondaryText) }
+                    // Every one, A to Z, with its filters: a page of its own,
+                    // not the rows' place on this one.
+                    if let all = model.sections.first(where: { $0.id == "all" }) {
+                        Pill([LibraryModel.allTitle(for: library), all.total.map { $0.formatted() }].compactMap { $0 }.joined(separator: " · "),
+                             systemImage: "square.grid.2x2", alwaysShowsTitle: true) { navigate(.grid(all.seeAllSpec)) }
+                            .padding(.top, 8)
+                            .accessibilityIdentifier("library.all")
+                    }
                 }
                 .padding(.top, 20)
             }

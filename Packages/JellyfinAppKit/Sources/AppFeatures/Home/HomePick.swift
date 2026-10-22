@@ -3,12 +3,9 @@ import DesignSystem
 import JellyfinAPI
 import SwiftUI
 
-/// Home's lead, nearly a screen of its own: the one thing you'd most likely
-/// watch now (`HomePicks`) big, over its picture, with Play ready — and
-/// its own short list of the others along the bottom. Moving along that
-/// list brings each one up (the TV's focus, the Mac's pointer, a tap) and
-/// selecting one plays it. Nothing else on the page changes what's up
-/// here: the rows below are their own.
+/// Home's lead, the top of the page: the one thing you'd most likely watch
+/// now (`HomePicks`) over its picture, with Play ready. The rows below are
+/// their own: nothing in them changes it.
 struct HomePickSection: View {
     let picks: [HomePicks.Pick]
     /// Play takes launch focus (Home's first focus) when given.
@@ -20,52 +17,40 @@ struct HomePickSection: View {
     @Environment(\.focusTracker) private var tracker
     @Environment(\.jellyfin) private var client
     @Environment(\.displayScale) private var scale
-    /// The pick that's up (the first until another is chosen).
-    @State private var chosen: String?
 
     static let row = "picks"
     private var compact: Bool { width < 700 }
-    private var shown: HomePicks.Pick? { picks.first { $0.id == chosen } ?? picks.first }
+    private var shown: HomePicks.Pick? { picks.first }
 
-    /// Nearly the screen: the TV leaves the first row's title showing
-    /// below; elsewhere it follows the page's shape.
+    /// The top of the page, not all of it: the first row shows below it,
+    /// and the next one's title.
     private var height: CGFloat {
         switch Layout.device {
-        case .tv: 820
-        case .phone: 560
-        default: max(440, min(width * 0.52, 700))
+        case .tv: 560
+        case .phone: 420
+        default: max(340, min(width * 0.4, 520))
         }
     }
     /// The picture runs up under the page's top padding, to the edge.
     private var bleed: CGFloat { Platform.isTV ? 110 : 18 }
-    private var listCardWidth: CGFloat { Layout.device == .tv ? 260 : compact ? 120 : 180 }
 
     var body: some View {
         if let pick = shown {
             ZStack(alignment: .bottomLeading) {
                 backdrop(pick.item)
                 VStack(alignment: .leading, spacing: Platform.isTV ? 40 : 20) {
-                    // Across the whole width: Up from anywhere along the list lands on Play.
+                    // Across the whole width: Up from anywhere along the row below lands on Play.
                     words(pick)
                         .frame(maxWidth: compact ? .infinity : width * 0.55, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .tvFocusSection()
-                    if picks.count > 1 { list }
                 }
                 .padding(.bottom, Platform.isTV ? 24 : 12)
             }
             .frame(height: height, alignment: .bottom)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.pick")
-            // On the TV a pick comes up as focus reaches it in the list (only
-            // there: the rows below never change it).
-            .onChange(of: tracker?.featured?.id) { _, id in
-                guard Platform.isTV, tracker?.row == Self.row, let id, picks.contains(where: { $0.id == id }) else { return }
-                chosen = id
-            }
-            .onChange(of: picks.map(\.id)) { _, ids in if let chosen, !ids.contains(chosen) { self.chosen = nil } }
-            // Every pick's picture and logo in memory before it's brought up:
-            // moving along the list swaps drawn images, never loads them.
+            // Its picture and logo in memory before the page shows it.
             .task(id: picks.map(\.id)) { prefetch() }
         }
     }
@@ -73,11 +58,10 @@ struct HomePickSection: View {
     private func prefetch() {
         guard let client else { return }
         let logoWidth = HeroLogo.box(for: Layout.device).width
-        let requests = picks.flatMap { pick in
+        let requests = picks.prefix(1).flatMap { pick in
             // The backdrop at the size FocusBackdrop asks for, so it's the same image.
             [ArtworkSource.resolve(pick.item, .backdrop)?.request(client: client, pixelWidth: 1920),
-             ArtworkSource.resolve(pick.item, .logo)?.request(client: client, pixelWidth: Int(logoWidth * scale)),
-             ArtworkSource.resolve(pick.item, .landscape)?.request(client: client, pixelWidth: Int(listCardWidth * scale))].compactMap { $0 }
+             ArtworkSource.resolve(pick.item, .logo)?.request(client: client, pixelWidth: Int(logoWidth * scale))].compactMap { $0 }
         }
         ImagePipeline.shared.prefetch(requests)
     }
@@ -94,32 +78,6 @@ struct HomePickSection: View {
             .padding(.top, -bleed)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-    }
-
-    /// The others (and the one that's up), each with why it's here.
-    private var list: some View {
-        ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: Layout.cardSpacing) {
-                ForEach(picks) { pick in
-                    let up = pick.id == shown?.id
-                    LandscapeCard(pick.item, width: listCardWidth, kind: .landscape, caption: pick.reason) {
-                        // Brought up already (focus, the pointer, an earlier tap): Select plays it.
-                        if Platform.isTV || up { app.play(pick.item) } else { withAnimation(.smooth(duration: 0.25)) { chosen = pick.id } }
-                    }
-                    .opacity(up ? 1 : 0.6)
-                    .animation(.easeOut(duration: 0.2), value: up)
-                    .contextMenu { ItemContextMenu(item: pick.item) }
-                    .reportsFocus(pick.item, row: Self.row)
-                    #if !os(tvOS)
-                    .onHover { inside in if inside { chosen = pick.id } }
-                    #endif
-                    .accessibilityIdentifier("card.picks.\(pick.id)")
-                }
-            }
-            .scrollTargetLayout()
-        }
-        .homeRow()
-        .tvFocusSection()
     }
 
     // MARK: Parts

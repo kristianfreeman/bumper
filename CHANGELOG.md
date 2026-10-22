@@ -7,6 +7,19 @@ TestFlight.
 
 ## Unreleased
 
+- Home and the Movies and Shows pages are made of rows, Netflix style, and
+  far more of them: every collection, the genres you have most of,
+  Because You Watched, Highest Rated, Films You Haven't Seen, Something
+  Different, your favourites, and on Movies and Shows the decades too.
+  Each row scrolls sideways through all of it and ends in View all.
+- Rows load as they come into view, so a long page costs nothing until
+  you get there, and a row with nothing in it isn't shown.
+- Home's pick is the top of the page, not all of it: Continue Watching and
+  the next row show beneath it.
+- Movies and Shows: Continue Watching from that library leads the page,
+  and All Movies (All Shows) is a button by the title that opens every
+  one, A to Z, with its filters.
+
 ## 0.3.1
 
 - Fixed: pressing Play after a long pause (overnight, say) said the film

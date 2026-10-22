@@ -34,6 +34,10 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     var arrivalsSpec: ArrivalsSpec? = nil
     /// A Playlists row: the library "View all" opens.
     var playlistsLibrary: BaseItem? = nil
+    /// A row that fills itself as it comes into view (see `Shelves`).
+    var source: Shelves.Source? = nil
+    /// A collection's row: its page is what "View all" opens.
+    var collection: BaseItem? = nil
 
     /// What "View all" opens: the narrowed query, or (a row with no query
     /// behind it, like Next Up) the whole row it was cut from.
@@ -58,8 +62,12 @@ final class HomeModel {
     /// Local Network access is off for the app (the Mac never asked).
     private(set) var localNetworkBlocked = false
     private(set) var loadedOnce = false
+    /// Everything after the first rows: genres, collections, because you
+    /// watched… (each loads as it comes into view).
+    let shelves = LazyShelves()
 
-    func load(_ session: UserSession, usage: [String: Double] = [:], hidden: Set<String> = [], continueWatching: ContinueWatchingFilter = .init()) async {
+    func load(_ session: UserSession, usage: [String: Double] = [:], hidden: Set<String> = [], continueWatching: ContinueWatchingFilter = .init(),
+              collections: BaseItem? = nil) async {
         let key = "home-\(session.id)"
         if sections.isEmpty, let cached = await ContentCache.shared.value([BrowseSection].self, for: key), !cached.isEmpty {
             BlurHashCache.shared.prewarm(cached.flatMap(\.items))
@@ -75,6 +83,9 @@ final class HomeModel {
             localNetworkBlocked = false
             LaunchClock.markFirstContent()
             await ContentCache.shared.store(fresh, for: key)
+            let libraries = ((try? await session.client.userViews().items) ?? [])
+                .filter { ($0.collectionType == "movies" || $0.collectionType == "tvshows") && !hidden.contains($0.id) }
+            shelves.replace(await Shelves.home(libraries: libraries, collections: collections, client: session.client))
         } catch {
             if sections.isEmpty { self.error = error.localizedDescription }
             if case .transport = error as? JellyfinError, !Platform.isTV, LocalNetworkAccess.isLocal(session.server.url) { localNetworkBlocked = true }
@@ -249,7 +260,10 @@ struct HomeView: View {
         let pickLeads = !page.picks.isEmpty
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
-            CollectionList(sections: page.sections, firstCardFocus: pickLeads ? nil : $firstCardFocused, showsQueue: true) {
+            CollectionList(sections: page.sections + model.shelves.sections, firstCardFocus: pickLeads ? nil : $firstCardFocused, onNear: { id in
+                guard let client = app.session?.client else { return }
+                Task { await model.shelves.near(id, client: client) }
+            }, showsQueue: true) {
                 HomePickSection(picks: page.picks, playFocus: pickLeads ? $firstCardFocused : nil)
                     .padding(.top, 10)
             }
@@ -260,7 +274,7 @@ struct HomeView: View {
                     Text("\(Brand.displayName) needs Local Network access to reach \(app.session?.server.name ?? "your server"). Turn it on in \(Platform.isMac ? "System Settings → Privacy & Security → Local Network" : "Settings → Privacy & Security → Local Network"), then try again.")
                 } actions: {
                     if let url = LocalNetworkAccess.settingsURL { Button("Open Settings") { openURL(url) }.buttonStyle(.borderedProminent) }
-                    Button("Try Again") { Task { if let s = app.session { await model.load(s, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter) } } }
+                    Button("Try Again") { Task { if let s = app.session { await model.load(s, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter, collections: app.collectionLibraries.first) } } }
                 }
             } else if let error = model.error {
                 ContentUnavailableView("Can’t Reach Your Server", systemImage: "wifi.exclamationmark", description: Text(error))
@@ -271,13 +285,13 @@ struct HomeView: View {
         .environment(\.focusTracker, tracker)
         .task {
             tracker.onDwell = { [app] item in Self.prefetch(item, app: app) }
-            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter) }
+            if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter, collections: app.collectionLibraries.first) }
             app.queue.candidates = model.sections.first { $0.id == "nextup" }?.items ?? []
             tracker.seed(EditorialHome.picks(model.sections, queue: app.queue.plan.entries.map(\.item)).first?.item ?? model.sections.first?.items.first)
         }
         // Something marked watched: Continue Watching and Next Up move on.
         .onChange(of: app.watchedChanges) { _, _ in
-            Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter) } }
+            Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter, collections: app.collectionLibraries.first) } }
         }
         // Where focus starts (only on appearing: it doesn't steer later moves,
         // which is what kept the sidebar from opening before).
