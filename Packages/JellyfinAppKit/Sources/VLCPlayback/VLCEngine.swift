@@ -56,6 +56,17 @@ public final class VLCEngine: PlayerEngine {
     @ObservationIgnored private var started: CheckedContinuation<Void, any Error>?
     @ObservationIgnored private var seekWaiter: (target: Duration, continuation: CheckedContinuation<Void, Never>)?
     @ObservationIgnored private var hasPlayed = false
+    /// Stopped on purpose, to open the item again (not its end).
+    @ObservationIgnored private var reopening = false
+    /// Whether it should be playing: what a reopen goes back to.
+    @ObservationIgnored private var wantsPlay = false
+    /// When it was paused: a connection left that long may be gone.
+    @ObservationIgnored private var pausedAt: Date?
+    /// Times this item's stream went away mid-way and was opened again.
+    @ObservationIgnored private var lostStreamReopens = 0
+    /// Paused longer than this, Play opens the item again where it was: the
+    /// server has closed the connection by then (overnight, it always has).
+    static let staleAfter: TimeInterval = 120
     @ObservationIgnored private var startsPaused = false
     /// Resume point the opening seek is heading for (nil once reached).
     @ObservationIgnored private var startTarget: Duration?
@@ -139,7 +150,7 @@ public final class VLCEngine: PlayerEngine {
         guard status == .playing else { return }
         let delayed = AudioRoute.isDelayed
         AudioRoute.lastPlayedDelayed = delayed
-        guard delayed != followsAudio, var next = plan else {
+        guard delayed != followsAudio, plan != nil else {
             // The same clock, but AirPlay's delay only shows once sound plays
             // (it reads as HDMI's before): the picture waits on a clock set for
             // the old delay and drops nearly every frame, black until a seek.
@@ -155,11 +166,19 @@ public final class VLCEngine: PlayerEngine {
         let resume = status == .playing
         let at = max(currentTime, startTarget ?? .zero)
         TraceFile.write("vlc", "audio now to \(AudioRoute.description): again from \(Int(at.seconds)) s with the clock \(delayed ? "following the audio" : "on the system clock")")
+        reopen(at: at, autoplay: resume)
+    }
+
+    /// The item again from `at`, on a new connection. The stop this makes
+    /// isn't the item ending.
+    private func reopen(at: Duration, autoplay: Bool) {
+        guard var next = plan else { return }
         next.startPosition = at
+        reopening = true
         statsTask?.cancel()
         markReopening()
         player.stop()
-        Task { [weak self] in try? await self?.load(next, autoplay: resume) }
+        Task { [weak self] in try? await self?.load(next, autoplay: autoplay) }
     }
 
     /// Opening the item again from where it is: a floating picture closes
@@ -187,6 +206,9 @@ public final class VLCEngine: PlayerEngine {
 
     public func load(_ plan: PlaybackPlan, autoplay: Bool) async throws {
         self.plan = plan
+        if !reopening { lostStreamReopens = 0 }
+        wantsPlay = autoplay
+        pausedAt = nil
         status = .loading
         firstFrameSpan = Span(.timeToFirstFrame)
         stats.method = plan.method.rawValue
@@ -311,11 +333,20 @@ public final class VLCEngine: PlayerEngine {
     // MARK: Transport
 
     public func play() {
+        wantsPlay = true
+        if let since = pausedAt, Date.now.timeIntervalSince(since) > Self.staleAfter, status == .paused {
+            TraceFile.write("vlc", "paused \(Int(Date.now.timeIntervalSince(since) / 60)) min: again from \(Int(currentTime.seconds)) s on a new connection")
+            reopen(at: currentTime, autoplay: true)
+            return
+        }
+        pausedAt = nil
         player.play()
         if Silence.on { player.audio?.isMuted = true }
     }
 
     public func pause() {
+        wantsPlay = false
+        pausedAt = .now
         player.pause()
         status = .paused
         updateFloating()
@@ -488,6 +519,7 @@ public final class VLCEngine: PlayerEngine {
             if hasPlayed, status != .paused { status = .buffering }
         case .playing:
             hasPlayed = true
+            reopening = false
             guard !(startsPaused && started != nil) else { return }   // the held pause follows
             status = .playing
             finishStart()
@@ -498,13 +530,24 @@ public final class VLCEngine: PlayerEngine {
                 self?.audioRouteChanged()
             }
         case .paused:
+            reopening = false
             status = .paused
             finishStart()
         case .stopped, .stopping:
-            if hasPlayed { status = .ended }
+            guard hasPlayed, !reopening else { return }
+            // Stopped well before the end: the connection went (a long pause,
+            // the server restarted), not the item. Open it again from there.
+            if let length = duration, currentTime < length - .seconds(60), lostStreamReopens < 2 {
+                lostStreamReopens += 1
+                TraceFile.write("vlc", "stopped at \(Int(currentTime.seconds)) s of \(Int(length.seconds)): the stream went away — again from there")
+                reopen(at: currentTime, autoplay: wantsPlay)
+                return
+            }
+            status = .ended
         case .nothingSpecial:
             break
         case .error:
+            reopening = false
             let message = "VLCKit could not play this item"
             Self.log.error("\(message, privacy: .public)")
             status = .failed(message)
@@ -606,16 +649,12 @@ public final class VLCEngine: PlayerEngine {
         guard !softwareDecode, !Self.decodesInSoftware(plan), status == .playing, plan?.mediaSource.videoStream != nil else { decoderStall = (decoded, 0); return }
         if decoded != decoderStall.decoded || bitrate < 0.2 { decoderStall = (decoded, 0); return }
         decoderStall.seconds += 1
-        guard decoderStall.seconds >= 4, var next = plan else { return }
+        guard decoderStall.seconds >= 4, plan != nil else { return }
         softwareDecode = true
-        markReopening()
         let at = max(currentTime, startTarget ?? .zero)
         TraceFile.write("vlc", "no frames decoded in 4 s with data arriving: the hardware decoder turned it down — again in software from \(Int(at.seconds)) s")
         Self.log.notice("VideoToolbox decoded nothing in 4 s: software decode from \(at.seconds, privacy: .public) s")
-        next.startPosition = at
-        statsTask?.cancel()
-        player.stop()
-        Task { [weak self] in try? await self?.load(next, autoplay: true) }
+        reopen(at: at, autoplay: true)
     }
 
     /// What VLC draws into (diagnostics): its views and layers and their

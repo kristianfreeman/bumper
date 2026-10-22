@@ -181,14 +181,18 @@ struct CompassChrome: View {
             if full {
                 Timeline(time: controller.displayTime, duration: length, scrubTime: scrubTime, scrubThumb: scrubThumb,
                          paused: engine.status == .paused, showsTimes: false)
+                // Info in the middle of the screen, whatever the times' widths
+                // (between two spacers it sat off to the shorter side).
                 HStack(alignment: .firstTextBaseline) {
                     Text(controller.displayTime.clockString)
                     Spacer()
-                    Hint(symbol: "chevron.down", title: "More", detail: more)
+                    Text(remaining(length))
+                }
+                .overlay {
+                    Hint(symbol: "chevron.down", title: "Info", detail: more)
+                        .fixedSize()
                         .opacity(scrubTime == nil ? 1 : 0)
                         .accessibilityIdentifier("edge.down")
-                    Spacer()
-                    Text(remaining(length))
                 }
                 .font(.system(size: 30, weight: .medium).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.68))
@@ -585,6 +589,9 @@ struct MorePanel: View {
     var focus: FocusState<PlayerView.PlayerFocus?>.Binding
     let close: () -> Void
     @State private var tab: MoreTab = .info
+    /// The tabs' content: Info's words without cutting them short, Up Next's
+    /// tiles, a few of Playback's rows (the rest scroll).
+    static let contentHeight: CGFloat = 380
 
     static func tabs(_ controller: PlayerController) -> [MoreTab] {
         MoreTab.allCases.filter { $0 != .upNext || !controller.chosenUpNext.isEmpty }
@@ -604,14 +611,22 @@ struct MorePanel: View {
             }
             .frame(maxWidth: .infinity)
             .tvFocusSection()
+            // One height for every tab, so moving along them never lifts the
+            // panel; what's longer (Playback's rows) scrolls inside it.
             Group {
                 switch tab {
                 case .info: ItemAbout(controller: controller).padding(.horizontal, 16)
                 case .upNext: UpNextRow(controller: controller, focus: focus, close: close)
-                case .playback: PlaybackOptions(controller: controller, focus: focus, close: close)
+                case .playback:
+                    ScrollView(.vertical) {
+                        PlaybackOptions(controller: controller, focus: focus, close: close)
+                            .padding(.vertical, 12)
+                    }
+                    .scrollIndicators(.hidden)
                 }
             }
             .frame(maxWidth: .infinity)
+            .frame(height: Self.contentHeight, alignment: .top)
             .transition(.opacity)
         }
         .padding(.top, 40)
@@ -917,7 +932,7 @@ struct ItemAbout: View {
 
     private var tv: Bool { Platform.isTV }
     private var phone: Bool { Layout.device == .phone }
-    private var small: Font { tv ? .callout : .footnote }
+    private var small: Font { tv ? .system(size: 27) : .footnote }
 
     var body: some View {
         let item = controller.item
@@ -934,10 +949,10 @@ struct ItemAbout: View {
                 VStack(alignment: .leading, spacing: tv ? 4 : 2) {
                     Text(Self.facts(item)).font(small).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                     if showsName {
-                        Text(item.name ?? "").font(tv ? .title3.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
+                        Text(item.name ?? "").font(tv ? .system(size: 34, weight: .semibold) : .subheadline.weight(.semibold)).lineLimit(2)
                     }
                     if let overview = item.overview {                     // you're watching it: no spoiler
-                        Text(overview).font(small).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 2 : 4)
+                        Text(overview).font(small).foregroundStyle(.white.opacity(0.85)).lineLimit(tv ? 5 : 4)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, tv ? 6 : 4)
                     }

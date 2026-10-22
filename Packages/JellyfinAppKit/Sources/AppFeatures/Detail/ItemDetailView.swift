@@ -122,7 +122,12 @@ struct ItemDetailView: View {
     @Environment(\.openURL) private var openURL
     @State private var model: DetailModel
     @State private var showTracks = false
+    /// Audio and subtitles chosen here before playing (this item only).
+    @State private var tracks = TrackChoice()
     @FocusState private var playFocused: Bool
+    /// Been here before (back from a page opened from this one): focus
+    /// goes back where it was, not to Play at the top.
+    @State private var arrived = false
     /// Focus was last on an episode: coming up into the action row goes to Play.
     @State private var fromEpisodes = false
     /// Which of the other actions has focus: the row animates as one when a
@@ -199,7 +204,12 @@ struct ItemDetailView: View {
             // Off the TV a button only takes focus with keyboard navigation
             // on: ask once (it never landed, and the page waited that second
             // before loading).
-            if Platform.isTV {
+            let first = !arrived
+            arrived = true
+            if !first {
+                // Back from a recommendation, a person, an episode: tvOS puts
+                // focus back on what opened it, and the page stays scrolled there.
+            } else if Platform.isTV {
                 for _ in 0..<20 where !playFocused {
                     playFocused = true
                     try? await Task.sleep(for: .milliseconds(50))
@@ -213,14 +223,14 @@ struct ItemDetailView: View {
             if app.settings.playThemeMusic, model.item.kind != .movie || app.settings.themeMusicForMovies {
                 Task { await ThemeMusic.shared.play(for: model.item, client: client, online: app.settings.onlineThemeFallback) }
             }
-            if model.item.kind == .series { playFocused = true }   // button appears only after Next Up loads
+            if first, model.item.kind == .series { playFocused = true }   // button appears only after Next Up loads
         }
         .onDisappear {
             ThemeMusic.shared.stop(owner: model.item.seriesId ?? model.item.id)
             if app.playback == nil { app.releasePrepared() }      // left without playing
         }
         .sheet(isPresented: $showTracks) {
-            TrackPicker(item: item)
+            TrackPicker(item: item, choice: $tracks)
         }
         .hidesNavigationBar()
     }
@@ -300,7 +310,7 @@ struct ItemDetailView: View {
     private func actionButtons(_ item: BaseItem) -> some View {
         if Self.phone {
             VStack(alignment: .leading, spacing: 16) {
-                if let target = model.playTarget { WidePlayButton(title: playLabel(target), target: target, focus: $playFocused) }
+                if let target = model.playTarget { WidePlayButton(title: playLabel(target), target: target, focus: $playFocused) { start(target) } }
                 // Bigger than the TV's, scaled: in a row that scrolls sideways if it has to.
                 ScrollView(.horizontal, showsIndicators: false) { secondaryRow(item, size: .large) }
                     .scrollClipDisabled()
@@ -319,7 +329,7 @@ struct ItemDetailView: View {
                     // buttons: "Play S1 · E1" reads as the page's point.
                     Pill(target.map(playLabel) ?? "Play", systemImage: castLink?.isConnected == true ? "play.tv.fill" : "play.fill",
                          prominent: true, alwaysShowsTitle: actionFocus == nil) {
-                        if let target { app.play(target) }
+                        if let target { start(target) }
                     }
                     .pillCaption(castLink?.connectedTo.map { "On \($0)" } ?? (target?.resumePosition != nil ? "Resume" : "Play"))
                     .focused($playFocused)
@@ -348,7 +358,7 @@ struct ItemDetailView: View {
         HStack(spacing: Self.phone ? 16 : 22) {
             if let target = model.playTarget {
                 if target.resumePosition != nil {
-                    Pill("Start Over", systemImage: "gobackward", size: size) { app.play(target, resume: false) }
+                    Pill("Start Over", systemImage: "gobackward", size: size) { start(target, resume: false) }
                         .pillCaption("Start Over")
                         .focused($actionFocus, equals: "restart")
                 }
@@ -372,20 +382,35 @@ struct ItemDetailView: View {
                                    seasonName: model.seasons.first { $0.id == season }?.name ?? "Season", episodes: model.episodes(in: season), size: size)
                     .focused($actionFocus, equals: "download")
             }
+            if hasTrackChoices(item) {
+                Pill(tracks.summary(in: item.mediaSources?.first) ?? "Audio & Subtitles", systemImage: "captions.bubble", size: size,
+                     active: !tracks.isEmpty) { showTracks = true }
+                    .pillCaption("Audio & Subtitles")
+                    .focused($actionFocus, equals: "tracks")
+                    .accessibilityIdentifier("detail.tracks")
+            }
             moreMenu(item, size: size)
         }
     }
 
-    /// Watched, Favourite, and the tracks to start with.
+    /// More than one audio track, or any subtitles: something to choose.
+    private func hasTrackChoices(_ item: BaseItem) -> Bool {
+        item.kind.isPlayable && item.mediaSources?.first.map { $0.audioStreams.count > 1 || !$0.subtitleStreams.isEmpty } == true
+    }
+
+    /// Plays, with the tracks chosen here when it's this page's item.
+    private func start(_ target: BaseItem, resume: Bool = true) {
+        guard target.id == model.item.id, !tracks.isEmpty else { app.play(target, resume: resume); return }
+        app.play(target, resume: resume, mediaSourceId: target.mediaSources?.first?.id, audioIndex: tracks.audio, subtitleIndex: tracks.subtitle)
+    }
+
+    /// Watched and Favourite.
     private func moreMenu(_ item: BaseItem, size: PillSize) -> some View {
         Menu {
             Button(model.item.isPlayed ? "Mark Unwatched" : "Mark Watched", systemImage: model.item.isPlayed ? "checkmark.circle.fill" : "checkmark.circle") { toggleWatched() }
                 .accessibilityIdentifier("detail.watched")
             Button(model.item.isFavorite ? "Remove from Favourites" : "Add to Favourites", systemImage: model.item.isFavorite ? "heart.fill" : "heart") { toggleFavorite() }
                 .accessibilityIdentifier("detail.favourite")
-            if item.kind.isPlayable, item.mediaSources?.first.map({ $0.audioStreams.count > 1 || !$0.subtitleStreams.isEmpty }) == true {
-                Button("Audio and Subtitles…", systemImage: "captions.bubble") { showTracks = true }
-            }
         } label: {
             PillFace("More", size: size, active: model.item.isPlayed || model.item.isFavorite) { PillSymbol("ellipsis", size: size) }
                 .pillCaption("More")
@@ -501,13 +526,29 @@ struct CastShelf: View {
     }
 }
 
-/// Pre-play audio / subtitle / version selection.
+/// The audio and subtitles to start with, chosen on the page: nil is what
+/// the file and Settings would pick; a subtitle of -1 is Off.
+struct TrackChoice: Equatable {
+    var audio: Int?
+    var subtitle: Int?
+    var isEmpty: Bool { audio == nil && subtitle == nil }
+
+    /// "Japanese · English" — what was chosen, for the button.
+    func summary(in source: MediaSource?) -> String? {
+        guard !isEmpty, let source else { return nil }
+        func name(_ s: MediaStream) -> String { s.language.flatMap { Locale.current.localizedString(forLanguageCode: $0) } ?? s.displayTitle ?? "Track \(s.index)" }
+        let a = audio.flatMap { i in source.audioStreams.first { $0.index == i } }.map(name)
+        let s = subtitle == -1 ? "No Subtitles" : subtitle.flatMap { i in source.subtitleStreams.first { $0.index == i } }.map(name)
+        return [a, s].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// Audio and subtitles to start with: chosen here, then Play, Resume or
+/// Start Over use them.
 struct TrackPicker: View {
     let item: BaseItem
-    @Environment(AppModel.self) private var app
+    @Binding var choice: TrackChoice
     @Environment(\.dismiss) private var dismiss
-    @State private var audio: Int?
-    @State private var subtitle: Int?
 
     var body: some View {
         let source = item.mediaSources?.first
@@ -515,29 +556,35 @@ struct TrackPicker: View {
             List {
                 Section("Audio") {
                     ForEach(source?.audioStreams ?? [], id: \.index) { s in
-                        Button { audio = s.index } label: {
-                            HStack { Text(s.displayTitle ?? s.codec ?? "Track \(s.index)"); Spacer(); if (audio ?? source?.defaultAudioStreamIndex) == s.index { Image(systemName: "checkmark") } }
-                        }
+                        row(s.displayTitle ?? s.codec ?? "Track \(s.index)", on: (choice.audio ?? source?.defaultAudioStreamIndex) == s.index) { choice.audio = s.index }
                     }
                 }
                 Section("Subtitles") {
-                    Button { subtitle = -1 } label: {
-                        HStack { Text("Off"); Spacer(); if subtitle == -1 { Image(systemName: "checkmark") } }
-                    }
+                    row("Automatic", detail: "As in Settings", on: choice.subtitle == nil) { choice.subtitle = nil }
+                    row("Off", on: choice.subtitle == -1) { choice.subtitle = -1 }
                     ForEach(source?.subtitleStreams ?? [], id: \.index) { s in
-                        Button { subtitle = s.index } label: {
-                            HStack { Text(s.displayTitle ?? s.language ?? "Track \(s.index)"); Spacer(); if subtitle == s.index { Image(systemName: "checkmark") } }
-                        }
+                        row(s.displayTitle ?? s.language ?? "Track \(s.index)", on: choice.subtitle == s.index) { choice.subtitle = s.index }
                     }
                 }
                 Section {
-                    Button("Play", systemImage: "play.fill") {
-                        dismiss()
-                        app.play(item, mediaSourceId: source?.id, audioIndex: audio, subtitleIndex: subtitle)
-                    }
+                    Button("Done", systemImage: "checkmark") { dismiss() }
+                        .accessibilityIdentifier("tracks.done")
                 }
             }
             .navigationTitle(item.name ?? "")
+        }
+    }
+
+    private func row(_ title: String, detail: String? = nil, on: Bool, pick: @escaping () -> Void) -> some View {
+        Button(action: pick) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                if on { Image(systemName: "checkmark") }
+            }
         }
     }
 }
@@ -609,14 +656,14 @@ private struct WidePlayButton: View {
     let title: String
     let target: BaseItem
     var focus: FocusState<Bool>.Binding
-    @Environment(AppModel.self) private var app
+    let play: () -> Void
     @Environment(\.castLink) private var cast
     @Environment(\.theme) private var theme
 
     var body: some View {
         let tv = cast?.connectedTo
         VStack(alignment: .leading, spacing: 8) {
-            Button { app.play(target) } label: {
+            Button { play() } label: {
                 HStack(spacing: 10) {
                     Image(systemName: tv == nil ? "play.fill" : "play.tv.fill")
                     Text(tv.map { "\(title) on \($0)" } ?? title).lineLimit(1).minimumScaleFactor(0.8)

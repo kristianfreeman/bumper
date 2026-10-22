@@ -7,6 +7,19 @@ TestFlight.
 
 ## Unreleased
 
+## 0.3.1
+
+- Fixed: pressing Play after a long pause (overnight, say) said the film
+  was over. Bumper now opens it again where you were, and a stream that
+  drops part-way picks up from the same place instead of ending.
+- Back from a recommendation, a person or an episode, a page stays where
+  you were instead of jumping to the top.
+- Audio & Subtitles on a film's or episode's page: choose them before you
+  play, and Play, Resume and Start Over use them.
+- Apple TV player: Down is Info, centred under the timeline. Its panel is
+  a little taller and stays one height on every tab; Playback's rows
+  scroll inside it, and Info's words aren't cut short.
+
 ## 0.3.0
 
 Home
