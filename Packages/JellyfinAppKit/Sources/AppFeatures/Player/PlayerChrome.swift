@@ -591,7 +591,7 @@ struct MorePanel: View {
     @State private var tab: MoreTab = .info
     /// The tabs' content: Info's words without cutting them short, Up Next's
     /// tiles, a few of Playback's rows (the rest scroll).
-    static let contentHeight: CGFloat = 380
+    static let contentHeight: CGFloat = 300
 
     static func tabs(_ controller: PlayerController) -> [MoreTab] {
         MoreTab.allCases.filter { $0 != .upNext || !controller.chosenUpNext.isEmpty }
