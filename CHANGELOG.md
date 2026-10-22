@@ -23,9 +23,6 @@ TestFlight.
 - Movies and Shows: Continue Watching from that library leads the page,
   and All Movies (All Shows) is a button by the title that opens every
   one, A to Z, with its filters.
-
-## 0.3.1
-
 - Fixed: pressing Play after a long pause (overnight, say) said the film
   was over. Bumper now opens it again where you were, and a stream that
   drops part-way picks up from the same place instead of ending.
