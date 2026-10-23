@@ -7,6 +7,8 @@ TestFlight.
 
 ## Unreleased
 
+## 0.4.0
+
 - Home and the Movies and Shows pages are made of rows, Netflix style, and
   far more of them: every collection, the genres you have most of,
   Because You Watched, Highest Rated, Films You Haven't Seen, Something
