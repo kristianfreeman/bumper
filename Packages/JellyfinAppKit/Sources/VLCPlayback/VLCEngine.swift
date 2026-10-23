@@ -70,6 +70,8 @@ public final class VLCEngine: PlayerEngine {
     @ObservationIgnored private var startsPaused = false
     /// Resume point the opening seek is heading for (nil once reached).
     @ObservationIgnored private var startTarget: Duration?
+    /// The opening seek sent again once (it hadn't landed).
+    @ObservationIgnored private var startSeekResent = false
     @ObservationIgnored private var statsTask: Task<Void, Never>?
     /// The hardware decoder gave nothing for this item: decode it in software
     /// from here on (see `watchDecoder`).
@@ -170,15 +172,36 @@ public final class VLCEngine: PlayerEngine {
     }
 
     /// The item again from `at`, on a new connection. The stop this makes
-    /// isn't the item ending.
+    /// isn't the item ending. VLC stops in the background: opening the next
+    /// one before it has lost the opening seek, and the film started again
+    /// from 0:00 (every reopen: a long pause, the software decoder, AirPlay).
+    /// So: stop, wait for it, then open.
     private func reopen(at: Duration, autoplay: Bool) {
         guard var next = plan else { return }
         next.startPosition = at
         reopening = true
         statsTask?.cancel()
         markReopening()
-        player.stop()
-        Task { [weak self] in try? await self?.load(next, autoplay: autoplay) }
+        Task { [weak self] in
+            guard let self else { return }
+            await self.stopAndWait()
+            try? await self.load(next, autoplay: autoplay)
+        }
+    }
+
+    @ObservationIgnored private var stopped: CheckedContinuation<Void, Never>?
+
+    /// `player.stop()`, and back once VLC says it has (1.5 s at most).
+    private func stopAndWait() async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            stopped = c
+            player.stop()
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(1500))
+                self?.stopped?.resume()
+                self?.stopped = nil
+            }
+        }
     }
 
     /// Opening the item again from where it is: a floating picture closes
@@ -300,6 +323,7 @@ public final class VLCEngine: PlayerEngine {
             started = c
             player.play()
             if Silence.on { player.audio?.isMuted = true }
+            startSeekResent = false
             if plan.startPosition > .zero {
                 startTarget = plan.startPosition
                 player.time = VLCTime(int: Int32(clamping: Int64(plan.startPosition.milliseconds)))
@@ -527,6 +551,13 @@ public final class VLCEngine: PlayerEngine {
         case .playing:
             hasPlayed = true
             reopening = false
+            // The opening seek, if it didn't land (it's sent as play() starts,
+            // and VLC can drop it): again now it's playing.
+            if let target = startTarget, !startSeekResent, let now = Self.duration(player.time), now < target - .seconds(3) {
+                startSeekResent = true
+                TraceFile.write("vlc", "opening seek didn't land (at \(Int(now.seconds)) s, asked \(Int(target.seconds)) s): again")
+                player.time = VLCTime(int: Int32(clamping: Int64(target.milliseconds)))
+            }
             guard !(startsPaused && started != nil) else { return }   // the held pause follows
             status = .playing
             finishStart()
@@ -541,6 +572,7 @@ public final class VLCEngine: PlayerEngine {
             status = .paused
             finishStart()
         case .stopped, .stopping:
+            if state == .stopped, let c = stopped { stopped = nil; c.resume() }
             guard hasPlayed, !reopening else { return }
             // Stopped well before the end: the connection went (a long pause,
             // the server restarted), not the item. Open it again from there.

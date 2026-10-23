@@ -7,6 +7,15 @@ TestFlight.
 
 ## Unreleased
 
+- Fixed: a film could start again from the beginning partway through —
+  after a long pause, or when Bumper switched how it decodes the picture
+  or where the sound goes. It now carries on from where it was.
+- Apple TV scrubbing, closer to Apple's own player: a swipe moves the
+  playhead less, and the same for a quick flick as a slow one; circling a
+  finger on the remote's ring moves it finely (a turn is about a minute);
+  and after Select, clicks skip from the new place instead of starting
+  another scrub.
+
 ## 0.4.1
 
 - Watching from a server over the internet (family on your server): the

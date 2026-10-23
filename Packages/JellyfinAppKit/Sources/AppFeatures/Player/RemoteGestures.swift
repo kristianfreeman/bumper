@@ -71,6 +71,13 @@ struct RemoteGestures: UIViewRepresentable {
         private var panStart: ContinuousClock.Instant?
         private var holdTask: Task<Void, Never>?
         private var holding = false
+        /// The ring: where the finger was on it, how far it's gone round,
+        /// and whether that's a jog (then the pan doesn't scrub as well).
+        private var ringAngle: Double?
+        private var ringTravel: Double = 0
+        private var jogging = false
+        private var pads: [GCMicroGamepad] = []
+        private var padObserver: NSObjectProtocol?
 
         /// The touch surface, in the units UIKit reports for indirect touches
         /// (a full swipe across the pad ≈ a screen width).
@@ -106,7 +113,57 @@ struct RemoteGestures: UIViewRepresentable {
                 window.addGestureRecognizer(r)
             }
             recognizers = [pan, arrows, select, playPause]
+            watchRing()
             TraceFile.write("input", "remote gestures installed on \(type(of: window))")
+        }
+
+        // MARK: The ring
+
+        /// The touch surface's absolute position (GameController): a finger
+        /// going round near the edge is the ring's jog, not a swipe.
+        private func watchRing() {
+            for controller in GCController.controllers() { watch(controller) }
+            // A remote that connects later (woken, paired): watch it too.
+            padObserver = NotificationCenter.default.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    for controller in GCController.controllers() { self.watch(controller) }
+                }
+            }
+        }
+
+        private func watch(_ controller: GCController) {
+            guard let pad = controller.microGamepad, !pads.contains(where: { $0 === pad }) else { return }
+            pad.reportsAbsoluteDpadValues = true
+            pad.dpad.valueChangedHandler = { [weak self] _, x, y in
+                MainActor.assumeIsolated { self?.ringMoved(x: Double(x), y: Double(y)) }
+            }
+            pads.append(pad)
+        }
+
+        private func ringMoved(x: Double, y: Double) {
+            guard active, let transport else { return }
+            let r = (x * x + y * y).squareRoot()
+            // Off the edge (lifted, or moving in to the middle): the turn ends.
+            guard r > 0.7 else {
+                if jogging { TraceFile.write("input", "ring: jog ended at head \(transport.head.map { "\(Int($0.components.seconds)) s" } ?? "-")") }
+                ringAngle = nil
+                ringTravel = 0
+                jogging = false
+                return
+            }
+            let angle = atan2(y, x)
+            defer { ringAngle = angle }
+            guard let last = ringAngle else { return }
+            var d = angle - last
+            if d > .pi { d -= 2 * .pi } else if d < -.pi { d += 2 * .pi }
+            ringTravel += d
+            // A sixth of a turn one way: it's going round, not a swipe across.
+            if !jogging, abs(ringTravel) > .pi / 3 {
+                jogging = true
+                TraceFile.write("input", "ring: jog")
+            }
+            if jogging { transport.jog(radians: -d) }               // clockwise (angle falling) is forward
         }
 
         func uninstall() {
@@ -114,6 +171,13 @@ struct RemoteGestures: UIViewRepresentable {
             holdTask?.cancel()
             for r in recognizers { r.view?.removeGestureRecognizer(r) }
             recognizers = []
+            for pad in pads {
+                pad.dpad.valueChangedHandler = nil
+                pad.reportsAbsoluteDpadValues = false
+            }
+            pads = []
+            if let padObserver { NotificationCenter.default.removeObserver(padObserver) }
+            padObserver = nil
         }
 
         // MARK: Delegate
@@ -146,7 +210,7 @@ struct RemoteGestures: UIViewRepresentable {
                     onVertical?(t.y < 0)
                     return
                 }
-                guard !verticalFired else { return }
+                guard !verticalFired, !jogging else { return }
                 let speed = abs(pan.velocity(in: view).x) / Self.padWidth
                 transport.panChanged(dx: Double(dx), speed: Double(speed))
             case .ended, .cancelled, .failed:

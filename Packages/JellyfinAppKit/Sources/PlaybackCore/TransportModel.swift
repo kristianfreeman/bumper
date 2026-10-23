@@ -23,6 +23,7 @@ public protocol TransportTarget: AnyObject {
 /// | Swipe left/right   | pause and scrub             | move the head with the finger    |
 /// | Click left/right   | skip ±10 s                  | head ±10 s                       |
 /// | Hold left/right    | scan (accelerating)         | scan (accelerating)              |
+/// | Circle the ring    | pause and jog (fine)        | jog the head (fine)              |
 /// | Menu               | —                           | cancel: back to where it was     |
 ///
 /// The head only moves while a finger, a click or a hold moves it: lifting
@@ -59,6 +60,10 @@ public final class TransportModel {
     @ObservationIgnored private var lastToggle: ContinuousClock.Instant?
     @ObservationIgnored private var scanHeld: Duration = .zero
     @ObservationIgnored private var feedbackCount = 0
+    /// Select pressed on a scrub: seeking there and about to play. Clicks
+    /// meanwhile skip from there (they started a new scrub from the old
+    /// place, and Select seemed not to have worked).
+    @ObservationIgnored private var committing = false
 
     public init() {}
 
@@ -93,7 +98,11 @@ public final class TransportModel {
     public func click(_ direction: Direction) {
         guard let target else { return }
         let step: Duration = direction == .forward ? .seconds(10) : .seconds(-10)
-        if isScrubbing || !target.isPlaying {
+        if committing {
+            Task { await target.skip(by: step) }
+            show(direction == .forward ? .skipForward : .skipBack)
+            log?("input click \(direction): skip (after the scrub)")
+        } else if isScrubbing || !target.isPlaying {
             beginScrubIfNeeded()
             move(to: (head ?? target.position) + step)
             log?("input click \(direction): head \(head?.clock ?? "-")")
@@ -136,6 +145,19 @@ public final class TransportModel {
             log?("input swipe: \(String(format: "%.2f", panTravel)) pad → head \(head?.clock ?? "-")")
         }
         panTravel = 0
+    }
+
+    // MARK: The ring (2nd-generation Siri Remote)
+
+    /// A finger circling the clickpad's ring, `radians` since the last call
+    /// (clockwise positive): the head moves finely — a turn is a minute or
+    /// so, the way Apple's player jogs.
+    public func jog(radians: Double) {
+        guard let target else { return }
+        beginScrubIfNeeded()
+        let perTurn = min(max(target.length.secondsValue / 100, 20), 60)
+        move(to: (head ?? target.position) + .seconds(radians / (2 * .pi) * perTurn))
+        onActivity?()
     }
 
     // MARK: Hold to scan
@@ -198,19 +220,24 @@ public final class TransportModel {
         guard let target else { return }
         head = nil
         scanning = nil
+        committing = true
         show(.play)
         Task {
             await target.seek(to: time)
             target.play()
+            committing = false
         }
     }
 
-    /// Touch travel → time. A full swipe covers about an eighth of the video
-    /// (90 s – 15 min); slow, careful movement is finer, a quick flick coarser.
+    /// Touch travel → time. A full swipe covers about a twelfth of the
+    /// video (1 – 7 min); slow, careful movement half that. No more for a
+    /// quick flick: up to four times as much made a natural swipe jump
+    /// minutes (0.44 of the pad, 0:06 → 8:03), and a click-by-click walk
+    /// back followed. The ring is for fine moves; holding, for long ones.
     func seconds(forPad travel: Double, speed: Double) -> Duration {
         guard let target else { return .zero }
-        let perPad = min(max(target.length.secondsValue / 8, 90), 900)
-        let gain = speed < 0.3 ? 0.5 : speed < 1 ? 1 : min(speed, 4)
+        let perPad = min(max(target.length.secondsValue / 12, 60), 420)
+        let gain = speed < 0.3 ? 0.5 : 1
         return .seconds(travel * perPad * gain)
     }
 
