@@ -30,9 +30,11 @@ struct ShelvesTests {
         let genre = try #require(rows.first { $0.id.hasPrefix("genre-") })
         await shelves.near(genre.id, client: client)
         #expect(shelves.sections.first { $0.id == genre.id }?.items.isEmpty == false)
-        // A decade the mock's films don't come from: asked for, empty, gone.
-        let oldest = try #require(rows.first { $0.id.hasSuffix("decade-1950") })
-        await shelves.near(oldest.id, client: client)
-        #expect(!shelves.sections.contains { $0.id == oldest.id })
+        // A row nothing's in: asked for, empty, gone.
+        var nothing = ItemQuery(includeItemTypes: [.movie], limit: 24)
+        nothing.genres = ["No Such Genre"]
+        shelves.replace(shelves.sections + [Shelves.shelf("empty", "Nothing", subtitle: nil, nothing)])
+        await shelves.near("empty", client: client)
+        #expect(!shelves.sections.contains { $0.id == "empty" })
     }
 }

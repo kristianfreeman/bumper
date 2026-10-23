@@ -1,4 +1,5 @@
 import Foundation
+import JellyfinAPI
 import Network
 
 /// macOS and iOS ask before an app reaches your home network — but only
@@ -15,13 +16,7 @@ enum LocalNetworkAccess {
 
     /// A server on this network (a private address, a .local name, a bare
     /// host name): the kind Local Network access is for.
-    static func isLocal(_ url: URL) -> Bool {
-        guard let host = url.host()?.lowercased() else { return false }
-        if host.hasSuffix(".local") || !host.contains(".") { return true }
-        let p = host.split(separator: ".").compactMap { Int($0) }
-        guard p.count == 4 else { return false }
-        return p[0] == 10 || (p[0] == 192 && p[1] == 168) || (p[0] == 172 && (16...31).contains(p[1])) || (p[0] == 169 && p[1] == 254)
-    }
+    static func isLocal(_ url: URL) -> Bool { url.isOnLocalNetwork }
 
     /// Settings → Privacy & Security → Local Network (the Mac); this app's
     /// own page in Settings (iPhone, iPad).

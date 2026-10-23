@@ -232,7 +232,12 @@ public final class VLCEngine: PlayerEngine {
         // it. A seek right after play() starts there instead.)
         if let index = plan.audioStreamIndex, let n = audioOrder(of: index) { media.addOption(":audio-track=\(n)") }
         media.addOption(":sub-track=-1")
-        media.addOption(":network-caching=500")
+        // Half a second ahead is plenty on the home network. Over the
+        // internet (your family, on your server) the stream arrives in fits:
+        // a late bit of audio was thrown away, so the sound cut in and out
+        // and the subtitles fell behind. Two and a half seconds rides it out.
+        let remote = !plan.url.isOnLocalNetwork
+        media.addOption(":network-caching=\(remote ? 2500 : 500)")
         // The clock runs on the system clock, not the audio output: after a
         // seek VLC otherwise waits ~1 s for the audio output to restart before
         // the picture moves (measured on an Apple TV 4K: ±10 s skip 1.9 s →

@@ -7,6 +7,16 @@ TestFlight.
 
 ## Unreleased
 
+- Watching from a server over the internet (family on your server): the
+  sound no longer cuts in and out and subtitles keep time. Bumper keeps a
+  few seconds of the film ahead instead of half a second.
+- A new show or film on the server turns up on Home and in the libraries
+  within seconds, and coming back to the app shows what's been added
+  meanwhile (the Apple TV keeps it open for days).
+- iPhone: when Bumper can't look for your Apple TV (Local Network is off
+  for it in Settings), it says so, with Open Settings; still finding
+  nothing after a few seconds, it lists what to check.
+
 ## 0.4.0
 
 - Home and the Movies and Shows pages are made of rows, Netflix style, and

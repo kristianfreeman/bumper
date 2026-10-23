@@ -290,7 +290,7 @@ struct HomeView: View {
             tracker.seed(EditorialHome.picks(model.sections, queue: app.queue.plan.entries.map(\.item)).first?.item ?? model.sections.first?.items.first)
         }
         // Something marked watched: Continue Watching and Next Up move on.
-        .onChange(of: app.watchedChanges) { _, _ in
+        .onChange(of: app.contentChanges) { _, _ in
             Task { if let session = app.session { await model.load(session, usage: app.libraryUsage.scores, hidden: app.settings.hiddenLibraries, continueWatching: app.continueWatchingFilter, collections: app.collectionLibraries.first) } }
         }
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "home")

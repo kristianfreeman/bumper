@@ -144,9 +144,10 @@ final class AppModel {
     /// Watched or not, as set here, by item: every card shows it at once
     /// (before the server answers or any page reloads).
     private(set) var playedNow: [String: Bool] = [:]
-    /// Counts changes to what's been watched: Home and an open library or
-    /// collection reload quietly on each (Continue Watching and Next Up move on).
-    private(set) var watchedChanges = 0
+    /// Counts changes to what the pages show — something marked watched,
+    /// something added on the server, back in the app after a while: Home
+    /// and an open library or collection reload quietly on each.
+    private(set) var contentChanges = 0
 
     /// Marks an item watched or not — the one way the app does it.
     func setPlayed(_ item: BaseItem, _ played: Bool) {
@@ -154,7 +155,7 @@ final class AppModel {
         guard let client = session?.client else { return }
         Task {
             try? await client.setPlayed(played, itemId: item.id)
-            watchedChanges += 1
+            contentChanges += 1
         }
     }
 
@@ -169,13 +170,13 @@ final class AppModel {
     }
 
     /// Home builds the row again (the window changed).
-    func continueWatchingChanged() { watchedChanges += 1 }
+    func continueWatchingChanged() { contentChanges += 1 }
 
     func removeFromContinueWatching(_ item: BaseItem) {
         removedFromContinueWatching[item.id] = .now
         saveRemoved()
         Task { await syncContinueWatching() }
-        watchedChanges += 1
+        contentChanges += 1
     }
 
     /// Keeps it in Continue Watching, from the start: the server forgets
@@ -184,7 +185,7 @@ final class AppModel {
         guard let client = session?.client else { return }
         Task {
             try? await client.updatePlaybackPosition(itemId: item.id, ticks: 0, lastPlayed: item.userData?.lastPlayedDate ?? .now)
-            watchedChanges += 1
+            contentChanges += 1
         }
     }
 
@@ -208,7 +209,7 @@ final class AppModel {
         if merged != removedFromContinueWatching {
             removedFromContinueWatching = merged
             saveRemoved()
-            watchedChanges += 1
+            contentChanges += 1
         }
         if merged != theirs {
             do { try await client.setCustomPreferences([Self.removedKey: ContinueWatching.encode(merged)]) }
@@ -644,6 +645,7 @@ final class AppModel {
         queueSync = sync
         loadRemoved()
         Task { await syncContinueWatching() }
+        listenToServer(session)
     }
 
     /// Back to the front: catch up with changes made on other devices.
@@ -734,7 +736,36 @@ final class AppModel {
     }
     #endif
 
+    /// The server's news while signed in: a library changed (a new show, a
+    /// film added) and the pages load again — once, a few seconds after a
+    /// scan's burst of changes settles. A dropped connection opens again.
+    @ObservationIgnored private var serverEvents: Task<Void, Never>?
+
+    private func listenToServer(_ session: UserSession) {
+        serverEvents?.cancel()
+        guard !options.mock else { return }
+        let client = session.client
+        serverEvents = Task { [weak self] in
+            var settle: Task<Void, Never>?
+            while !Task.isCancelled {
+                for await _ in client.libraryChanges() {
+                    settle?.cancel()
+                    settle = Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(5))
+                        guard !Task.isCancelled else { return }
+                        TraceFile.write("server", "a library changed: pages load again")
+                        self?.contentChanges += 1
+                    }
+                }
+                try? await Task.sleep(for: .seconds(15))      // dropped (asleep, the server restarting): again
+            }
+        }
+    }
+
     func refreshFromOtherDevices() {
+        // Back in the app (the TV keeps it for days): the pages load again,
+        // for anything added or watched elsewhere meanwhile.
+        contentChanges += 1
         if !options.mock {
             if session == nil { Task { await signInFromCloud() } } else { Task { await checkCloudSignIn() } }
         }

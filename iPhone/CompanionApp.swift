@@ -95,7 +95,15 @@ struct ConnectView: View {
 
     var body: some View {
         List {
-            if model.tvs.isEmpty {
+            if model.localNetworkDenied {
+                // Nothing will ever be found until this is on.
+                Section {
+                    Label("Bumper can't look for your Apple TV", systemImage: "wifi.exclamationmark")
+                    Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                } footer: {
+                    Text("Turn on Local Network for Bumper in Settings, then come back.")
+                }
+            } else if model.tvs.isEmpty {
                 Section {
                     HStack(spacing: 14) {
                         ProgressView()
@@ -103,6 +111,14 @@ struct ConnectView: View {
                     }
                 } footer: {
                     Text("Open the app on your Apple TV, on the same network as this phone.")
+                }
+                if model.searchingLong {
+                    Section("Still nothing? Check that") {
+                        Label("Bumper is open on the Apple TV, not just installed", systemImage: "appletv")
+                        Label("The Apple TV and this phone are on the same Wi-Fi (not a guest network)", systemImage: "wifi")
+                        Label("iPhone Remote is on in the Apple TV's Bumper Settings", systemImage: "iphone")
+                        Label("Local Network is on for Bumper in this phone's Settings", systemImage: "lock.shield")
+                    }
                 }
             } else {
                 Section("On this network") {

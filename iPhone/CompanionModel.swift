@@ -1,6 +1,7 @@
 import Companion
 import Foundation
 import Network
+import dnssd
 import Observation
 
 /// The phone's side: finds Apple TVs running the app, connects to one, and
@@ -24,6 +25,12 @@ final class CompanionModel {
     /// The service name of the TV linked to (its Bonjour name).
     private var linked: String?
     private(set) var state: CompanionState?
+    /// iOS won't let the app look on the network (Local Network is off for
+    /// it in Settings): no TV can ever turn up, so say so.
+    private(set) var localNetworkDenied = false
+    /// Looking for a while with nothing found: show what to check.
+    private(set) var searchingLong = false
+    private var searchStarted: Task<Void, Never>?
 
     private let queue = DispatchQueue(label: "companion.phone")
     private var browser: NWBrowser?
@@ -39,6 +46,11 @@ final class CompanionModel {
         // A browser that stops (the local-network prompt on first use, the
         // network changing) starts again, or no TV would ever turn up.
         b.stateUpdateHandler = { [weak self] state in
+            if case .waiting(let error) = state, case .dns(let code) = error, code == DNSServiceErrorType(kDNSServiceErr_PolicyDenied) {
+                Task { @MainActor in self?.localNetworkDenied = true }
+            } else if case .ready = state {
+                Task { @MainActor in self?.localNetworkDenied = false }
+            }
             switch state {
             case .failed, .waiting:
                 Task { @MainActor in
@@ -66,6 +78,13 @@ final class CompanionModel {
         }
         b.start(queue: queue)
         browser = b
+        searchStarted?.cancel()
+        searchingLong = false
+        searchStarted = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled, let self, self.tvs.isEmpty else { return }
+            self.searchingLong = true
+        }
     }
 
     /// Settings → Remote off: stop looking, and drop the TV.

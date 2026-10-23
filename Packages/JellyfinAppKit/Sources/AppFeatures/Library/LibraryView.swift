@@ -191,7 +191,7 @@ struct LibraryView: View {
             await model.load(library: library, client: client, collections: app.collectionLibraries)
             tracker.seed(model.sections.first?.items.first)
         }
-        .onChange(of: app.watchedChanges) { _, _ in
+        .onChange(of: app.contentChanges) { _, _ in
             Task { if let client = app.session?.client { await model.load(library: library, client: client, collections: app.collectionLibraries) } }
         }
         .claimsLaunchFocus($firstCardFocused, ready: !model.sections.isEmpty, key: "library-\(library.id)")
@@ -412,7 +412,7 @@ struct CollectionPage: View {
             guard let client = app.session?.client else { return }
             await model.loadGenres(parentId: spec.filter.base.parentId, client: client)
         }
-        .onChange(of: app.watchedChanges) { _, _ in
+        .onChange(of: app.contentChanges) { _, _ in
             guard spec.items == nil, let client = app.session?.client else { return }
             Task { await model.reload(filter, client: client, quietly: true) }
         }
