@@ -7,6 +7,8 @@ TestFlight.
 
 ## Unreleased
 
+## 0.4.1
+
 - Watching from a server over the internet (family on your server): the
   sound no longer cuts in and out and subtitles keep time. Bumper keeps
   four seconds of the film ahead instead of half a second.
