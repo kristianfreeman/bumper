@@ -8,8 +8,8 @@ TestFlight.
 ## Unreleased
 
 - Watching from a server over the internet (family on your server): the
-  sound no longer cuts in and out and subtitles keep time. Bumper keeps a
-  few seconds of the film ahead instead of half a second.
+  sound no longer cuts in and out and subtitles keep time. Bumper keeps
+  four seconds of the film ahead instead of half a second.
 - A new show or film on the server turns up on Home and in the libraries
   within seconds, and coming back to the app shows what's been added
   meanwhile (the Apple TV keeps it open for days).
