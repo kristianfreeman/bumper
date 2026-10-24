@@ -16,6 +16,7 @@ struct SettingsView: View {
     @Environment(ThemeStore.self) private var themes
     @Environment(\.theme) private var theme
     @Environment(\.navigate) private var navigate
+    @Environment(\.openURL) private var openURL
     @State private var editing: String?
     @State private var preview: (setting: String, option: String)?
     @Environment(\.pageWidth) private var width
@@ -402,7 +403,10 @@ struct SettingsView: View {
             .action("caches", "Clear Caches", "trash", "Frees space. Artwork reloads from your server.", value: cleared ? "Cleared" : nil) {
                 Task { await ImagePipeline.shared.removeAll(); await ContentCache.shared.removeAll(); cleared = true }
             },
-            .link("source", "Source Code", "chevron.left.forwardslash.chevron.right", "Bumper is open source.", value: Brand.sourceCodeURL.host() ?? "") {},
+            // The TV has no browser: the address is there to type elsewhere.
+            .link("support", "Help & Support", "questionmark.circle", "Questions answered, and how to reach us.",
+                  value: "playbumper.com") { openURL(Brand.supportURL) },
+            .link("source", "Source Code", "chevron.left.forwardslash.chevron.right", "Bumper is open source.", value: Brand.sourceCodeURL.host() ?? "") { openURL(Brand.sourceCodeURL) },
         ]
         #if DEBUG
         tiles.append(.link("budgets", "Performance Budgets", "stopwatch", "Debug builds only.", value: nil) { navigate(.settings("budgets")) })

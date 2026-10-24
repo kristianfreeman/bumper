@@ -20,6 +20,11 @@ public enum Brand {
     public static let bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.kristianfreeman.bumper"
 
     public static let sourceCodeURL = URL(string: "https://github.com/kristianfreeman/bumper")!
+    /// playbumper.com: the site, its help and its privacy policy (the App
+    /// Store's support and privacy links).
+    public static let websiteURL = URL(string: "https://playbumper.com")!
+    public static let supportURL = URL(string: "https://playbumper.com/support/")!
+    public static let privacyURL = URL(string: "https://playbumper.com/privacy/")!
 }
 
 /// The business rules in one place.

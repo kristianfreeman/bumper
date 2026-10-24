@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bumper — a Jellyfin player for Apple TV, iPhone, iPad and Mac</title>
+<meta name="description" content="Bumper plays your Jellyfin library on Apple TV, iPhone, iPad and Mac — MKV, HEVC, Dolby Vision, Atmos and styled subtitles, as they are. Free, open source, in beta on TestFlight.">
+<link rel="canonical" href="https://playbumper.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://playbumper.com/">
+<meta property="og:title" content="Bumper — your library, at home on the big screen">
+<meta property="og:description" content="A Jellyfin player for Apple TV, iPhone, iPad and Mac that plays the files you have, as they are.">
+<meta property="og:image" content="https://playbumper.com/assets/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0B0B0F">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="preload" href="/assets/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<a class="strip" href="/changelog/"><span>Now showing</span><span>0.4 — a Home made of rows, every collection on it →</span></a>
+<header class="wrap bar">
+<a class="brand" href="/" aria-label="Bumper, home"><img src="/assets/apple-touch-icon.png" alt="" width="34" height="34">Bumper</a>
+<nav aria-label="Main">
+<ul>
+<li><a href="#plays">What it plays</a></li>
+<li class="wide"><a href="#remote">Your iPhone</a></li>
+<li><a href="#features">Features</a></li>
+<li class="wide"><a href="#faq">Questions</a></li>
+<li><a class="pill" href="https://testflight.apple.com/join/QDpjTEQ2">Get the beta</a></li>
+</ul>
+</nav>
+</header>
+
+<main id="main">
+
+<section class="hero" aria-labelledby="hero-title">
+<div class="wall-frame" role="img" aria-label="A slowly scrolling wall of classic horror posters: Dracula, Frankenstein, Night of the Living Dead, Carnival of Souls and dozens more">
+<div class="wall" id="wall"></div>
+</div>
+<div class="wrap">
+<div class="hero-words">
+<p class="eyebrow">A Jellyfin player for Apple TV</p>
+<h1 class="display" id="hero-title">Your library,<br>at home on the<br>big screen.</h1>
+<p class="lede" style="max-width: 34ch">Bumper plays what's on your Jellyfin server the way the Apple TV should: fast, native, and without converting a thing.</p>
+<div class="actions">
+<a class="button" href="https://testflight.apple.com/join/QDpjTEQ2">Get it on TestFlight</a>
+<a class="link" href="#features">See what it does →</a>
+</div>
+<p class="small">Apple TV · iPhone · iPad · Mac — free and open source</p>
+</div>
+</div>
+</section>
+
+<section class="band alt" id="plays" aria-labelledby="plays-title">
+<div class="wrap">
+<div class="section-head">
+<h2 class="display" id="plays-title">Every tape in the shop plays.</h2>
+<p class="lede">Whatever's on the shelf — a Blu-ray rip, a box set from 2006, a fansub with fancy subtitles — Bumper plays it as it is.</p>
+</div>
+<div class="shelf" role="img" aria-label="A shelf of tape boxes, each labelled with a format Bumper plays">
+<div class="shelf-row">
+<div class="tape" style="height: 290px; width: 64px; background: #2A1E14"><span style="color: #FFB547">MKV · HEVC</span></div>
+<div class="tape" style="height: 310px; width: 56px; background: #16232B"><span style="color: #9FD3F0">DOLBY VISION</span></div>
+<div class="tape" style="height: 280px; width: 70px; background: #2B1620"><span style="color: #F0A0C0">TRUEHD · ATMOS</span></div>
+<div class="tape" style="height: 320px; width: 52px; background: #1B2416"><span style="color: #B6E09A">AV1</span></div>
+<div class="tape" style="height: 270px; width: 66px; background: #231B2B"><span style="color: #CBB2F0">ASS SUBTITLES</span></div>
+<div class="tape" style="height: 300px; width: 58px; background: #2B2716"><span style="color: #F0DE9A">DTS-HD</span></div>
+<div class="tape" style="height: 290px; width: 60px; background: #142A27"><span style="color: #9AE0D2">VC-1</span></div>
+<div class="tape" style="height: 260px; width: 54px; background: #2A1616"><span style="color: #F0A99A">MPEG-2</span></div>
+<div class="tape" style="height: 305px; width: 68px; background: #1A1C2E"><span style="color: #A9B4F0">PGS SUBTITLES</span></div>
+<div class="tape" style="height: 285px; width: 56px; background: #24180F"><span style="color: #E8C08A">AVI · DIVX</span></div>
+<div class="tape" style="height: 315px; width: 62px; background: #1E2416"><span style="color: #CDE09A">FLAC</span></div>
+<div class="tape" style="height: 275px; width: 70px; background: #2B1A24"><span style="color: #F0B0D2">HDR10 · HLG</span></div>
+<div class="tape" style="height: 295px; width: 58px; background: #16232B"><span style="color: #9FD3F0">TS · M2TS</span></div>
+<div class="tape lean" style="height: 290px; width: 56px; background: #3A2A12"><span style="color: #FFB547">YOURS</span></div>
+</div>
+<div class="shelf-board"></div>
+<div class="shelf-lip"></div>
+</div>
+
+<div class="table">
+<div class="table-head">
+<h3>The full compatibility table</h3>
+<p>Played as is — your server converts none of it</p>
+</div>
+<dl>
+<div class="row"><dt>Files</dt><dd class="formats">MKV · MP4 · M4V · MOV · AVI · DivX · Xvid · TS · M2TS · MTS · WebM · FLV · OGG · OGV · WMV · ASF · MPEG · MPG · VOB · 3GP</dd><dd class="note">Straight from the file, with seeking anywhere.</dd></div>
+<div class="row"><dt>Video</dt><dd class="formats">H.264 (8- and 10-bit) · HEVC (Main, Main 10) · AV1 · VP9 · VP8 · VC-1 · WMV3 · MPEG-1 · MPEG-2 · MPEG-4 Part 2 · H.263 · Theora · ProRes · MJPEG</dd><dd class="note">The hardware decoder where it can; interlaced video smoothed.</dd></div>
+<div class="row"><dt>Picture</dt><dd class="formats">Dolby Vision · HDR10 · HLG · SDR</dd><dd class="note">Apple TV switches to the film's frame rate and range.</dd></div>
+<div class="row"><dt>Sound</dt><dd class="formats">Dolby Atmos · TrueHD · MLP · DTS · DTS-HD · AC-3 · E-AC-3 · AAC · FLAC · ALAC · Opus · Vorbis · MP3 · MP2 · PCM (incl. Blu-ray and DVD) · WMA (2, Pro, Lossless) · APE · WavPack</dd><dd class="note">Atmos passed through to your receiver on Apple TV.</dd></div>
+<div class="row"><dt>Subtitles, text</dt><dd class="formats">SRT · ASS · SSA · WebVTT · MOV text · MicroDVD · SAMI</dd><dd class="note">Styled ASS drawn as authored, fonts and all; your style for the rest.</dd></div>
+<div class="row"><dt>Subtitles, image</dt><dd class="formats">PGS (Blu-ray) · VobSub (DVD) · DVB · XSUB</dd><dd class="note">Shown exactly as on the disc.</dd></div>
+</dl>
+</div>
+</div>
+</section>
+
+<section class="band" id="remote" aria-labelledby="remote-title">
+<div class="wrap remote">
+<div class="remote-words">
+<p class="eyebrow">Your iPhone, on the sofa</p>
+<h2 id="remote-title">The remote you can't lose down the cushions.</h2>
+<p class="lede" style="max-width: 44ch">Open Bumper on your iPhone and it finds the TV by itself. See what's playing, scrub with your thumb, switch the subtitles, set a sleep timer.</p>
+<ul class="ticks">
+<li><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#FFB547" stroke-width="2"><path d="M4 10l4 4 8-8"></path></svg>No pairing, no code — the same Wi-Fi is enough</li>
+<li><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#FFB547" stroke-width="2"><path d="M4 10l4 4 8-8"></path></svg>Play something from the phone and it starts on the TV</li>
+<li><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#FFB547" stroke-width="2"><path d="M4 10l4 4 8-8"></path></svg>Up Next, lined up from the phone</li>
+</ul>
+</div>
+<div class="phone" role="img" aria-label="Bumper's remote on an iPhone, playing Dracula on the Living Room TV">
+<p class="on">Playing on Living Room</p>
+<img class="still" src="/assets/posters/p25.webp" alt="">
+<div><p class="title">Dracula</p><p class="meta">1931 · 1h 15m</p></div>
+<div><div class="bar-track"><div class="bar-fill" style="width: 41%"></div></div><div class="times"><span>30:45</span><span>−44:15</span></div></div>
+<div class="transport">
+<div class="small-btn">−10</div>
+<div class="big-btn"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="#0B0B0F"><rect x="7" y="5" width="5" height="18" rx="1.5"></rect><rect x="16" y="5" width="5" height="18" rx="1.5"></rect></svg></div>
+<div class="small-btn">+10</div>
+</div>
+<div class="chips3">
+<div>Subtitles<b>English</b></div>
+<div>Audio<b>Mono</b></div>
+<div>Sleep<b>Off</b></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="band" id="features" aria-labelledby="features-title" style="padding-top: 24px">
+<div class="wrap">
+<div class="section-head">
+<h2 class="display" id="features-title">The little moments.</h2>
+<p class="lede">The things you notice on the third night, and keep noticing.</p>
+</div>
+<div class="bento">
+
+<article class="tile s6 r2 big">
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 18px">
+<div class="search-field"><svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#8F8A80" stroke-width="2"><circle cx="9.5" cy="9.5" r="6.5"></circle><path d="M14.5 14.5l5 5"></path></svg><span>cheesy 50s and 60s horror I haven't seen</span></div>
+<div class="chips"><span class="chip on">Horror</span><span class="chip on">1950–1969</span><span class="chip on">Unwatched</span><span class="chip">Films</span></div>
+<div class="mini-posters"><img src="/assets/posters/p32.webp" alt=""><img src="/assets/posters/p13.webp" alt=""><img src="/assets/posters/p00.webp" alt=""><img src="/assets/posters/p58.webp" alt=""><img src="/assets/posters/p80.webp" alt=""></div>
+</div>
+<div><h3>Search the way you'd ask</h3><p>Say what you're in the mood for; Bumper turns it into genre, decade and what you've seen.</p></div>
+</article>
+
+<article class="tile s6">
+<div class="split">
+<div><h3>Continue Watching that lets go</h3><p>What you haven't touched in a week leaves by itself. Remove anything, on every device at once.</p></div>
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 8px"><img src="/assets/posters/p05.webp" alt="" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; object-position: center 25%; border-radius: 10px"><div class="bar-track" style="height: 4px"><div class="bar-fill" style="width: 64%; height: 4px"></div></div><span class="option" style="align-self: flex-start; font-size: 12px">Remove from Continue Watching</span></div>
+</div>
+</article>
+
+<article class="tile s3" style="background: #24180F">
+<span aria-hidden="true" style="align-self: flex-end; background: var(--text); color: var(--ground); border-radius: 999px; padding: 10px 18px; font-size: 14px; font-weight: 600">Skip Intro →</span>
+<div><h3>Skips the intro</h3><p style="color: #C9B8A4">Or does it for you.</p></div>
+</article>
+
+<article class="tile s3">
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 6px"><span class="option on">English · this exact file ✓</span><span class="option">English · SDH</span></div>
+<div><h3>No subtitles? Found</h3><p>Matched to your file, best first.</p></div>
+</article>
+
+<article class="tile s4 r2" style="background: #1A1610; border-color: #3A2E18">
+<div class="book" aria-hidden="true">
+<div style="width: 200px; aspect-ratio: 1; border-radius: 14px; background: #3A2A12; display: flex; flex-direction: column; justify-content: flex-end; padding: 18px; box-sizing: border-box; gap: 4px"><b style="font-size: 20px; line-height: 1.1">The Fall of the House of Usher</b><span style="font-size: 13px; color: #C9A86C">Edgar Allan Poe</span></div>
+<div style="width: 100%"><div class="bar-track" style="height: 4px"><div class="bar-fill" style="width: 38%; height: 4px"></div></div><div class="times"><span>Chapter 3</span><span>48m left</span></div></div>
+<div class="chips"><span class="chip">1.25×</span><span class="chip" style="color: var(--amber)">Smart Speed</span></div>
+</div>
+<div><h3 style="font-size: 26px; font-weight: 700">Audiobooks, too</h3><p style="font-size: 15px">From the same server. Chapters, any speed without the chipmunk voice, and Smart Speed to trim the silences.</p></div>
+</article>
+
+<article class="tile s8">
+<div class="split">
+<div><h3>A queue that knows when you'll finish</h3><p>Line things up on any device. It's the same everywhere, kept on your own server.</p></div>
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 8px">
+<div class="queue-row"><img src="/assets/posters/p27.webp" alt=""><span>Frankenstein</span><span>ends 10:10</span></div>
+<div class="queue-row"><img src="/assets/posters/p62.webp" alt=""><span>Bride of Frankenstein</span><span>ends 11:25</span></div>
+<div class="done">All done by 11:25 PM</div>
+</div>
+</div>
+</article>
+
+<article class="tile s4">
+<div class="split" style="grid-template-columns: 140px minmax(0, 1fr)">
+<img aria-hidden="true" src="/assets/posters/p81.webp" alt="" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; filter: blur(6px)">
+<div><h3>No spoilers</h3><p>Episodes you haven't seen stay blurred, with no descriptions.</p></div>
+</div>
+</article>
+
+<article class="tile s4">
+<div class="swatches" aria-hidden="true">
+<i style="background:#FFB547"></i><i style="background:#FF3B4E"></i><i style="background:#E8B931"></i><i style="background:#30D158"></i><i style="background:#FF8A1F"></i><i style="background:#64D2FF"></i><i style="background:#BF5AF2"></i><i style="background:#F4F1EA"></i><i style="background:#D92633"></i><i style="background:#5E5CE6"></i><i style="background:#66D4CF"></i>
+<i style="background:#FF9F0A"></i><i style="background:#AC8E68"></i><i style="background:#FF6482"></i><i style="background:#0A84FF"></i><i style="background:#8E8E93"></i><i style="background:#34C759"></i><i style="background:#FFD60A"></i><i style="background:#FF375F"></i><i style="background:#40C8E0"></i><i style="background:#A2845E"></i><i style="background:#7D7AFF"></i>
+</div>
+<div><h3>62 themes</h3><p>From true OLED black to a light one for daytime rooms.</p></div>
+</article>
+
+<article class="tile s6">
+<div class="split">
+<div><h3>Sign in once</h3><p>Your other Apple TVs sign themselves in through iCloud, end-to-end encrypted, and your settings follow you from room to room.</p></div>
+<div aria-hidden="true" style="display: flex; flex-direction: column; gap: 8px">
+<div class="option" style="display: flex; justify-content: space-between; padding: 10px 12px"><span>Living Room</span><span style="color: var(--amber)">Signed in</span></div>
+<div class="option" style="display: flex; justify-content: space-between; padding: 10px 12px"><span>Bedroom</span><span style="color: var(--amber)">Signed in</span></div>
+</div>
+</div>
+</article>
+
+<article class="tile s3">
+<svg aria-hidden="true" width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="#FFB547" stroke-width="2.5"><path d="M15 29V9l18-4v20"></path><circle cx="11" cy="29" r="4"></circle><circle cx="29" cy="25" r="4"></circle></svg>
+<div><h3>Theme songs</h3><p>A show's page plays its tune — found online if your server hasn't got it.</p></div>
+</article>
+
+<article class="tile s3">
+<div aria-hidden="true" style="display: flex; align-items: flex-end; gap: 6px; height: 64px"><i style="flex: 1; height: 100%; background: var(--amber); border-radius: 4px"></i><i style="flex: 1; height: 72%; background: #C98A2E; border-radius: 4px"></i><i style="flex: 1; height: 52%; background: #8A5E22; border-radius: 4px"></i><i style="flex: 1; height: 34%; background: #5A4520; border-radius: 4px"></i></div>
+<div><h3>Your watching, counted</h3><p>Hours watched, films, episodes and your top genres.</p></div>
+</article>
+
+<article class="tile s4">
+<p class="big-number" aria-hidden="true">29:41</p>
+<div><h3>A sleep timer</h3><p>In 15, 30 or 60 minutes, or after this one. The picture fades out gently.</p></div>
+</article>
+
+<article class="tile s4">
+<div aria-hidden="true" style="display: flex; gap: 10px"><img src="/assets/posters/p27.webp" alt="" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: center 20%"><img src="/assets/posters/p25.webp" alt="" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: center 20%"><img src="/assets/posters/p62.webp" alt="" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: center 20%"><img src="/assets/posters/p57.webp" alt="" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; object-position: center 20%"></div>
+<div><h3>Cast, crew, trailers, extras</h3><p>Follow an actor to what else of theirs you have. Deleted scenes and featurettes on the film's page.</p></div>
+</article>
+
+<article class="tile s4">
+<div aria-hidden="true" style="position: relative; height: 90px; border-radius: 12px; background: var(--card-2)"><img src="/assets/posters/p19.webp" alt="" style="position: absolute; right: 10px; bottom: 10px; width: 110px; height: 62px; object-fit: cover; border-radius: 8px; border: 2px solid var(--amber)"></div>
+<div><h3>Picture in Picture</h3><p>Keep watching while you do something else on iPhone and iPad.</p></div>
+</article>
+
+</div>
+</div>
+</section>
+
+<section class="band alt" id="faq" aria-labelledby="faq-title">
+<div class="wrap">
+<div class="section-head"><h2 class="display" id="faq-title">Questions.</h2></div>
+<div class="faq">
+<details><summary>Do I need a Jellyfin server?</summary><p>Yes. Bumper plays what's on a Jellyfin server — yours, or one a friend or family member shares with you. It isn't affiliated with the Jellyfin project.</p></details>
+<details><summary>What does it cost?</summary><p>Bumper is free. Some of its 62 themes are an optional purchase; everything else is included.</p></details>
+<details><summary>Which devices does it run on?</summary><p>Apple TV, iPhone, iPad and Mac, on tvOS 26, iOS 26, iPadOS 26 and macOS 26 or later. That includes the first Apple TV 4K, from 2017.</p></details>
+<details><summary>Does it work away from home?</summary><p>Yes, if your server can be reached over the internet. Bumper keeps a few seconds of the film ready when it's streaming from far away, so a patchy connection doesn't cut the sound.</p></details>
+<details><summary>Will it play my files?</summary><p>Almost certainly — see the compatibility table above. Bumper plays files as they are, so your server doesn't need to convert them (or be powerful enough to).</p></details>
+<details><summary>What does Bumper know about me?</summary><p>Nothing it sends anywhere. There are no accounts, no ads and no analytics. The <a href="/privacy/">privacy page</a> lists exactly what goes where.</p></details>
+<details><summary>How do I try it?</summary><p>Install TestFlight from the App Store, then open <a href="https://testflight.apple.com/join/QDpjTEQ2">the beta link</a> on your Apple TV, iPhone, iPad or Mac.</p></details>
+</div>
+</div>
+</section>
+
+<section class="wrap finale" aria-labelledby="finale-title">
+<p class="eyebrow">Doors open</p>
+<h2 class="display" id="finale-title">Bring your own server.</h2>
+<p class="lede" style="max-width: 44ch">Bumper is in beta on TestFlight for Apple TV, iPhone, iPad and Mac.</p>
+<a class="button" href="https://testflight.apple.com/join/QDpjTEQ2">Join the beta</a>
+</section>
+
+</main>
+
+<footer>
+<div class="wrap">
+<div class="cols">
+<a class="brand" href="/" aria-label="Bumper, home"><img src="/assets/apple-touch-icon.png" alt="" width="34" height="34">Bumper</a>
+<ul aria-label="Bumper">
+<li><a href="https://testflight.apple.com/join/QDpjTEQ2">Get the beta</a></li>
+<li><a href="/changelog/">What's new</a></li>
+<li><a href="https://github.com/kristianfreeman/bumper">Source code</a></li>
+</ul>
+<ul aria-label="Help">
+<li><a href="/support/">Support</a></li>
+<li><a href="/privacy/">Privacy</a></li>
+<li><a href="/credits/">Poster credits</a></li>
+</ul>
+</div>
+<div class="fine">
+<p>Bumper isn't affiliated with or endorsed by the Jellyfin project. Apple TV, iPhone, iPad, Mac and TestFlight are trademarks of Apple Inc.</p>
+<p>Posters: public domain, via <a href="/credits/">Wikimedia Commons</a>. Geist type under the SIL Open Font License.</p>
+<p>© 2026 Kristian Freeman.</p>
+</div>
+</div>
+</footer>
+
+<script>
+// The poster wall: four columns, each twice over so the loop meets itself.
+(function () {
+  var wall = document.getElementById("wall");
+  if (!wall) return;
+  var kinds = ["wall-up", "wall-down-slow", "wall-up-slow", "wall-down"];
+  var total = 82;
+  kinds.forEach(function (kind, c) {
+    var col = document.createElement("div");
+    col.className = "wall-col " + kind;
+    var mine = [];
+    for (var i = c; i < total; i += 4) mine.push(i);
+    mine.concat(mine).forEach(function (n, k) {
+      var img = document.createElement("img");
+      img.src = "/assets/posters/p" + (n < 10 ? "0" + n : n) + ".webp";
+      img.alt = "";
+      img.decoding = "async";
+      img.width = 320; img.height = 480;
+      if (c === 1 && k === 3) img.className = "focus";
+      col.appendChild(img);
+    });
+    wall.appendChild(col);
+  });
+})();
+</script>
+</body>
+</html>

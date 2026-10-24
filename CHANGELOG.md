@@ -7,6 +7,9 @@ TestFlight.
 
 ## Unreleased
 
+- Settings → Help & Support opens playbumper.com/support (on the Apple TV,
+  the address to visit), and Source Code opens the code on GitHub.
+
 - Fixed: a film could start again from the beginning partway through —
   after a long pause, or when Bumper switched how it decodes the picture
   or where the sound goes. It now carries on from where it was.

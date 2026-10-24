@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support — Bumper</title>
+<meta name="description" content="Help with Bumper, the Jellyfin player for Apple TV, iPhone, iPad and Mac: getting started, common problems, and how to reach the developer.">
+<link rel="canonical" href="https://playbumper.com/support/">
+<meta name="theme-color" content="#0B0B0F">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="wrap bar">
+<a class="brand" href="/" aria-label="Bumper, home"><img src="/assets/apple-touch-icon.png" alt="" width="34" height="34">Bumper</a>
+<nav aria-label="Main"><ul><li><a href="/">Home</a></li><li><a href="/privacy/">Privacy</a></li><li><a class="pill" href="https://testflight.apple.com/join/QDpjTEQ2">Get the beta</a></li></ul></nav>
+</header>
+<main id="main" class="wrap doc">
+<h1 class="display">Support</h1>
+<p class="updated">Bumper is in beta. Thanks for trying it.</p>
+
+<h2>Getting started</h2>
+<ol>
+<li>Install <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> from the App Store.</li>
+<li>Open <a href="https://testflight.apple.com/join/QDpjTEQ2">the Bumper beta link</a> and install Bumper on your Apple TV, iPhone, iPad or Mac.</li>
+<li>Open Bumper and pick your Jellyfin server — it finds servers on your network — or type its address. Sign in, or use Quick Connect with a code.</li>
+</ol>
+<p>Your other Apple TVs on the same iCloud account then sign themselves in.</p>
+
+<h2>Common questions</h2>
+
+<h3>My iPhone can't find the Apple TV</h3>
+<ul>
+<li>Open Bumper on the Apple TV: it has to be open, not just installed.</li>
+<li>Put the phone and the TV on the same Wi-Fi network (not a guest network).</li>
+<li>On the TV: Bumper → Settings → iPhone Remote should be on.</li>
+<li>On the phone: Settings → Privacy &amp; Security → Local Network → Bumper should be on.</li>
+</ul>
+
+<h3>Sound cuts out, or subtitles drift, away from home</h3>
+<p>Watching from a server over the internet, Bumper keeps a few seconds of the film ready ahead. If it still stutters, the film may need more than the server's upload speed can send: compare the file's bitrate (in Jellyfin's media info) with the server's upload speed.</p>
+
+<h3>The sound is late on AirPlay speakers or Bluetooth</h3>
+<p>AirPlay speakers hold back about two seconds of sound; Bumper keeps the picture in time with them. Turn on Settings → Speakers Button to pick speakers from inside the player.</p>
+
+<h3>A new film or show isn't showing up</h3>
+<p>Bumper updates when your server finishes adding it, and whenever you come back to the app. If it's still missing, check it appears in Jellyfin itself.</p>
+
+<h3>No subtitles came on</h3>
+<p>Settings → Subtitles → Show Subtitles decides when they turn on. If a file has none, the player's Audio &amp; Subtitles → Find Subtitles searches for one that fits your exact file (your server needs a subtitles plugin, such as OpenSubtitles).</p>
+
+<h2>Tell us what happened</h2>
+<p>The quickest way is TestFlight: open the TestFlight app, choose Bumper, and tap <strong>Send Beta Feedback</strong>. It includes your device and version. You can also email <a href="mailto:support@playbumper.com">support@playbumper.com</a> or open an issue on <a href="https://github.com/kristianfreeman/bumper/issues">GitHub</a>.</p>
+<p>It helps to say which device, where the sound goes (TV speakers, a receiver, AirPlay, Bluetooth), whether you're at home or away, and which film or show.</p>
+</main>
+<footer>
+<div class="wrap">
+<div class="fine" style="margin-top: 0">
+<p><a href="/">Bumper</a> · <a href="/privacy/">Privacy</a> · <a href="/changelog/">What's new</a> · <a href="https://github.com/kristianfreeman/bumper">Source code</a></p>
+<p>Bumper isn't affiliated with or endorsed by the Jellyfin project. © 2026 Kristian Freeman.</p>
+</div>
+</div>
+</footer>
+</body>
+</html>

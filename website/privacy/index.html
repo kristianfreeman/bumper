@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Bumper</title>
+<meta name="description" content="What Bumper sends where: your own Jellyfin server, Apple's iCloud, and two small services — no accounts, no ads, no analytics.">
+<link rel="canonical" href="https://playbumper.com/privacy/">
+<meta name="theme-color" content="#0B0B0F">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="wrap bar">
+<a class="brand" href="/" aria-label="Bumper, home"><img src="/assets/apple-touch-icon.png" alt="" width="34" height="34">Bumper</a>
+<nav aria-label="Main"><ul><li><a href="/">Home</a></li><li><a href="/support/">Support</a></li><li><a class="pill" href="https://testflight.apple.com/join/QDpjTEQ2">Get the beta</a></li></ul></nav>
+</header>
+<main id="main" class="wrap doc">
+<h1 class="display">Privacy</h1>
+<p class="updated">Last updated 23 October 2026</p>
+
+<p>Bumper is a player for your own Jellyfin server. It has no accounts of its own, no ads and no analytics, and it doesn't sell or share anything about you. This page lists everything it sends, and where.</p>
+
+<h2>Your Jellyfin server</h2>
+<p>Almost everything Bumper does is between your device and the Jellyfin server you sign in to: your library, artwork, what you watch and where you stopped, your queue, and the films and shows you remove from Continue Watching. That server is yours (or the person's who shares it with you); Bumper's author never sees it.</p>
+
+<h2>Apple</h2>
+<ul>
+<li><strong>Signing in on your other devices.</strong> So a new Apple TV can sign itself in, Bumper keeps your server sign-in in your private iCloud database, in an end-to-end encrypted field that only your own devices can read. Signing out on any device removes it.</li>
+<li><strong>Your settings.</strong> Settings such as subtitle style and theme sync between your devices through iCloud.</li>
+<li><strong>Crash reports and feedback.</strong> If you share them through TestFlight, Apple passes crash reports and the feedback you write on to the developer.</li>
+</ul>
+
+<h2>Two small services</h2>
+<ul>
+<li><strong>Bumper's search service</strong>, run by its author on Cloudflare. When you search in words ("funny 80s films I haven't seen"), it receives those words and answers with the genre, decade and other filters they describe. When you look for subtitles, it receives the title, year, episode, file name, frame rate and length of what you're watching, plus the names of the subtitles your server found, and says which fit best. It never receives your server's address, your account, or your library.</li>
+<li><strong>Plex's theme-song archive.</strong> If theme music is on and your server has no theme song for a show, Bumper asks Plex's public archive for it by the show's TVDB number. You can turn this off in Settings → Find Missing Theme Songs.</li>
+</ul>
+
+<h2>Trailers</h2>
+<p>Some trailers your server lists are on YouTube. Playing one of those opens it from YouTube, under YouTube's own privacy policy.</p>
+
+<h2>On your device</h2>
+<p>Downloads, a playback log used to diagnose problems, and caches of artwork stay on your device. You can clear the caches in Settings → Clear Caches.</p>
+
+<h2>This website</h2>
+<p>playbumper.com sets no cookies, runs no analytics and loads no fonts or scripts from anyone else. It's served by Cloudflare, which handles the requests your browser makes to it.</p>
+
+<h2>Children</h2>
+<p>Bumper doesn't knowingly collect anything from anyone, children included.</p>
+
+<h2>Changes and questions</h2>
+<p>If this changes, this page will say so, with a new date at the top. Questions: <a href="mailto:support@playbumper.com">support@playbumper.com</a>.</p>
+</main>
+<footer>
+<div class="wrap">
+<div class="fine" style="margin-top: 0">
+<p><a href="/">Bumper</a> · <a href="/support/">Support</a> · <a href="/changelog/">What's new</a> · <a href="https://github.com/kristianfreeman/bumper">Source code</a></p>
+<p>Bumper isn't affiliated with or endorsed by the Jellyfin project. © 2026 Kristian Freeman.</p>
+</div>
+</div>
+</footer>
+</body>
+</html>
