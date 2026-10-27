@@ -7,6 +7,11 @@ TestFlight.
 
 ## Unreleased
 
+- Apple TV with AirPlay speakers: an episode that got ready ahead of Play
+  no longer starts skipping with no sound.
+- A show remembers your subtitles and audio: switch on English SDH, or off,
+  or Japanese audio, and the next episode starts the same way.
+
 - Fixed: after a pause or a skip, an episode could stop and never start
   again — most often with AirPlay speakers. Bumper took the wait for the
   stream to refill as the picture failing, and opened the episode again

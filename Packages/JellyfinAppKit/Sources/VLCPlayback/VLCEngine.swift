@@ -83,6 +83,8 @@ public final class VLCEngine: PlayerEngine {
     /// clock has been set again for the one they turned out to have.
     @ObservationIgnored private var openedLatency: TimeInterval = 0
     @ObservationIgnored private var resynced = false
+    /// Opened held (`:start-paused`, prepared ahead of Play).
+    @ObservationIgnored private var openedHeld = false
     @ObservationIgnored private var routeObservers: [NSObjectProtocol] = []
 
     private static let log = Perf.logger("vlc-engine")
@@ -157,10 +159,13 @@ public final class VLCEngine: PlayerEngine {
             // (it reads as HDMI's before): the picture waits on a clock set for
             // the old delay and drops nearly every frame, black until a seek.
             // One seek where it is sets the clock again.
-            if delayed, followsAudio, !resynced, abs(AudioRoute.outputLatency - openedLatency) > 0.25 {
+            // Opened held (got ready ahead of Play) on the delayed speakers, the
+            // same: the audio starts two seconds behind a clock that ran on,
+            // and nearly every frame was dropped with no sound — once a seek.
+            if delayed, followsAudio, !resynced, abs(AudioRoute.outputLatency - openedLatency) > 0.25 || openedHeld {
                 resynced = true
                 let at = currentTime
-                TraceFile.write("vlc", "audio delay \(Int(openedLatency * 1000)) → \(Int(AudioRoute.outputLatency * 1000)) ms since opening: the picture's clock set again at \(Int(at.seconds)) s")
+                TraceFile.write("vlc", (openedHeld ? "got ready ahead on delayed speakers" : "audio delay \(Int(openedLatency * 1000)) → \(Int(AudioRoute.outputLatency * 1000)) ms since opening") + ": the picture's clock set again at \(Int(at.seconds)) s")
                 Task { [weak self] in await self?.seek(to: at) }
             }
             return
@@ -284,6 +289,7 @@ public final class VLCEngine: PlayerEngine {
         followsAudio = AudioRoute.isDelayed || AudioRoute.lastPlayedDelayed
         openedLatency = AudioRoute.outputLatency
         resynced = false
+        openedHeld = !autoplay
         media.addOption(followsAudio ? ":clock-master=audio" : ":clock-master=monotonic")
         TraceFile.write("vlc", "audio to \(AudioRoute.description); clock \(followsAudio ? (AudioRoute.isDelayed ? "follows the audio" : "follows the audio (delayed when sound last played)") : "system")")
         AudioSessionReport.write("opening")

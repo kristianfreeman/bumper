@@ -609,11 +609,20 @@ final class PlayerController {
 
     // MARK: Tracks
 
-    func selectAudio(_ id: Int) async {
+    /// Chosen here (not by the player at the start): the show remembers it
+    /// for its next episode.
+    func selectAudio(_ id: Int, remember: Bool = true) async {
         await engine?.selectAudio(id)
+        if remember, let show = plan?.item.seriesId, let stream = plan?.mediaSource.audioStreams.first(where: { $0.index == id }) {
+            app.trackMemory.update(show: show) { $0.audioLanguage = stream.language }
+        }
     }
 
-    func selectSubtitle(_ index: Int?) async {
+    func selectSubtitle(_ index: Int?, remember: Bool = true) async {
+        if remember, let show = plan?.item.seriesId {
+            let stream = index.flatMap { i in plan?.mediaSource.subtitleStreams.first { $0.index == i } }
+            app.trackMemory.update(show: show) { $0.remember(subtitle: stream) }
+        }
         selectedSubtitle = index
         foundSubtitle = nil
         subtitleTrack = nil
@@ -720,8 +729,18 @@ final class PlayerController {
     private func applyInitialSubtitles(plan: PlaybackPlan, client: JellyfinClient) async {
         let streams = plan.mediaSource.mediaStreams ?? []
         let chosen: Int?
+        // What you chose last time in this show, when this episode has it.
+        let remembered = plan.item.seriesId.flatMap { app.trackMemory.preference(forShow: $0) }
+        if request.audioIndex == nil, let audio = remembered?.audio(in: plan.mediaSource.audioStreams), audio != plan.audioStreamIndex {
+            TraceFile.write("subtitles", "audio as last time in this show: \(remembered?.audioLanguage ?? "?")")
+            await selectAudio(audio, remember: false)
+        }
         if let explicit = request.subtitleIndex {
             chosen = explicit >= 0 ? explicit : nil            // -1 = user picked Off
+        } else if let remembered, remembered.subtitlesOff {
+            chosen = nil
+        } else if let remembered, let index = remembered.subtitle(in: plan.mediaSource.subtitleStreams) {
+            chosen = index
         } else {
             switch app.settings.subtitleMode {
             case .off: chosen = nil
@@ -733,13 +752,14 @@ final class PlayerController {
         // Why subtitles are (or aren't) on, for "they didn't come on":
         // the setting, what the file has, and what was picked.
         let subs = plan.mediaSource.subtitleStreams
-        let why = request.subtitleIndex != nil ? "picked before playing" : "setting \(app.settings.subtitleMode.rawValue)"
+        let asBefore = request.subtitleIndex == nil && (remembered?.subtitlesOff == true || remembered?.subtitle(in: subs) != nil)
+        let why = request.subtitleIndex != nil ? "picked before playing" : asBefore ? "as last time in this show" : "setting \(app.settings.subtitleMode.rawValue)"
         let have = subs.isEmpty ? "none" : subs.map { "\($0.index) \($0.language ?? "?") \($0.codec ?? "?")\($0.isDefault == true ? " default" : "")\($0.isForced == true ? " forced" : "")\($0.isExternal == true ? " external" : "")" }.joined(separator: ", ")
         if let chosen {
             let title = subs.first { $0.index == chosen }?.displayTitle ?? "#\(chosen)"
             Self.log.info("Subtitles on by default: \(title, privacy: .public)")
             TraceFile.write("subtitles", "\(why): on, \(title) (of \(have))")
-            await selectSubtitle(chosen)
+            await selectSubtitle(chosen, remember: false)
             TraceFile.write("subtitles", "now: \(subtitleStatus)")
         } else {
             TraceFile.write("subtitles", "\(why): off (of \(have))")

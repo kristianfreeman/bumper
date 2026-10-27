@@ -225,6 +225,8 @@ final class AppModel {
     let accounts: AccountStore
     let themes: ThemeStore
     let sleepTimer = SleepTimer()
+    /// The subtitles and audio last chosen in each show (for its next episode).
+    let trackMemory = TrackMemory()
     /// Which libraries get used most (orders the sidebar, Home and the Top Shelf).
     let libraryUsage: LibraryUsage
     /// The server's libraries, most used first (set as the sidebar loads them).
