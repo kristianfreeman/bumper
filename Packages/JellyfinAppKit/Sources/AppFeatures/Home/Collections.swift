@@ -110,7 +110,12 @@ struct CollectionSection: View, Equatable {
         section.style == .poster ? Layout.columns(available, minWidth: Layout.posterMin, max: 6)
                                  : Layout.columns(available, minWidth: Layout.landscapeMin, max: 4)
     }
-    private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
+    private var width: CGFloat {
+        // The TV's first row is the page's lead: bigger posters, a bigger open tile.
+        if Platform.isTV, section.id == "resume" { return 340 }
+        if Platform.isTV, section.id == "nextup" { return 373 }
+        return Layout.cardWidth(available, columns: columns)
+    }
 
     nonisolated static func == (a: Self, b: Self) -> Bool {
         a.section == b.section && a.section.title == b.section.title && a.section.subtitle == b.section.subtitle
@@ -172,18 +177,45 @@ struct CollectionSection: View, Equatable {
 
     @ViewBuilder
     private func card(_ item: BaseItem) -> some View {
+        // The TV's lead rows: Continue Watching as big posters (its open tile
+        // the page's hero), Next Up as wide cards with names.
+        if Platform.isTV, section.id == "resume" || section.id == "nextup" {
+            OpenTile(item, shape: section.id == "resume" ? .poster : .landscape, width: width,
+                     title: item.kind == .episode ? item.seriesName ?? item.name : nil,
+                     detail: section.id == "nextup" ? [item.episodeLabel, item.runtime.map(MetadataLine.runtimeString)].compactMap { $0 }.joined(separator: " · ") : nil) {
+                app.select(item, navigate: navigate)
+            }
+            .contextMenu { ItemContextMenu(item: item) }
+        } else {
+            styledCard(item)
+        }
+    }
+
+    @ViewBuilder
+    private func styledCard(_ item: BaseItem) -> some View {
         switch section.style {
         case .landscape:
             if let arrival = section.arrivals?.first(where: { $0.id == item.id }) {
                 ArrivalCard(arrival: arrival, width: width)
             } else if item.kind == .playlist {
                 PlaylistCard(playlist: item, width: width)
+            } else if Platform.isTV {
+                // The TV: the focused card opens to its wide art, words on it.
+                OpenTile(item, shape: .landscape, width: width) { app.select(item, navigate: navigate) }
+                    .contextMenu { ItemContextMenu(item: item) }
             } else {
                 LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
                     .contextMenu { ItemContextMenu(item: item) }
             }
         case .poster:
-            if section.id == "nextup" {
+            if Platform.isTV {
+                OpenTile(item, shape: .poster, width: width,
+                         title: section.id == "nextup" ? item.seriesName ?? item.name : nil,
+                         detail: section.id == "nextup" ? [item.episodeLabel, item.runtime.map(MetadataLine.runtimeString)].compactMap { $0 }.joined(separator: " · ") : nil) {
+                    app.select(item, navigate: navigate)
+                }
+                .contextMenu { ItemContextMenu(item: item) }
+            } else if section.id == "nextup" {
                 // The show, and where you are in it: "S2 · E4 · 23m".
                 PosterCard(item, width: width, title: item.seriesName ?? item.name,
                            detail: [item.episodeLabel, item.runtime.map(MetadataLine.runtimeString)].compactMap { $0 }.joined(separator: " · ")) {
