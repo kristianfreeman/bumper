@@ -172,6 +172,9 @@ final class AppModel {
     /// Home builds the row again (the window changed).
     func continueWatchingChanged() { contentChanges += 1 }
 
+    /// Something was watched (or stopped part-way): the pages load again.
+    func contentChanged() { contentChanges += 1 }
+
     func removeFromContinueWatching(_ item: BaseItem) {
         removedFromContinueWatching[item.id] = .now
         saveRemoved()
@@ -748,12 +751,23 @@ final class AppModel {
         serverEvents = Task { [weak self] in
             var settle: Task<Void, Never>?
             while !Task.isCancelled {
-                for await _ in client.libraryChanges() {
+                for await change in client.serverChanges() {
+                    let why: String
+                    switch change {
+                    case .connected: TraceFile.write("server", "listening for changes"); continue
+                    case .dropped(let reason): TraceFile.write("server", "stopped listening: \(reason)"); continue
+                    case .library: why = "a library changed"
+                    case .userData:
+                        // Our own progress reports say this every few seconds
+                        // while something plays: those wait for the end of it.
+                        if self?.playback != nil { continue }
+                        why = "something was watched elsewhere"
+                    }
                     settle?.cancel()
                     settle = Task { [weak self] in
                         try? await Task.sleep(for: .seconds(5))
                         guard !Task.isCancelled else { return }
-                        TraceFile.write("server", "a library changed: pages load again")
+                        TraceFile.write("server", "\(why): pages load again")
                         self?.contentChanges += 1
                     }
                 }

@@ -253,6 +253,9 @@ final class PlayerController {
         let position = engine?.currentTime ?? .zero
         engine?.stop()
         if let reporter { await reporter.stop(position: position) }
+        // What was just watched (its place, watched or not) on Home, the
+        // libraries and the show's page when you're back there.
+        app.contentChanged()
         DisplayModeManager.reset()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         removeRemoteCommands()
@@ -281,6 +284,13 @@ final class PlayerController {
                 if engine.status == .ended { await self.finishedItem(); return }
                 if engine.kind == .native, case .failed(let message) = engine.status {
                     await self.switchToVLC(reason: "AVPlayer error: \(message)")
+                    continue
+                }
+                // VLCKit stuck (a stop that never finished, an error): once, a
+                // fresh player from where it was, rather than a dead screen.
+                if engine.kind == .vlc, case .failed(let message) = engine.status, !self.restartedVLC {
+                    self.restartedVLC = true
+                    await self.switchToVLC(reason: "VLCKit: \(message)")
                     continue
                 }
                 if await self.applySleepTimer(engine) { return }
@@ -793,14 +803,17 @@ final class PlayerController {
     /// AVPlayer failed (to open or mid-playback), or the item needs
     /// something only VLCKit does: VLCKit takes over from the current
     /// position and keeps the item for the rest of its playback.
+    /// VLCKit started again once already for this item (see the run loop).
+    @ObservationIgnored private var restartedVLC = false
+
     private func switchToVLC(reason: String) async {
-        guard let old = engine, old.kind == .native, var next = plan else { return }
+        guard let old = engine, var next = plan else { return }
         let position = max(old.currentTime, old.playheadNow)
         // Paused by the person, not "not moving yet": a hand-off at the very
         // start (AVPlayer not yet playing) left VLCKit paused on frame one.
         let wasPaused = old.status == .paused && phase == .playing && position > .seconds(1) && !transport.isScrubbing && !isPlaying
-        Self.log.notice("AVPlayer → VLCKit at \(position.seconds, privacy: .public)s: \(reason, privacy: .public)")
-        TraceFile.write("player", "AVPlayer → VLCKit at \(position.seconds)s: \(reason)")
+        Self.log.notice("\(old.kind == .native ? "AVPlayer" : "VLCKit", privacy: .public) → VLCKit at \(position.seconds, privacy: .public)s: \(reason, privacy: .public)")
+        TraceFile.write("player", "\(old.kind == .native ? "AVPlayer" : "VLCKit") → a fresh VLCKit at \(Int(position.seconds))s: \(reason)")
         // A floating picture goes with AVPlayer: the screen back for VLCKit's.
         detachPictureInPicture(old)
         if floatFlow.screenClosed { app.playback = request }

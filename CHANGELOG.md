@@ -7,6 +7,16 @@ TestFlight.
 
 ## Unreleased
 
+- Fixed: after a pause or a skip, an episode could stop and never start
+  again — most often with AirPlay speakers. Bumper took the wait for the
+  stream to refill as the picture failing, and opened the episode again
+  in a way that didn't start. Now it only does that when a file has never
+  shown a frame, and if the player ever gets stuck it starts a fresh one
+  from the same place.
+- Finishing or leaving something updates where you are in it on Home, in
+  the libraries and on the show's page straight away, and watching on
+  another device (or in Jellyfin) updates them too.
+
 - Settings → Help & Support opens playbumper.com/support (on the Apple TV,
   the address to visit), and Source Code opens the code on GitHub.
 

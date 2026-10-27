@@ -225,6 +225,11 @@ struct ItemDetailView: View {
             }
             if first, model.item.kind == .series { playFocused = true }   // button appears only after Next Up loads
         }
+        // Back from the player (it covers the page, which never leaves), or
+        // something changed on the server: where you are in it, again.
+        .onChange(of: app.contentChanges) { _, _ in
+            Task { if let client = app.session?.client { await model.load(client: client) } }
+        }
         .onDisappear {
             ThemeMusic.shared.stop(owner: model.item.seriesId ?? model.item.id)
             if app.playback == nil { app.releasePrepared() }      // left without playing
