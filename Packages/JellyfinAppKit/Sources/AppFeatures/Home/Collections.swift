@@ -178,12 +178,23 @@ struct CollectionSection: View, Equatable {
                 ArrivalCard(arrival: arrival, width: width)
             } else if item.kind == .playlist {
                 PlaylistCard(playlist: item, width: width)
+            } else if Platform.isTV {
+                // The TV: the focused card opens to its wide art, words on it.
+                OpenTile(item, shape: .landscape, width: width) { app.select(item, navigate: navigate) }
+                    .contextMenu { ItemContextMenu(item: item) }
             } else {
                 LandscapeCard(item, width: width) { app.select(item, navigate: navigate) }
                     .contextMenu { ItemContextMenu(item: item) }
             }
         case .poster:
-            if section.id == "nextup" {
+            if Platform.isTV {
+                OpenTile(item, shape: .poster, width: width,
+                         title: section.id == "nextup" ? item.seriesName ?? item.name : nil,
+                         detail: section.id == "nextup" ? [item.episodeLabel, item.runtime.map(MetadataLine.runtimeString)].compactMap { $0 }.joined(separator: " · ") : nil) {
+                    app.select(item, navigate: navigate)
+                }
+                .contextMenu { ItemContextMenu(item: item) }
+            } else if section.id == "nextup" {
                 // The show, and where you are in it: "S2 · E4 · 23m".
                 PosterCard(item, width: width, title: item.seriesName ?? item.name,
                            detail: [item.episodeLabel, item.runtime.map(MetadataLine.runtimeString)].compactMap { $0 }.joined(separator: " · ")) {
