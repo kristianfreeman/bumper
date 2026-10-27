@@ -67,6 +67,8 @@ public struct OpenTile: View {
         }
 
         private var open: Bool { Platform.isTV && focused }
+        /// A lead row's open tile (half the screen): hero-sized words.
+        private var big: Bool { OpenTile.sizes(shape, width: width).art > 400 }
         private var progress: Double? {
             guard let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) else { return nil }
             return p
@@ -82,7 +84,9 @@ public struct OpenTile: View {
                             .frame(width: size.open, height: size.art)
                         LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0)], startPoint: .leading, endPoint: .center)
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(title ?? Self.name(item)).font(.cardTitle.weight(.bold)).lineLimit(2)
+                            Text(title ?? Self.name(item))
+                                .font(big ? .system(size: 56, weight: .heavy) : .cardTitle.weight(.bold))
+                                .lineLimit(2)
                             if let line = detail ?? Self.line(item) {
                                 Text(line).font(.cardSubtitle).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
                             }
@@ -90,6 +94,10 @@ public struct OpenTile: View {
                                 Text(overview).font(.cardSubtitle).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
                             }
                             if let progress { ProgressStrip(progress).frame(width: min(size.open * 0.4, 360)) }
+                            if big {
+                                Text(progress != nil ? "▶ Resume  ·  Start Over  ·  Details" : "▶ Play  ·  Details")
+                                    .font(.cardTitle.weight(.semibold)).padding(.top, 6)
+                            }
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: size.open * 0.55, alignment: .leading)

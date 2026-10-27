@@ -132,7 +132,13 @@ final class HomeModel {
         var sections: [BrowseSection] = []
         // Not played lately, or removed: Settings → Keep in Continue Watching.
         let resumeItems = continueWatching.apply((try? await resume.items) ?? [])
-        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: .landscape, scrolls: true, total: resumeItems.count)) }
+        if !resumeItems.isEmpty { sections.append(BrowseSection(id: "resume", title: "Continue Watching", items: resumeItems, style: {
+            #if os(tvOS)
+            .poster
+            #else
+            .landscape
+            #endif
+        }(), scrolls: true, total: resumeItems.count)) }
         let nextItems = (try? await nextUp.items) ?? []
         // The shows' posters, big: what's next is a show, not an episode's name.
         if !nextItems.isEmpty { sections.append(BrowseSection(id: "nextup", title: "Next Up", items: nextItems, style: .poster, scrolls: true, total: nextItems.count)) }
@@ -257,15 +263,15 @@ struct HomeView: View {
     var body: some View {
         let page = EditorialHome(sections: model.sections, userName: app.session?.account.userName, queue: app.queue.plan.entries.map(\.item))
         // The pick's Play takes launch focus when there's a pick; the first card otherwise.
-        let pickLeads = !page.picks.isEmpty
+        let pickLeads = !Platform.isTV && !page.picks.isEmpty      // the TV: no hero, the first row's open tile is it
         ZStack(alignment: .top) {
             TrackedBackdrop(tracker: tracker)
             CollectionList(sections: page.sections + model.shelves.sections, firstCardFocus: pickLeads ? nil : $firstCardFocused, onNear: { id in
                 guard let client = app.session?.client else { return }
                 Task { await model.shelves.near(id, client: client) }
             }, showsQueue: true) {
-                HomePickSection(picks: page.picks, playFocus: pickLeads ? $firstCardFocused : nil)
-                    .padding(.top, 10)
+                if !Platform.isTV { HomePickSection(picks: page.picks, playFocus: pickLeads ? $firstCardFocused : nil)
+                    .padding(.top, 10) }
             }
             if model.localNetworkBlocked {
                 ContentUnavailableView {
