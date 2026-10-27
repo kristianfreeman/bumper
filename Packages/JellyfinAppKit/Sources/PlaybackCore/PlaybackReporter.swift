@@ -46,8 +46,13 @@ public actor PlaybackReporter {
     public func start(position: Duration) async {
         started = true
         lastReported = .now
-        do { try await client.reportPlaybackStart(report(position: position, paused: false, audio: nil, subtitle: nil)) }
-        catch { Self.log.error("start report failed: \(error.localizedDescription, privacy: .public)") }
+        do {
+            try await client.reportPlaybackStart(report(position: position, paused: false, audio: nil, subtitle: nil))
+            TraceFile.write("playstate", "start reported at \(Int(position.seconds)) s")
+        } catch {
+            Self.log.error("start report failed: \(error.localizedDescription, privacy: .public)")
+            TraceFile.write("playstate", "start report failed: \(error.localizedDescription)")
+        }
     }
 
     /// Call freely (every tick is fine): throttled to one request / 10 s
@@ -57,13 +62,21 @@ public actor PlaybackReporter {
         if !force, let last = lastReported, last.duration(to: .now) < .seconds(10) { return }
         lastReported = .now
         do { try await client.reportPlaybackProgress(report(position: position, paused: paused, audio: audio, subtitle: subtitle)) }
-        catch { undelivered(position) }
+        catch {
+            TraceFile.write("playstate", "progress report failed at \(Int(position.seconds)) s: \(error.localizedDescription) (kept for later)")
+            undelivered(position)
+        }
     }
 
     public func stop(position: Duration) async {
         guard started else { return }
         started = false
-        do { try await client.reportPlaybackStopped(report(position: position, paused: true, audio: nil, subtitle: nil)) }
-        catch { undelivered(position) }
+        do {
+            try await client.reportPlaybackStopped(report(position: position, paused: true, audio: nil, subtitle: nil))
+            TraceFile.write("playstate", "stop reported at \(Int(position.seconds)) s")
+        } catch {
+            TraceFile.write("playstate", "stop report failed at \(Int(position.seconds)) s: \(error.localizedDescription) (kept for later)")
+            undelivered(position)
+        }
     }
 }

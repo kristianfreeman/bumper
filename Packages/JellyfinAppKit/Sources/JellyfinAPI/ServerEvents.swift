@@ -11,11 +11,22 @@ extension JellyfinClient {
         return c.url!
     }
 
-    /// Each time the server says a library changed (something added,
-    /// removed, its details refreshed), until the connection drops: the
-    /// caller opens it again. The server asks to be kept alive
-    /// (`ForceKeepAlive`, with how often); this does that.
-    public func libraryChanges() -> AsyncStream<Void> {
+    /// What the server announced.
+    public enum ServerChange: Sendable {
+        /// Something added, removed, or its details refreshed.
+        case library
+        /// Watched, a resume point, a favourite — here or on another device.
+        case userData
+        /// Connected (the server asked to be kept alive), for the trace.
+        case connected
+        /// Dropped, and why.
+        case dropped(String)
+    }
+
+    /// The server's announcements, until the connection drops: the caller
+    /// opens it again. The server asks to be kept alive (`ForceKeepAlive`,
+    /// with how often); this does that.
+    public func serverChanges() -> AsyncStream<ServerChange> {
         let socket = URLSession.shared.webSocketTask(with: socketURL)
         return AsyncStream { continuation in
             socket.resume()
@@ -27,7 +38,11 @@ extension JellyfinClient {
                     continuation.finish()
                 }
                 while !Task.isCancelled {
-                    guard let message = try? await socket.receive() else { return }
+                    let message: URLSessionWebSocketTask.Message
+                    do { message = try await socket.receive() } catch {
+                        continuation.yield(.dropped(error.localizedDescription))
+                        return
+                    }
                     let data: Data? = switch message {
                     case .string(let s): Data(s.utf8)
                     case .data(let d): d
@@ -37,6 +52,7 @@ extension JellyfinClient {
                           let type = json["MessageType"] as? String else { continue }
                     switch type {
                     case "ForceKeepAlive":
+                        if keepAlive == nil { continuation.yield(.connected) }
                         let every = max(5, ((json["Data"] as? Double) ?? 60) / 2)
                         keepAlive?.cancel()
                         keepAlive = Task {
@@ -46,7 +62,9 @@ extension JellyfinClient {
                             }
                         }
                     case "LibraryChanged":
-                        continuation.yield()
+                        continuation.yield(.library)
+                    case "UserDataChanged":
+                        continuation.yield(.userData)
                     default:
                         break
                     }

@@ -184,21 +184,31 @@ public final class VLCEngine: PlayerEngine {
         markReopening()
         Task { [weak self] in
             guard let self else { return }
-            await self.stopAndWait()
+            // A stop that doesn't finish (VLC waiting on a stalled stream or
+            // decoder — 36 s on a Bedroom TV) leaves this player unusable: a
+            // new item opened on it never starts. Say so, and the player
+            // starts again on a fresh one.
+            guard await self.stopAndWait() else {
+                TraceFile.write("vlc", "the stop didn't finish in 3 s: this player is stuck")
+                self.reopening = false
+                self.status = .failed("Playback stopped responding")
+                return
+            }
             try? await self.load(next, autoplay: autoplay)
         }
     }
 
-    @ObservationIgnored private var stopped: CheckedContinuation<Void, Never>?
+    @ObservationIgnored private var stopped: CheckedContinuation<Bool, Never>?
 
-    /// `player.stop()`, and back once VLC says it has (1.5 s at most).
-    private func stopAndWait() async {
-        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+    /// `player.stop()`, and back once VLC says it has: true, or false when
+    /// it hasn't after 3 s.
+    private func stopAndWait() async -> Bool {
+        await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
             stopped = c
             player.stop()
             Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(1500))
-                self?.stopped?.resume()
+                try? await Task.sleep(for: .seconds(3))
+                self?.stopped?.resume(returning: false)
                 self?.stopped = nil
             }
         }
@@ -572,7 +582,7 @@ public final class VLCEngine: PlayerEngine {
             status = .paused
             finishStart()
         case .stopped, .stopping:
-            if state == .stopped, let c = stopped { stopped = nil; c.resume() }
+            if state == .stopped, let c = stopped { stopped = nil; c.resume(returning: true) }
             guard hasPlayed, !reopening else { return }
             // Stopped well before the end: the connection went (a long pause,
             // the server restarted), not the item. Open it again from there.
@@ -685,14 +695,20 @@ public final class VLCEngine: PlayerEngine {
     /// frame decoded in 4 s: the item again from where it is, decoded in
     /// software (once; FFmpeg managed every such file on an Apple TV 4K).
     private func watchDecoder(decoded: Int, bitrate: Double) {
-        guard !softwareDecode, !Self.decodesInSoftware(plan), status == .playing, plan?.mediaSource.videoStream != nil else { decoderStall = (decoded, 0); return }
+        // Only a decoder that has (next to) never produced a frame since this
+        // item opened turned it down. One that has stalls only while the
+        // stream refills — after a skip, or a resume with AirPlay's two
+        // seconds and the buffer to fill — and calling that a refusal
+        // reopened the item mid-way, which then didn't start.
+        guard !softwareDecode, !Self.decodesInSoftware(plan), status == .playing, plan?.mediaSource.videoStream != nil,
+              decoded < 30, seekWaiter == nil else { decoderStall = (decoded, 0); return }
         if decoded != decoderStall.decoded || bitrate < 0.2 { decoderStall = (decoded, 0); return }
         decoderStall.seconds += 1
-        guard decoderStall.seconds >= 4, plan != nil else { return }
+        guard decoderStall.seconds >= 6, plan != nil else { return }
         softwareDecode = true
         let at = max(currentTime, startTarget ?? .zero)
-        TraceFile.write("vlc", "no frames decoded in 4 s with data arriving: the hardware decoder turned it down — again in software from \(Int(at.seconds)) s")
-        Self.log.notice("VideoToolbox decoded nothing in 4 s: software decode from \(at.seconds, privacy: .public) s")
+        TraceFile.write("vlc", "no frames decoded in 6 s with data arriving: the hardware decoder turned it down — again in software from \(Int(at.seconds)) s")
+        Self.log.notice("VideoToolbox decoded nothing in 6 s: software decode from \(at.seconds, privacy: .public) s")
         reopen(at: at, autoplay: true)
     }
 
