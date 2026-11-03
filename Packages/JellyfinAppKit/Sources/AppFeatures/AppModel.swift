@@ -752,11 +752,13 @@ final class AppModel {
         let client = session.client
         serverEvents = Task { [weak self] in
             var settle: Task<Void, Never>?
+            var retry = 15.0
             while !Task.isCancelled {
+                var connected = false
                 for await change in client.serverChanges() {
                     let why: String
                     switch change {
-                    case .connected: TraceFile.write("server", "listening for changes"); continue
+                    case .connected: connected = true; TraceFile.write("server", "listening for changes"); continue
                     case .dropped(let reason): TraceFile.write("server", "stopped listening: \(reason)"); continue
                     case .library: why = "a library changed"
                     case .userData:
@@ -773,7 +775,10 @@ final class AppModel {
                         self?.contentChanges += 1
                     }
                 }
-                try? await Task.sleep(for: .seconds(15))      // dropped (asleep, the server restarting): again
+                // Dropped (asleep, the server restarting): again in 15s. Refused
+                // outright (a proxy without WebSockets): less and less often, to 5 min.
+                retry = connected ? 15 : min(retry * 2, 300)
+                try? await Task.sleep(for: .seconds(retry))
             }
         }
     }

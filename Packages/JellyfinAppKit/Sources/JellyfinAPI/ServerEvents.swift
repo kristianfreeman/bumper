@@ -27,7 +27,11 @@ extension JellyfinClient {
     /// opens it again. The server asks to be kept alive (`ForceKeepAlive`,
     /// with how often); this does that.
     public func serverChanges() -> AsyncStream<ServerChange> {
-        let socket = URLSession.shared.webSocketTask(with: socketURL)
+        // The header every other request carries, as well as `api_key`:
+        // servers that turned legacy authorization off refuse the query alone.
+        var request = URLRequest(url: socketURL)
+        request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
+        let socket = URLSession.shared.webSocketTask(with: request)
         return AsyncStream { continuation in
             socket.resume()
             let reader = Task {
@@ -40,7 +44,13 @@ extension JellyfinClient {
                 while !Task.isCancelled {
                     let message: URLSessionWebSocketTask.Message
                     do { message = try await socket.receive() } catch {
-                        continuation.yield(.dropped(error.localizedDescription))
+                        // A refused upgrade only says "bad response": the
+                        // status (401 the server, 400/502 a proxy) says whose.
+                        var why = error.localizedDescription
+                        if let http = socket.response as? HTTPURLResponse, http.statusCode != 101 {
+                            why += " (HTTP \(http.statusCode)\(http.value(forHTTPHeaderField: "Server").map { ", \($0)" } ?? ""))"
+                        }
+                        continuation.yield(.dropped(why))
                         return
                     }
                     let data: Data? = switch message {
