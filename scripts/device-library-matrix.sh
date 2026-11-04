@@ -6,6 +6,7 @@
 #
 #   scripts/device-library-matrix.sh            pick, then play every kind
 #   PICKS=<library-matrix.json> scripts/device-library-matrix.sh   reuse a pick
+#   WINDOW=3 WINDOWS=2 …           shorter measuring (default three 4-s windows)
 #
 # Writes perf-results/library-matrix-<date>/report.md.
 set -uo pipefail
@@ -42,7 +43,7 @@ for i in $(seq 0 $((COUNT - 1))); do
   name=$(python3 -c "import json;print(json.load(open('$OUT/manifest.json'))[$i]['name'][:70])")
   printf '▶ %-3s %-72s' "$i" "$name"
   subs=$(python3 -c "import json;print(json.load(open('$OUT/picks.json'))[$i].get('subtitles',''))")
-  launch_app 75 -autoplay "$id" -autoplayBackground -statsWindow 4 -traceStderr -startAt "$start" ${subs:+-autoplaySubtitles "$subs"}
+  launch_app 75 -autoplay "$id" -autoplayBackground -statsWindow "${WINDOW:-4}" -traceStderr -startAt "$start" ${subs:+-autoplaySubtitles "$subs"}
   trace="$OUT/trace-$i.log"; result=TIMEOUT
   for _ in $(seq 1 40); do
     sleep 1
@@ -50,7 +51,7 @@ for i in $(seq 0 $((COUNT - 1))); do
     # off the TV hangs while it's busy decoding).
     cp "$OUT/console.log" "$trace" 2>/dev/null
     grep -qE "Playback failed|could not play" "$trace" && { result=FAILED; break; }
-    [[ $(grep -cE "\[(vlc|native)\] [0-9]+ s:" "$trace") -ge 3 ]] && { result=MEASURED; break; }
+    [[ $(grep -cE "\[(vlc|native)\] [0-9]+ s:" "$trace") -ge "${WINDOWS:-3}" ]] && { result=MEASURED; break; }
     kill -0 "$LAUNCHER" 2>/dev/null || { result=EXITED; break; }
   done
   kill "$LAUNCHER" 2>/dev/null; wait "$LAUNCHER" 2>/dev/null

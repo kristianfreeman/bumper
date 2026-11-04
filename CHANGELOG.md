@@ -7,6 +7,18 @@ TestFlight.
 
 ## Unreleased
 
+- Fixed: some films and episodes couldn't be continued partway in, or
+  scrubbed far — "It took too long to start." About one MKV in fifteen
+  lists its index in an order VLC reads wrongly (often older rips); Bumper
+  now puts it in order as it plays, without your server converting
+  anything.
+- Blu-ray and DVD disc images (.iso) play: your server reads the film out
+  of the disc. A 4K disc image can take 15 seconds to start.
+- A server that can't convert video (many NAS boxes): what Bumper would
+  have asked it to convert now plays as it is after 12 seconds, instead of
+  never starting — interlaced HEVC, Dolby Vision in MKV. With Disable
+  Transcoding on, it plays that way at once.
+
 - Apple TV with AirPlay speakers: an episode that got ready ahead of Play
   no longer starts skipping with no sound.
 - A show remembers your subtitles and audio: switch on English SDH, or off,

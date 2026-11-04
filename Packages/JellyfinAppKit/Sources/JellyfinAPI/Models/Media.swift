@@ -43,6 +43,10 @@ public struct MediaSource: Codable, Sendable, Hashable, Identifiable {
     public var videoStream: MediaStream? { mediaStreams?.first { $0.type == .video } }
     public var audioStreams: [MediaStream] { mediaStreams?.filter { $0.type == .audio } ?? [] }
     public var subtitleStreams: [MediaStream] { mediaStreams?.filter { $0.type == .subtitle } ?? [] }
+    /// A Blu-ray or DVD image (an .iso, a disc folder): the server says it
+    /// can be played as it is, but what comes over HTTP is the disc's
+    /// file system, not a video — only the server can read the film out of it.
+    public var isDiscImage: Bool { ["iso", "bluray", "dvd", "hddvd"].contains((videoType ?? "").lowercased()) }
 }
 
 public enum MediaStreamType: String, Codable, Sendable, Hashable {

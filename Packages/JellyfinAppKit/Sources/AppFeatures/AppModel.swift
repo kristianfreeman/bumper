@@ -40,6 +40,9 @@ nonisolated struct PlaybackRequest: Identifiable, Sendable {
     var background = false
     /// A playlist's items after this one, played in turn.
     var sequence: [BaseItem] = []
+    /// A test play (the playback sweep): Background, and nothing on the
+    /// TV's Now Playing or the phone, nothing remembered for the show.
+    var quiet = false
 }
 
 /// Launch configuration, parsed once from the process arguments.
@@ -69,6 +72,17 @@ nonisolated struct LaunchOptions: Sendable {
     /// (container, codecs, size, scan, range, audio, subtitles), written to
     /// Library/Caches/perf/library-matrix.json for scripts/device-library-matrix.sh.
     var libraryMatrix = false
+    /// `-sweep`: every kind of file in the library played in turn, a few
+    /// seconds each, in one launch — quiet Background plays
+    /// (scripts/device-sweep.sh). `-sweepSeconds <s>` each (3),
+    /// `-sweepFrom <n>` to carry on from there, `-sweepSubtitles` with a
+    /// subtitle on where the file has one (the hardest kind it has),
+    /// `-sweepAt 0.5` from that far through each instead (deep resumes).
+    var sweep = false
+    var sweepAt: Double?
+    var sweepSeconds: Double = 3
+    var sweepFrom = 0
+    var sweepSubtitles = false
     /// Self-driven scroll benchmark (no XCUITest overhead in the numbers).
     var benchmark = false
     /// Deep link for tests: `item:<id>`, `person:<id>` or `grid:<libraryId>`.
@@ -134,6 +148,11 @@ nonisolated struct LaunchOptions: Sendable {
         autoplayBackground = arguments.contains("-autoplayBackground")
         if let i = arguments.firstIndex(of: "-autoplaySubtitles"), i + 1 < arguments.count { autoplaySubtitles = arguments[i + 1] }
         libraryMatrix = arguments.contains("-libraryMatrix")
+        sweep = arguments.contains("-sweep")
+        if let i = arguments.firstIndex(of: "-sweepSeconds"), i + 1 < arguments.count, let s = Double(arguments[i + 1]) { sweepSeconds = s }
+        if let i = arguments.firstIndex(of: "-sweepFrom"), i + 1 < arguments.count, let n = Int(arguments[i + 1]) { sweepFrom = n }
+        sweepSubtitles = arguments.contains("-sweepSubtitles")
+        if let i = arguments.firstIndex(of: "-sweepAt"), i + 1 < arguments.count { sweepAt = Double(arguments[i + 1]) }
         if let i = arguments.firstIndex(of: "-memoryGuardAt"), i + 1 < arguments.count { memoryGuardMB = Int(arguments[i + 1]) }
     }
 }
@@ -389,6 +408,7 @@ final class AppModel {
         if let ms = options.mediaLatencyMs { MockMedia.latency.withLock { $0 = .milliseconds(ms) } }
         if let session { reportCapabilities(session) }
         if options.libraryMatrix, let client = session?.client { Task { await LibraryMatrix.pick(client: client) } }
+        if options.sweep, let client = session?.client { Task { await PlaybackSweep.run(app: self, client: client) } }
         if let id = options.autoplay {
             TraceFile.write("app", "autoplay \(id): session \(session.map { $0.server.url.absoluteString } ?? "none")")
             if let client = session?.client {

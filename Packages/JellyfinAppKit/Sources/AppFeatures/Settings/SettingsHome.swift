@@ -265,7 +265,7 @@ struct SettingsView: View {
                     current: bitrateKey(settings.maxBitrate)) { settings.maxBitrate = Int($0) },
             .toggle("match", "Match Frame Rate and Range", "tv", Self.matchDetail(on: settings.matchContent), $settings.matchContent),
             .toggle("atmos", "Dolby Atmos Passthrough", "hifispeaker", "Sends Dolby audio straight to your receiver.", $settings.preferPassthrough),
-            .toggle("noTranscode", "Disable Transcoding", "bolt.slash", "Never asks your server to convert. Some videos won't play.", $settings.disableTranscoding),
+            .toggle("noTranscode", "Disable Transcoding", "bolt.slash", "Never asks your server to convert: every video plays as it is, as well as this device can. Disc images (.iso) won't play.", $settings.disableTranscoding),
             .toggle("speakers", "Speakers Button", "airplay.audio", "Puts Speakers in the player, to pick AirPlay speakers or the TV.", $settings.speakersButton),
         ]
     }

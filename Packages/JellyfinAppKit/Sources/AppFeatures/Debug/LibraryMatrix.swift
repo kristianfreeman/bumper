@@ -30,7 +30,8 @@ enum LibraryMatrix {
                 a, subs.isEmpty ? nil : subs].compactMap { $0 }.joined(separator: " · ")
     }
 
-    static func pick(client: JellyfinClient) async {
+    @discardableResult
+    static func pick(client: JellyfinClient) async -> [Pick] {
         // In pages: every item's media details at once timed out on a real library.
         var items: [BaseItem] = []
         var q = ItemQuery(includeItemTypes: [.movie, .episode], limit: 300)
@@ -44,7 +45,7 @@ enum LibraryMatrix {
                 q.startIndex += 300
             } catch {
                 TraceFile.write("librarymatrix", "couldn't list the library at \(q.startIndex): \(error)")
-                if items.isEmpty { return } else { break }
+                if items.isEmpty { return [] } else { break }
             }
         }
         var seen: [String: Pick] = [:]
@@ -61,5 +62,6 @@ enum LibraryMatrix {
         TraceFile.write("librarymatrix", "\(items.count) items, \(picks.count) kinds")
         let url = TraceFile.directory.appending(path: "library-matrix.json")
         try? JSONEncoder().encode(picks).write(to: url)
+        return picks
     }
 }

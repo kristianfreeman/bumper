@@ -263,7 +263,10 @@ public final class VLCEngine: PlayerEngine {
         }
         selectedAudioTrack = plan.selectedAudio?.index
 
-        guard let media = VLCMedia(url: plan.url) else { throw VLCEngineError.cannotOpen }
+        // An MKV whose index VLCKit would throw away: through the proxy that fixes it.
+        let url = Self.isMatroska(plan.mediaSource.container) && plan.method == .directPlay && plan.url.scheme?.hasPrefix("http") == true
+            ? await SeekHeadProxy.shared.served(plan.url) : plan.url
+        guard let media = VLCMedia(url: url) else { throw VLCEngineError.cannotOpen }
         // On the chosen audio track, with no subtitle until the player
         // selects one. (No `:start-time`: VLC 4 makes it the clip's in-point,
         // so the clock, the length and every later seek become relative to

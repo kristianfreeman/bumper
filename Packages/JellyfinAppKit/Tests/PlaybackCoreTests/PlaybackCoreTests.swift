@@ -66,6 +66,36 @@ struct PlannerTests {
         #expect(p.decide(source: src, audioIndex: 2, subtitleIndex: nil).engine == .vlc)
         #expect(p.decide(source: src, audioIndex: 1, subtitleIndex: 3).engine == .vlc)
     }
+
+    /// A disc image goes to the server, though it says it can be played as it is.
+    @Test func discImagesGoToTheServer() {
+        var src = MediaSource(id: "m", container: "ts", mediaStreams: [
+            MediaStream(index: 0, type: .video, codec: "hevc"), MediaStream(index: 1, type: .audio, codec: "truehd"),
+        ])
+        src.supportsDirectPlay = true
+        src.videoType = "Iso"
+        let p = PlaybackPlanner(capabilities: .appleTV4KReference, preference: .automatic, maxBitrate: nil)
+        #expect(p.decide(source: src, audioIndex: 1, subtitleIndex: nil).method == .transcode)
+        src.videoType = "VideoFile"
+        #expect(p.decide(source: src, audioIndex: 1, subtitleIndex: nil).method == .directPlay)
+    }
+
+    /// Transcoding off (a server that can't): what it would have converted goes
+    /// to VLCKit as it is — all but a disc image, which has nothing to play.
+    @Test func noConversionPlaysTheFile() {
+        var src = MediaSource(id: "m", container: "mkv", mediaStreams: [
+            MediaStream(index: 0, type: .video, codec: "hevc"), MediaStream(index: 1, type: .audio, codec: "eac3"),
+        ])
+        src.supportsDirectPlay = false                       // Dolby Vision only, say
+        src.transcodingUrl = "/videos/m/master.m3u8"
+        var p = PlaybackPlanner(capabilities: .appleTV4KReference, preference: .automatic, maxBitrate: nil)
+        #expect(p.decide(source: src, audioIndex: 1, subtitleIndex: nil).method == .transcode)
+        p.allowsTranscoding = false
+        let d = p.decide(source: src, audioIndex: 1, subtitleIndex: nil)
+        #expect(d.method == .directPlay && d.engine == .vlc)
+        src.videoType = "Iso"
+        #expect(p.decide(source: src, audioIndex: 1, subtitleIndex: nil).method == .transcode)
+    }
 }
 
 @Suite("Device profile")
@@ -241,4 +271,74 @@ struct LocalPlanTests {
     let d = planner.decide(source: source, audioIndex: nil, subtitleIndex: nil)
     #expect(d.engine == EngineKind.vlc)
     #expect(d.method == PlayMethod.directPlay)
+}
+
+@Suite("MKV SeekHead")
+struct MatroskaSeekHeadTests {
+    /// Dark City's first 118 bytes (mkvmerge 7.1): its SeekHead lists Cues,
+    /// Chapters, Info, Tracks — VLCKit threw the cues away and couldn't resume.
+    static let darkCity = Data(hex: "1a45dfa3a34286810142f7810142f2810442f381084282886d6174726f736b6142878104428581021853806701000004cc87f1e3114d9b74bd4dbb8f53ab841c53bb6b53ac8504cc82cf4b4dbb8c53ab841043a77053ac8218a24dbb8b53ab841549a96653ac81424dbb8b53ab841654ae6b53ac81e3")
+
+    /// The SeekIDs of the Seek entries in `bytes`' SeekHead, in order.
+    func listed(_ bytes: Data) -> [String] {
+        let names: [String: String] = ["1c53bb6b": "Cues", "1043a770": "Chapters", "1549a966": "Info", "1654ae6b": "Tracks"]
+        let hex = bytes.map { String(format: "%02x", $0) }.joined()
+        var out: [String] = []
+        var rest = hex[...]
+        while let r = rest.range(of: "53ab84") {
+            let id = String(rest[r.upperBound...].prefix(8))
+            out.append(names[id] ?? id)
+            rest = rest[r.upperBound...]
+        }
+        return out
+    }
+
+    @Test func movesInfoAndTracksAheadOfCues() throws {
+        let fix = try #require(MatroskaSeekHead.fix(head: Self.darkCity))
+        #expect(fix.range == 57..<118)                       // the SeekHead's body, and only that
+        #expect(fix.bytes.count == fix.range.count)
+        #expect(listed(fix.bytes) == ["Info", "Tracks", "Cues", "Chapters"])
+        var patched = Self.darkCity
+        MatroskaSeekHead.apply(fix, to: &patched, at: 0)
+        #expect(MatroskaSeekHead.fix(head: patched) == nil)  // fixed: nothing more to do
+        #expect(patched.count == Self.darkCity.count)
+    }
+
+    @Test func appliesToAnyPieceOfTheFile() throws {
+        let fix = try #require(MatroskaSeekHead.fix(head: Self.darkCity))
+        var whole = Self.darkCity
+        MatroskaSeekHead.apply(fix, to: &whole, at: 0)
+        // The same bytes when the file arrives in pieces, split across the SeekHead.
+        var pieced = Data()
+        for (start, end) in [(0, 60), (60, 61), (61, 100), (100, 118)] {
+            var piece = Self.darkCity.subdata(in: start..<end)
+            MatroskaSeekHead.apply(fix, to: &piece, at: start)
+            pieced += piece
+        }
+        #expect(pieced == whole)
+        var later = Data(repeating: 7, count: 10)               // past the SeekHead: untouched
+        MatroskaSeekHead.apply(fix, to: &later, at: 500)
+        #expect(later == Data(repeating: 7, count: 10))
+    }
+
+    @Test func leavesGoodFilesAlone() {
+        var good = Self.darkCity                                 // already fixed: Tracks before Cues
+        if let fix = MatroskaSeekHead.fix(head: good) { MatroskaSeekHead.apply(fix, to: &good, at: 0) }
+        #expect(MatroskaSeekHead.fix(head: good) == nil)
+        #expect(MatroskaSeekHead.fix(head: Data("not a video at all".utf8)) == nil)
+        #expect(MatroskaSeekHead.fix(head: Self.darkCity.prefix(80)) == nil)   // SeekHead cut short
+    }
+}
+
+private extension Data {
+    init(hex: String) {
+        var bytes: [UInt8] = []
+        var i = hex.startIndex
+        while i < hex.endIndex {
+            let next = hex.index(i, offsetBy: 2)
+            bytes.append(UInt8(hex[i..<next], radix: 16)!)
+            i = next
+        }
+        self.init(bytes)
+    }
 }

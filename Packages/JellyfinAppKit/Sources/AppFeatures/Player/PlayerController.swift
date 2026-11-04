@@ -67,12 +67,14 @@ final class PlayerController {
     @ObservationIgnored private var memoryWatch: Task<Void, Never>?
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
     @ObservationIgnored private let totalSpan = Span("playback.tapToFrame")
+    @ObservationIgnored private let openedAt = ContinuousClock.now
     private static let log = Perf.logger("player")
 
     init(request: PlaybackRequest, app: AppModel) {
         self.request = request
         self.app = app
         isBackground = request.background
+        if request.quiet { PlaybackSweep.current = self }
         transport.target = self
         transport.log = { TraceFile.write("input", $0) }
         phonePlayPause = NotificationCenter.default.addObserver(forName: .companionPlayPause, object: nil, queue: .main) { [weak self] _ in
@@ -276,7 +278,7 @@ final class PlayerController {
                     let paused = engine.status == .paused
                     Task { await reporter.progress(position: now, paused: paused) }
                 }
-                if tick % 2 == 0 {                                   // for the companion app
+                if tick % 2 == 0, !self.request.quiet {              // for the companion app
                     self.app.player = self
                     self.app.nowPlaying = NowPlayingInfo(item: self.item, position: now.seconds,
                                                          duration: (engine.duration ?? self.item.runtime ?? .zero).seconds, paused: engine.status == .paused)
@@ -284,6 +286,15 @@ final class PlayerController {
                 if engine.status == .ended { await self.finishedItem(); return }
                 if engine.kind == .native, case .failed(let message) = engine.status {
                     await self.switchToVLC(reason: "AVPlayer error: \(message)")
+                    continue
+                }
+                // The server's conversion with nothing to show after 12 s
+                // (a NAS that can't convert: it trickles, or sends nothing,
+                // and AVPlayer waits on it for ever): the file itself instead.
+                // The playhead, not "starting": AVPlayer says it's moving before it has a frame.
+                if engine.kind == .native, let plan = self.plan, plan.method == .transcode, !plan.mediaSource.isDiscImage,
+                   engine.status != .paused, engine.playheadNow < plan.startPosition + .seconds(1), self.openedAt.duration(to: .now) > .seconds(12) {
+                    await self.switchToVLC(reason: "nothing from the server's conversion in 12 s")
                     continue
                 }
                 // VLCKit stuck (a stop that never finished, an error): once, a
@@ -613,13 +624,13 @@ final class PlayerController {
     /// for its next episode.
     func selectAudio(_ id: Int, remember: Bool = true) async {
         await engine?.selectAudio(id)
-        if remember, let show = plan?.item.seriesId, let stream = plan?.mediaSource.audioStreams.first(where: { $0.index == id }) {
+        if remember, !request.quiet, let show = plan?.item.seriesId, let stream = plan?.mediaSource.audioStreams.first(where: { $0.index == id }) {
             app.trackMemory.update(show: show) { $0.audioLanguage = stream.language }
         }
     }
 
     func selectSubtitle(_ index: Int?, remember: Bool = true) async {
-        if remember, let show = plan?.item.seriesId {
+        if remember, !request.quiet, let show = plan?.item.seriesId {
             let stream = index.flatMap { i in plan?.mediaSource.subtitleStreams.first { $0.index == i } }
             app.trackMemory.update(show: show) { $0.remember(subtitle: stream) }
         }
@@ -841,6 +852,13 @@ final class PlayerController {
         old.stop()
         next.engine = .vlc
         next.startPosition = position
+        // It was the server's conversion that failed: the file itself, as
+        // VLCKit plays it (a disc image has none to play).
+        if next.method == .transcode, !next.mediaSource.isDiscImage, let client {
+            next.url = client.directStreamURL(itemId: next.item.id, mediaSourceId: next.mediaSource.id, container: next.mediaSource.container, playSessionId: next.playSessionId)
+            next.method = .directPlay
+            next.reasons.append("Straight from the file: the server's conversion gave nothing")
+        }
         next.reasons.append("Switched to VLCKit: \(reason)")
         plan = next
         let engine = app.makeEngine(.vlc)
@@ -912,7 +930,7 @@ final class PlayerController {
     // MARK: System integration
 
     private func updateNowPlaying() {
-        guard let engine else { return }
+        guard let engine, !request.quiet else { return }
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: item.name ?? "",
             MPNowPlayingInfoPropertyElapsedPlaybackTime: engine.currentTime.seconds,

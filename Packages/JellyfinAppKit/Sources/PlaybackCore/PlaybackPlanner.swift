@@ -97,8 +97,17 @@ public struct PlaybackPlanner: Sendable {
         let blockers = avPlayerBlockers(source: source, audioIndex: audioIndex, subtitleIndex: subtitleIndex)
         if source.supportsDirectPlay == false {
             // Over the bitrate cap, or a stream VLCKit can't show (pure DV):
-            // the server's HLS, which is AVPlayer's.
+            // the server's HLS, which is AVPlayer's. With conversion off (a
+            // NAS that can't), VLCKit's best of the file instead of nothing.
+            if !allowsTranscoding, !source.isDiscImage {
+                return Decision(engine: .vlc, method: .directPlay, reasons: ["Transcoding off: VLCKit plays the file as it is (over the bitrate cap, or Dolby Vision outside MP4)"])
+            }
             return Decision(engine: .native, method: .transcode, reasons: ["Server transcode (bitrate cap or Dolby Vision outside MP4)"])
+        }
+        if source.isDiscImage {
+            // A 97 GB UHD Blu-ray .iso went to VLCKit as "ts": it read the
+            // disc's file system as a stream and never started.
+            return Decision(engine: .native, method: .transcode, reasons: ["Disc image (\(source.videoType ?? "?")): the server reads the film from it"])
         }
         if preference == .automatic && blockers.isEmpty {
             return Decision(engine: .native, method: .directPlay, reasons: ["AVPlayer: MP4/MOV · H.264/HEVC · AAC/AC-3/E-AC-3"])
@@ -182,7 +191,7 @@ public struct PlaybackPlanner: Sendable {
         let subtitle = subtitleIndex ?? source.defaultSubtitleStreamIndex
         var decision = decide(source: source, audioIndex: audio, subtitleIndex: subtitle)
         if decision.method == .transcode && !allowsTranscoding {
-            let why = source.videoStream?.isDolbyVision == true ? "Dolby Vision outside MP4" : "the server won't send it as it is"
+            let why = source.isDiscImage ? "a disc image" : source.videoStream?.isDolbyVision == true ? "Dolby Vision outside MP4" : "the server won't send it as it is"
             throw PlanError.needsTranscoding(why)
         }
 
