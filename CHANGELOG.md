@@ -7,6 +7,8 @@ TestFlight.
 
 ## Unreleased
 
+## 0.5.0
+
 - Fixed: some films and episodes couldn't be continued partway in, or
   scrubbed far — "It took too long to start." About one MKV in fifteen
   lists its index in an order VLC reads wrongly (often older rips); Bumper
