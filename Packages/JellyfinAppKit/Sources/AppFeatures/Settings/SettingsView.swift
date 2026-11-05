@@ -112,7 +112,8 @@ struct ThemePreview: View {
     let locked: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // The same card as everywhere else (CardLockup): it lifts, its name with it.
+        CardLockup(width: 240, height: 135, shape: .rounded(18), gap: 14) {
             ZStack(alignment: .bottomLeading) {
                 theme.backgroundGradient
                 HStack(spacing: 9) {
@@ -124,15 +125,15 @@ struct ThemePreview: View {
                 }
                 .padding(16)
             }
-            .frame(width: 240, height: 135)
-            .clipShape(.rect(cornerRadius: 18))
             .overlay(alignment: .topTrailing) {
                 Image(systemName: locked ? "lock.fill" : selected ? "checkmark.circle.fill" : "")
                     .font(.title3).padding(16).foregroundStyle(.white)
             }
-            .cardHighlight()
-            Text(theme.name).font(.detailText.weight(.semibold)).lineLimit(1)
-            Text(theme.tagline).font(.fineText).foregroundStyle(.secondary).lineLimit(1)
+        } words: {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(theme.name).font(.detailText.weight(.semibold)).lineLimit(1)
+                Text(theme.tagline).font(.fineText).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
     }
 }

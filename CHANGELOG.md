@@ -18,6 +18,20 @@ TestFlight.
   have asked it to convert now plays as it is after 12 seconds, instead of
   never starting — interlaced HEVC, Dolby Vision in MKV. With Disable
   Transcoding on, it plays that way at once.
+- Rows on Home and in the libraries (New Movies, New Shows, a genre, the
+  Queue) show the edge of the next card at the end, so it's plain there's
+  more to the side.
+- Genres, decades and collections are rows of posters, with a line under
+  each title written from what's in it: "142 films, from Heat to Prisoners
+  · mostly the 90s", "6 films, 1979 to 2017 · 2 you haven't seen".
+- Every few rows, a spotlight: one film from the row below across the
+  whole page — its picture, its title, a line of what it's about, and
+  Play. Something you haven't seen, and never the same one twice.
+- Apple TV: every card — posters, wide cards, cast, audiobook covers —
+  zooms with its name as one when focused, in the same motion, instead of
+  the name sliding down on its own.
+- Themes no longer glow round a focused card (it read as a box round it):
+  every theme lifts it the Apple TV's own way.
 
 - Apple TV with AirPlay speakers: an episode that got ready ahead of Play
   no longer starts skipping with no sound.

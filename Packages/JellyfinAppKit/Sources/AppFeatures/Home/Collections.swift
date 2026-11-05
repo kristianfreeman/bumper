@@ -53,8 +53,14 @@ struct CollectionList<Header: View>: View {
                         }
                         ForEach(sections) { section in
                             // Equatable: a row filling in redraws that row, not every row.
-                            CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
-                                .equatable()
+                            Group {
+                                if section.spotlight != nil {
+                                    SpotlightSection(section: section, available: width).equatable()
+                                } else {
+                                    CollectionSection(section: section, available: width, firstCardFocus: !queueLeads && section.id == sections.first?.id ? firstCardFocus : nil)
+                                        .equatable()
+                                }
+                            }
                                 // Back from the sidebar, focus returns to the row it left.
                                 .focusPreferred(tracker?.row == section.id, in: page)
                                 .id(section.id)
@@ -110,7 +116,7 @@ struct CollectionSection: View, Equatable {
         section.style == .poster ? Layout.columns(available, minWidth: Layout.posterMin, max: 6)
                                  : Layout.columns(available, minWidth: Layout.landscapeMin, max: 4)
     }
-    private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
+    private var width: CGFloat { Layout.rowCardWidth(available, columns: columns) }
 
     nonisolated static func == (a: Self, b: Self) -> Bool {
         a.section == b.section && a.section.title == b.section.title && a.section.subtitle == b.section.subtitle
@@ -141,8 +147,12 @@ struct CollectionSection: View, Equatable {
             } else {
                 // Loading: a row of skeleton cards at the real size, so nothing
                 // moves when they fill in.
-                HStack(spacing: Layout.cardSpacing) {
+                HStack(alignment: .top, spacing: Layout.cardSpacing) {
                     ForEach(0..<columns, id: \.self) { _ in SkeletonCard(width: width, aspect: aspect) }
+                    // The next one's edge too, as the row will have.
+                    SkeletonCard(width: width, aspect: aspect)
+                        .frame(width: (width * Layout.rowPeek).rounded(.down), alignment: .leading)
+                        .clipped()
                 }
             }
         }

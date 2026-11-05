@@ -54,7 +54,7 @@ nonisolated enum Shelves {
         if !movies.isEmpty {
             rows.append(row("favourites", "Your Favourites", nil, sort: ["SortName"], order: .ascending, filters: ["IsFavorite"]))
         }
-        return rows
+        return Spotlight.placed(in: rows)
     }
 
     // MARK: A library
@@ -77,35 +77,45 @@ nonisolated enum Shelves {
         for d in stride(from: decade, through: 1950, by: -10) {
             var q = ItemQuery(parentId: library.id, includeItemTypes: kinds, sortBy: ["Random"], limit: rowLimit)
             q.years = Array(d..<(d + 10))
-            var s = shelf("\(library.id)-decade-\(d)", "The \(String(d).suffix(2))s", subtitle: nil, q)
+            var s = shelf("\(library.id)-decade-\(d)", "The \(String(d).suffix(2))s", subtitle: nil, q, line: .decade)
             if d >= 2000 { s.title = "The \(d)s" }
             s.library = library.name
             rows.append(s)
         }
         rows += await boxsets.dropFirst(6)
-        return rows
+        return Spotlight.placed(in: rows)
     }
 
     // MARK: Filling a row
 
-    /// A row's cards, when it comes near.
-    nonisolated static func items(for source: Source, client: JellyfinClient) async -> [BaseItem] {
+    /// A row's cards, when it comes near, and how many there are in all
+    /// (a query's; nil for Similar).
+    nonisolated static func items(for source: Source, client: JellyfinClient) async -> (items: [BaseItem], total: Int?) {
         switch source {
-        case .query(let q): (try? await client.items(q))?.items ?? []
-        case .similar(let id): (try? await client.similar(to: id, limit: rowLimit))?.items ?? []
+        case .query(let q):
+            guard let page = try? await client.items(q) else { return ([], nil) }
+            return (page.items, page.totalRecordCount)
+        case .similar(let id): return ((try? await client.similar(to: id, limit: rowLimit))?.items ?? [], nil)
         }
     }
+
 
     // MARK: Kinds of row
 
     /// A row of `q`, with "View all" behind it: the whole of it by name.
-    nonisolated static func shelf(_ id: String, _ title: String, subtitle: String?, _ q: ItemQuery) -> BrowseSection {
+    /// Posters: the most colourful, most recognisable art a film has, and
+    /// more of them across. (Because You Watched keeps its wide cards.)
+    /// `line`: the line under the title, written from the row's films when
+    /// they come (`RowLine`); a blank one holds its place until then, so
+    /// nothing moves.
+    nonisolated static func shelf(_ id: String, _ title: String, subtitle: String?, _ q: ItemQuery, line: RowLine.Kind? = nil) -> BrowseSection {
         var all = q
         all.limit = 100
         if all.sortBy == ["Random"] { all.sortBy = ["SortName"]; all.sortOrder = .ascending }
-        var s = BrowseSection(id: id, title: title, items: [], style: .landscape, scrolls: true, seeAll: all)
-        s.subtitle = subtitle
+        var s = BrowseSection(id: id, title: title, items: [], style: .poster, scrolls: true, seeAll: all)
+        s.subtitle = subtitle ?? (line == nil ? nil : " ")
         s.source = .query(q)
+        s.line = line
         return s
     }
 
@@ -146,7 +156,7 @@ nonisolated enum Shelves {
         return counted.prefix(max).map { g, count in
             var q = ItemQuery(parentId: parentId, includeItemTypes: kinds, sortBy: ["Random"], limit: rowLimit)
             q.genres = [g.name ?? ""]
-            var s = shelf("genre-\(prefix)-\(g.name ?? g.id)", g.name ?? "", subtitle: nil, q)
+            var s = shelf("genre-\(prefix)-\(g.name ?? g.id)", g.name ?? "", subtitle: nil, q, line: .genre)
             s.total = count
             return s
         }
@@ -161,7 +171,7 @@ nonisolated enum Shelves {
         let sets = (try? await client.items(q))?.items ?? []
         return sets.map { set in
             let films = ItemQuery(parentId: set.id, sortBy: ["ProductionYear", "SortName"], limit: rowLimit)
-            var s = shelf("collection-\(set.id)", set.name ?? "Collection", subtitle: nil, films)
+            var s = shelf("collection-\(set.id)", set.name ?? "Collection", subtitle: nil, films, line: .collection)
             s.seeAll = nil                        // the collection's own page is behind its name
             s.collection = set
             return s
@@ -175,23 +185,60 @@ nonisolated enum Shelves {
 final class LazyShelves {
     private(set) var sections: [BrowseSection] = []
     @ObservationIgnored private var asked: Set<String> = []
+    /// Films already in a spotlight on the page: each is in one only.
+    @ObservationIgnored private var spotlit: Set<String> = []
 
     /// A new set of rows: those already filled keep their cards.
     func replace(_ rows: [BrowseSection]) {
         let filled = Dictionary(sections.filter { !$0.items.isEmpty }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         sections = rows.map { filled[$0.id] ?? $0 }
         asked = asked.intersection(Set(filled.keys))
+        spotlit = Set(sections.filter { $0.spotlight != nil }.flatMap { $0.items.map(\.id) })
     }
 
     /// A row's about to show: its cards (once). Empty, it goes.
     func near(_ id: String, client: JellyfinClient) async {
-        guard !asked.contains(id), let source = sections.first(where: { $0.id == id })?.source,
-              sections.first(where: { $0.id == id })?.items.isEmpty == true else { return }
+        // A spotlight fills from its row: that row's cards first (if it
+        // hasn't them yet, it fills the spotlight as it does).
+        if let row = sections.first(where: { $0.id == id }), let below = row.spotlight {
+            await near(below, client: client)
+            await fillSpotlight(above: below, client: client)
+            return
+        }
+        guard !asked.contains(id), let row = sections.first(where: { $0.id == id }), let source = row.source, row.items.isEmpty else { return }
         asked.insert(id)
-        let items = await Shelves.items(for: source, client: client)
+        let (items, total) = await Shelves.items(for: source, client: client)
         guard let i = sections.firstIndex(where: { $0.id == id }) else { return }
-        if items.isEmpty { sections.remove(at: i); return }
+        if items.isEmpty {
+            sections.remove(at: i)
+            sections.removeAll { $0.spotlight == id }        // nothing for its spotlight either
+            return
+        }
         BlurHashCache.shared.prewarm(items)
-        sections[i].items = items
+        var filled = sections[i]
+        filled.items = items
+        if let line = filled.line {
+            // Blank when there's nothing worth saying: the place stays, nothing moves.
+            filled.subtitle = RowLine.make(line, items: items, total: filled.total ?? total) ?? " "
+        }
+        sections[i] = filled
+        await fillSpotlight(above: id, client: client)
+    }
+
+    /// The spotlight over row `below`, once that row has its cards: the best
+    /// of them for it, with what it's about (one item's details). None that
+    /// will do: the spotlight goes.
+    private func fillSpotlight(above below: String, client: JellyfinClient) async {
+        guard let spot = sections.first(where: { $0.spotlight == below }), !asked.contains(spot.id),
+              let items = sections.first(where: { $0.id == below })?.items, !items.isEmpty else { return }
+        asked.insert(spot.id)
+        for candidate in Spotlight.candidates(items, excluding: spotlit).prefix(3) {
+            guard let full = try? await client.item(id: candidate.id, fields: ItemField.hero),
+                  !(full.overview ?? "").isEmpty else { continue }
+            spotlit.insert(full.id)
+            if let i = sections.firstIndex(where: { $0.id == spot.id }) { sections[i].items = [full] }
+            return
+        }
+        sections.removeAll { $0.id == spot.id }
     }
 }

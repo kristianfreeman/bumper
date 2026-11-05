@@ -6,7 +6,6 @@ import UIKit
 /// A complete visual theme. Themes are the *only* thing the app sells:
 /// playback, decoding and every feature are free forever.
 public struct Theme: Identifiable, Hashable, Sendable {
-    public enum FocusStyle: String, Sendable, Hashable { case lift, glow }
 
     public let id: String
     public let name: String
@@ -22,7 +21,6 @@ public struct Theme: Identifiable, Hashable, Sendable {
     public let secondaryText: Color
     public let progress: Color
     public let cardCornerRadius: CGFloat
-    public let focusStyle: FocusStyle
     /// Grid section in the theme picker.
     public var family: String = "Signature"
 
@@ -32,7 +30,7 @@ public struct Theme: Identifiable, Hashable, Sendable {
 
     /// Returns a copy with a different accent (the "custom accent" option).
     public func withAccent(_ color: Color) -> Theme {
-        Theme(id: id, name: name, tagline: tagline, isPremium: isPremium, colorScheme: colorScheme, backgroundTop: backgroundTop, backgroundBottom: backgroundBottom, surface: surface, accent: color, primaryText: primaryText, secondaryText: secondaryText, progress: color, cardCornerRadius: cardCornerRadius, focusStyle: focusStyle, family: family)
+        Theme(id: id, name: name, tagline: tagline, isPremium: isPremium, colorScheme: colorScheme, backgroundTop: backgroundTop, backgroundBottom: backgroundBottom, surface: surface, accent: color, primaryText: primaryText, secondaryText: secondaryText, progress: color, cardCornerRadius: cardCornerRadius, family: family)
     }
 }
 
@@ -47,7 +45,7 @@ extension Theme {
         surface: BumperBrand.Palette.graphite, accent: BumperBrand.Palette.signal,
         primaryText: BumperBrand.Palette.paper, secondaryText: Color(red: 0.667, green: 0.643, blue: 0.592),   // #AAA497, 7.3:1 on soot
         progress: BumperBrand.Palette.signal,
-        cardCornerRadius: 16, focusStyle: .lift
+        cardCornerRadius: 16
     )
 
     /// Bumper on paper (the kit's BumperBrand.Light): ink text, and the
@@ -58,7 +56,7 @@ extension Theme {
         surface: BumperBrand.Light.surface, accent: BumperBrand.Light.signal,
         primaryText: BumperBrand.Light.text, secondaryText: BumperBrand.Light.quiet,
         progress: BumperBrand.Light.signal,
-        cardCornerRadius: 16, focusStyle: .lift
+        cardCornerRadius: 16
     )
 
     public static let abyss = Theme(
@@ -66,7 +64,7 @@ extension Theme {
         backgroundTop: Color(red: 0.03, green: 0.07, blue: 0.12), backgroundBottom: Color(red: 0.01, green: 0.02, blue: 0.04),
         surface: Color(red: 0.10, green: 0.15, blue: 0.22), accent: Color(red: 0.00, green: 0.80, blue: 0.85),
         primaryText: .white, secondaryText: Color(white: 0.68), progress: Color(red: 0.00, green: 0.80, blue: 0.85),
-        cardCornerRadius: 14, focusStyle: .lift
+        cardCornerRadius: 14
     )
 
     public static let midnight = Theme(
@@ -74,7 +72,7 @@ extension Theme {
         backgroundTop: .black, backgroundBottom: .black,
         surface: Color(white: 0.10), accent: Color(red: 0.55, green: 0.42, blue: 1.0),
         primaryText: .white, secondaryText: Color(white: 0.6), progress: Color(red: 0.55, green: 0.42, blue: 1.0),
-        cardCornerRadius: 12, focusStyle: .lift
+        cardCornerRadius: 12
     )
 
     // Premium
@@ -83,7 +81,7 @@ extension Theme {
         backgroundTop: Color(red: 0.05, green: 0.12, blue: 0.14), backgroundBottom: Color(red: 0.10, green: 0.04, blue: 0.16),
         surface: Color(red: 0.12, green: 0.18, blue: 0.22), accent: Color(red: 0.40, green: 1.0, blue: 0.70),
         primaryText: .white, secondaryText: Color(white: 0.72), progress: Color(red: 0.40, green: 1.0, blue: 0.70),
-        cardCornerRadius: 20, focusStyle: .glow
+        cardCornerRadius: 20
     )
 
     public static let ember = Theme(
@@ -91,7 +89,7 @@ extension Theme {
         backgroundTop: Color(red: 0.14, green: 0.06, blue: 0.03), backgroundBottom: Color(red: 0.05, green: 0.02, blue: 0.01),
         surface: Color(red: 0.22, green: 0.12, blue: 0.08), accent: Color(red: 1.0, green: 0.55, blue: 0.20),
         primaryText: Color(red: 1.0, green: 0.96, blue: 0.92), secondaryText: Color(red: 0.85, green: 0.72, blue: 0.62), progress: Color(red: 1.0, green: 0.55, blue: 0.20),
-        cardCornerRadius: 10, focusStyle: .glow
+        cardCornerRadius: 10
     )
 
     public static let paper = Theme(
@@ -99,7 +97,7 @@ extension Theme {
         backgroundTop: Color(red: 0.96, green: 0.95, blue: 0.93), backgroundBottom: Color(red: 0.88, green: 0.87, blue: 0.85),
         surface: Color(red: 0.82, green: 0.81, blue: 0.79), accent: Color(red: 0.85, green: 0.15, blue: 0.20),
         primaryText: Color(white: 0.08), secondaryText: Color(white: 0.35), progress: Color(red: 0.85, green: 0.15, blue: 0.20),
-        cardCornerRadius: 6, focusStyle: .lift
+        cardCornerRadius: 6
     )
 
     public static let mono = Theme(
@@ -107,7 +105,7 @@ extension Theme {
         backgroundTop: Color(white: 0.09), backgroundBottom: Color(white: 0.02),
         surface: Color(white: 0.16), accent: .white,
         primaryText: .white, secondaryText: Color(white: 0.55), progress: .white,
-        cardCornerRadius: 0, focusStyle: .lift
+        cardCornerRadius: 0
     )
 
     public static let signature: [Theme] = [.bumper, .bumperLight, .abyss, .midnight, .aurora, .ember, .paper, .mono]
@@ -183,6 +181,20 @@ public enum Layout {
     /// The width of each of `columns` cards across `available`.
     public static func cardWidth(_ available: CGFloat, columns: Int) -> CGFloat {
         ((available - CGFloat(columns - 1) * cardSpacing) / CGFloat(columns)).rounded(.down)
+    }
+
+    /// How much a focused card grows on the TV (picture and words as one;
+    /// about what the system's own highlight grows a poster by).
+    public static let cardLift: CGFloat = 1.1
+
+    /// How much of the next card a sideways row shows at its end, as a
+    /// fraction of a card: cut off by the edge, so it's plain the row goes on.
+    public static let rowPeek: CGFloat = 0.3
+
+    /// The width of a sideways row's cards: `columns` of them across
+    /// `available`, and `rowPeek` of the next one.
+    public static func rowCardWidth(_ available: CGFloat, columns: Int) -> CGFloat {
+        ((available - CGFloat(columns) * cardSpacing) / (CGFloat(columns) + rowPeek)).rounded(.down)
     }
 }
 

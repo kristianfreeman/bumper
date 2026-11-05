@@ -61,16 +61,42 @@ extension View {
 }
 
 extension View {
-    /// The system's card lift: focus on the TV, the pointer on iPad; on the
-    /// Mac, a gentle grow under the pointer.
-    @ViewBuilder public func cardHighlight() -> some View {
-        #if os(macOS)
+    /// A card lifting (`CardLockup`). On the TV the whole card — picture
+    /// and words — grows as one, in one animation, with a shadow under the
+    /// picture alone (`shape`). (The system's highlight can't be used: on the
+    /// picture only, the words' motion was a second, differently timed one;
+    /// on the whole card, it shaded the words too.) The iPad's pointer
+    /// highlights the picture; the Mac grows the whole card a little.
+    @ViewBuilder public func cardLift<S: Shape>(_ shape: S) -> some View {
+        #if os(tvOS)
+        modifier(TVCardLift(shape: shape))
+        #elseif os(macOS)
         modifier(MacHoverLift())
         #else
-        hoverEffect(.highlight)
+        contentShape(.hoverEffect, shape).hoverEffect(.highlight)
         #endif
     }
 }
+
+#if os(tvOS)
+private struct TVCardLift<S: Shape>: ViewModifier {
+    let shape: S
+    @Environment(\.isFocused) private var focused
+
+    func body(content: Content) -> some View {
+        content
+            // Under the picture only, and only while focused (a shadow costs
+            // an offscreen pass; one card's is nothing, a row's was jank).
+            .background {
+                if focused { shape.fill(.black).shadow(color: .black.opacity(0.5), radius: 22, y: 16) }
+            }
+            .scaleEffect(focused ? Layout.cardLift : 1)
+            .animation(.smooth(duration: 0.24), value: focused)
+            // Nothing of the system's on top (a borderless button can give its image one).
+            .hoverEffectDisabled()
+    }
+}
+#endif
 
 #if os(macOS)
 private struct MacHoverLift: ViewModifier {
@@ -78,7 +104,6 @@ private struct MacHoverLift: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scaleEffect(hovering ? 1.03 : 1)
-            .shadowWhen(hovering, color: .black.opacity(0.3), radius: 14, y: 8)
             .animation(.spring(duration: 0.25), value: hovering)
             .onHover { hovering = $0 }
     }
@@ -255,7 +280,11 @@ extension View {
         // Room inside the clip for a focused card's lift and shadow: sideways
         // within the margins, and above and below without moving the page
         // (the clipped shadow drew a line along the top of a cast picture).
-        let lift: CGFloat = 28, headroom: CGFloat = 36
+        // Enough for a lifted poster and the system's shadow under it (the
+        // lift grows a tall poster ~25 pt): with less, the shadow was cut off
+        // in a hard line. Sideways that's nearly to the screen's edge, which
+        // is only the clip: the cards still start at the margin.
+        let lift: CGFloat = 64, headroom: CGFloat = 72
         contentMargins(.horizontal, lift, for: .scrollContent)
             .contentMargins(.vertical, headroom, for: .scrollContent)
             .padding(.horizontal, Layout.horizontalMargin - lift)

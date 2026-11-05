@@ -31,7 +31,7 @@ struct QueueSection: View {
     @Environment(\.theme) private var theme
 
     private var columns: Int { Layout.columns(available, minWidth: Layout.landscapeMin, max: 4) }
-    private var width: CGFloat { Layout.cardWidth(available, columns: columns) }
+    private var width: CGFloat { Layout.rowCardWidth(available, columns: columns) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

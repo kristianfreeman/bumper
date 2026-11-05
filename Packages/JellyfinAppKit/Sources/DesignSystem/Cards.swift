@@ -7,29 +7,76 @@ extension EnvironmentValues {
     @Entry public var downloadStore: DownloadStore? = nil
 }
 
-/// Focus treatment shared by every card. `.lift` uses the system highlight
-/// (parallax + specular, the native tvOS feel); `.glow` (premium themes) adds
-/// an accent-coloured halo.
-struct CardFocusModifier: ViewModifier {
-    @Environment(\.theme) private var theme
-    @Environment(\.isFocused) private var isFocused
+/// Every card in the app: its picture, and the words under it, lifting as
+/// one (`cardLift`). Posters, wide cards, covers, cast, theme previews and
+/// See All are all this, so focus looks and moves the same everywhere, in
+/// every theme.
+public struct CardLockup<Art: View, Words: View>: View {
+    public enum Shape: Sendable { case rounded(CGFloat? = nil), circle }
 
-    func body(content: Content) -> some View {
-        let base = content
-            .clipShape(.rect(cornerRadius: theme.cardCornerRadius))
-            .cardHighlight()
-        // Only glow themes pay for a shadow, and only on the focused card:
-        // a shadow (even a clear one) can force an offscreen render pass.
-        if theme.focusStyle == .glow && isFocused {
-            base.shadow(color: theme.accent.opacity(0.55), radius: 24)
-        } else {
-            base
+    let width: CGFloat
+    let height: CGFloat
+    let shape: Shape
+    let gap: CGFloat
+    let alignment: HorizontalAlignment
+    let wordsWidth: CGFloat?
+    let art: Art
+    let words: Words
+    @Environment(\.theme) private var theme
+
+    /// `width` × `height`: the picture. `wordsWidth`: when the words may run
+    /// wider than it (a cast member's name under a small circle).
+    public init(width: CGFloat, height: CGFloat, shape: Shape = .rounded(), gap: CGFloat = 12, alignment: HorizontalAlignment = .leading,
+                wordsWidth: CGFloat? = nil, @ViewBuilder art: () -> Art, @ViewBuilder words: () -> Words) {
+        self.width = width
+        self.height = height
+        self.shape = shape
+        self.gap = gap
+        self.alignment = alignment
+        self.wordsWidth = wordsWidth
+        self.art = art()
+        self.words = words()
+    }
+
+    public var body: some View {
+        VStack(alignment: alignment, spacing: gap) {
+            picture
+            words.frame(width: wordsWidth ?? width, alignment: Alignment(horizontal: alignment, vertical: .top))
         }
+        .cardLift(PictureShape(size: CGSize(width: width, height: height), centred: alignment == .center && (wordsWidth ?? width) > width,
+                               circle: { if case .circle = shape { true } else { false } }(), radius: radius))
+    }
+
+    private var radius: CGFloat {
+        if case .rounded(let r) = shape { r ?? theme.cardCornerRadius } else { 0 }
+    }
+
+    @ViewBuilder private var picture: some View {
+        let framed = art.frame(width: width, height: height)
+        if case .circle = shape { framed.clipShape(.circle) } else { framed.clipShape(.rect(cornerRadius: radius)) }
     }
 }
 
-extension View {
-    func cardFocus() -> some View { modifier(CardFocusModifier()) }
+/// Where a card's picture is inside the whole card (the picture at the top,
+/// the words under it): what the focus sheen and shadow follow.
+nonisolated struct PictureShape: Shape {
+    let size: CGSize
+    /// Centred across a card wider than its picture (cast); else at its left.
+    let centred: Bool
+    let circle: Bool
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let frame = CGRect(x: centred ? (rect.width - size.width) / 2 : 0, y: 0, width: size.width, height: size.height)
+        return circle ? Circle().path(in: frame) : RoundedRectangle(cornerRadius: radius).path(in: frame)
+    }
+}
+
+extension CardLockup where Words == EmptyView {
+    /// A card with nothing under it ("See All").
+    public init(width: CGFloat, height: CGFloat, shape: Shape = .rounded(), @ViewBuilder art: () -> Art) {
+        self.init(width: width, height: height, shape: shape, art: art) { EmptyView() }
+    }
 }
 
 /// Thin playback-progress bar overlaid on artwork.
@@ -72,46 +119,24 @@ public struct PosterCard: View {
 
     public var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 14) {
+            CardLockup(width: width, height: width * 1.5, gap: 14) {
                 Artwork(item: item, kind: .poster, width: width)
-                    .frame(width: width, height: width * 1.5)
                     .overlay(alignment: .topTrailing) { WatchedBadge(item: item).padding(10) }
                     .overlay(alignment: .topLeading) { DownloadedBadge(item: item).padding(10) }
                     .overlay(alignment: .bottom) {
                         if let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) { ProgressStrip(p).padding(12) }
                     }
-                    .cardFocus()
-                Words(title: title ?? item.name ?? "", detail: detail, posterHeight: width * 1.5)
-                    .frame(width: width, alignment: .leading)
+            } words: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title ?? item.name ?? "").font(.cardTitle).foregroundStyle(theme.primaryText).lineLimit(1)
+                    if let detail {
+                        Text(detail).font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
+                    }
+                }
             }
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(title ?? item.name ?? "Untitled")
-    }
-
-    /// The lines under the poster. On the TV the focused poster lifts and
-    /// grows over them; they move down by as much (as PersonCard's do), so
-    /// they stay clear of it.
-    private struct Words: View {
-        let title: String
-        let detail: String?
-        let posterHeight: CGFloat
-        @Environment(\.theme) private var theme
-        @Environment(\.isFocused) private var focused
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.cardTitle)
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                if let detail {
-                    Text(detail).font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
-                }
-            }
-            .offset(y: Platform.isTV && focused ? posterHeight * 0.07 : 0)
-            .animation(.spring(duration: 0.25), value: focused)
-        }
     }
 }
 
@@ -134,19 +159,17 @@ public struct SquareCard: View {
 
     public var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
+            CardLockup(width: width, height: width, gap: 10) {
                 Artwork(item: item, kind: .poster, width: width)
-                    .frame(width: width, height: width)
                     .overlay(alignment: .bottom) {
                         if let progress { ProgressStrip(progress).padding(12) }
                     }
-                    .cardFocus()
+            } words: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name ?? "").font(.cardTitle).foregroundStyle(theme.primaryText)
                     Text(subtitle ?? " ").font(.cardSubtitle).foregroundStyle(theme.secondaryText)
                 }
                 .lineLimit(1)
-                .frame(width: width, alignment: .leading)
             }
         }
         .buttonStyle(.borderless)
@@ -191,9 +214,8 @@ public struct LandscapeCard: View {
 
     public var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            CardLockup(width: width, height: width * 9 / 16) {
                 Artwork(item: item, kind: kind, width: width)
-                    .frame(width: width, height: width * 9 / 16)
                     .overlay(alignment: .bottom) {
                         if let p = item.progress, !(playedNow[item.id] ?? item.isPlayed) {
                             ProgressStrip(p).padding(.horizontal, 14).padding(.bottom, 12)
@@ -209,14 +231,13 @@ public struct LandscapeCard: View {
                                 .padding(Platform.isTV ? 12 : 8)
                         }
                     }
-                    .cardFocus()
+            } words: {
                 // Always two lines (an empty one if there's no subtitle): every
                 // card is the same height, so grids never re-measure as they scroll.
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.cardTitle).foregroundStyle(theme.primaryText).lineLimit(1)
                     Text(subtitle ?? " ").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
                 }
-                .frame(width: width, alignment: .leading)
             }
         }
         .buttonStyle(.borderless)
@@ -234,40 +255,20 @@ public struct PersonCard: View {
         self.action = action
     }
 
+    @Environment(\.theme) private var theme
+
     public var body: some View {
-        Button(action: action) { Face(person: person) }
-            .buttonStyle(.borderless)
-    }
-
-    /// The picture, and the name and role under it. On the TV the focused
-    /// picture lifts and grows; the words move down by as much (as the
-    /// system's own cards do), so at rest they sit close under the picture
-    /// and focused they clear it.
-    private struct Face: View {
-        let person: Person
-        @Environment(\.theme) private var theme
-        @Environment(\.isFocused) private var focused
-
-        var body: some View {
-            VStack(spacing: 10) {
+        Button(action: action) {
+            CardLockup(width: Layout.castWidth, height: Layout.castWidth, shape: .circle, gap: 10, alignment: .center, wordsWidth: Layout.castWidth + 20) {
                 Artwork(person.primaryImageTag.map { ArtworkSource(itemId: person.id, type: .primary, tag: $0, blurHash: person.imageBlurHashes?["Primary"]?[$0]) }, kind: .poster, width: Layout.castWidth)
-                    .frame(width: Layout.castWidth, height: Layout.castWidth)
-                    .clipShape(.circle)
-                    // The focus sheen and shadow follow the circle: on the square
-                    // frame the sheen's top edge showed as a light line above it.
-                    #if !os(macOS)
-                    .contentShape(.hoverEffect, .circle)
-                    #endif
-                    .cardHighlight()
+            } words: {
                 VStack(spacing: 4) {
                     Text(person.name ?? "").font(Layout.device == .mac ? .subheadline : .caption2).foregroundStyle(theme.primaryText).lineLimit(1)
                     Text(person.role ?? "").font(.cardSubtitle).foregroundStyle(theme.secondaryText).lineLimit(1)
                 }
-                .offset(y: Platform.isTV && focused ? Layout.castWidth * 0.07 : 0)
-                .animation(.spring(duration: 0.25), value: focused)
             }
-            .frame(width: Layout.castWidth + 20)
         }
+        .buttonStyle(.borderless)
     }
 }
 

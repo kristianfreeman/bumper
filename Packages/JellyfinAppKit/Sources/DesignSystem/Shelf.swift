@@ -89,14 +89,15 @@ struct SeeAllCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
-                Image(systemName: "square.grid.3x3.fill").font(.title2)
-                Text("See All").font(.labelText.weight(.semibold))
+            CardLockup(width: width, height: width * aspect) {
+                VStack(spacing: 12) {
+                    Image(systemName: "square.grid.3x3.fill").font(.title2)
+                    Text("See All").font(.labelText.weight(.semibold))
+                }
+                .foregroundStyle(theme.primaryText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.surface)
             }
-            .foregroundStyle(theme.primaryText)
-            .frame(width: width, height: width * aspect)
-            .background(theme.surface)
-            .cardFocus()
         }
         .buttonStyle(.borderless)
     }

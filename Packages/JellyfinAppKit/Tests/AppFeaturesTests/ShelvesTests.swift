@@ -28,8 +28,21 @@ struct ShelvesTests {
         let shelves = LazyShelves()
         shelves.replace(rows)
         let genre = try #require(rows.first { $0.id.hasPrefix("genre-") })
+        // Posters, and a line held blank (nothing moves when it comes)…
+        #expect(genre.style == .poster && genre.subtitle == " ")
         await shelves.near(genre.id, client: client)
-        #expect(shelves.sections.first { $0.id == genre.id }?.items.isEmpty == false)
+        let filled = try #require(shelves.sections.first { $0.id == genre.id })
+        #expect(!filled.items.isEmpty)
+        // …then written from what's in it.
+        #expect(filled.subtitle?.first?.isNumber == true, "line: \(filled.subtitle ?? "nil")")
+        // A spotlight: filled from its row with a film and what it's about, or gone.
+        let spot = try #require(rows.first { $0.spotlight != nil }, "no spotlight")
+        await shelves.near(spot.id, client: client)
+        if let lit = shelves.sections.first(where: { $0.id == spot.id }) {
+            let film = try #require(lit.items.first, "spotlight left empty")
+            #expect(!(film.overview ?? "").isEmpty)
+            #expect(shelves.sections.first { $0.id == spot.spotlight }?.items.contains { $0.id == film.id } == true)
+        }
         // A row nothing's in: asked for, empty, gone.
         var nothing = ItemQuery(includeItemTypes: [.movie], limit: 24)
         nothing.genres = ["No Such Genre"]

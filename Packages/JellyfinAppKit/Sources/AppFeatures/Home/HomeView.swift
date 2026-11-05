@@ -38,6 +38,10 @@ nonisolated struct BrowseSection: Identifiable, Codable, Sendable, Equatable {
     var source: Shelves.Source? = nil
     /// A collection's row: its page is what "View all" opens.
     var collection: BaseItem? = nil
+    /// The kind of line written under the title once the row's filled.
+    var line: RowLine.Kind? = nil
+    /// A spotlight (`Spotlight`): the id of the row below whose film it shows.
+    var spotlight: String? = nil
 
     /// What "View all" opens: the narrowed query, or (a row with no query
     /// behind it, like Next Up) the whole row it was cut from.
